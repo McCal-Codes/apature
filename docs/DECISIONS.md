@@ -124,3 +124,11 @@ not yet wired to a settings file.
 PM wrote `850_7802.XMP` for `850_7802.NEF`. An existing sidecar of either
 case is reused; a new one copies the case of the source extension. On APFS
 this is cosmetic; on a case-sensitive filesystem it prevents two sidecars.
+
+## ADR-010 (2026-10-13, accepted): a known label beats a disagreeing colour-class number
+
+Photo Mechanic writes `xmp:Label` and `photomechanic:ColorClass` together.
+Capture One (verified) and Lightroom (by its documentation) only update
+the label. When both exist and disagree, and the label maps to a class in
+the scheme, the label wins and the next write repairs the number. An
+unrecognised label leaves the number in charge.
