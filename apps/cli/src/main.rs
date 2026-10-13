@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 use rayon::prelude::*;
 
 use photo_core::{ColorClass, ColorClassScheme, Marks, Rating, ScanOptions};
-use photo_metadata::xmp::{self, XmpMarks};
+use photo_metadata::items;
 use photo_preview::{Source, ThumbCache};
 
 #[derive(Parser)]
@@ -117,10 +117,8 @@ fn scan(dir: &Path, recursive: bool) -> Result<()> {
     let items = photo_core::scan(dir, &ScanOptions { recursive })?;
     let scheme = ColorClassScheme::default();
     for it in &items {
-        let marks = xmp::read_sidecar(&it.sidecar_path())
-            .ok()
-            .flatten()
-            .map(|m| m.to_marks(&scheme));
+        let src = items::read(it);
+        let m = src.effective(it, &scheme);
         let pair = if it.is_pair() {
             format!(
                 " +{}",
@@ -133,15 +131,31 @@ fn scan(dir: &Path, recursive: bool) -> Result<()> {
         } else {
             String::new()
         };
-        let m = marks
-            .map(|m| {
-                format!(
-                    "  rating={} class={} tagged={}",
-                    m.rating.0, m.color_class.0, m.tagged
-                )
-            })
-            .unwrap_or_default();
-        println!("{:>5}  {}{}{}", it.id, it.display_name(), pair, m);
+        let has_any = |m: &photo_metadata::XmpMarks| {
+            m.rating.is_some() || m.label.is_some() || m.color_class.is_some() || m.tagged.is_some()
+        };
+        let marked = src.sidecar.as_ref().is_some_and(has_any)
+            || src.embedded.iter().any(|(_, m)| has_any(m));
+        let mtext = if marked {
+            format!(
+                "  rating={} class={} tagged={}",
+                m.rating.0, m.color_class.0, m.tagged
+            )
+        } else {
+            String::new()
+        };
+        println!("{:>5}  {}{}{}", it.id, it.display_name(), pair, mtext);
+        for (p, c) in src.conflicts() {
+            println!(
+                "       CONFLICT {}: sidecar={} embedded({})={}",
+                c.field,
+                c.sidecar,
+                p.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                c.embedded
+            );
+        }
     }
     eprintln!(
         "{} items in {:.1} ms",
@@ -292,20 +306,32 @@ fn bench(
 }
 
 fn mark(file: &Path, rating: Option<i8>, class: Option<u8>, tag: Option<bool>) -> Result<()> {
-    let sidecar = file.with_extension("xmp");
+    // Resolve the file to its item so a pair gets both the sidecar and the JPEG.
+    let dir = file.parent().context("file has no parent directory")?;
+    let stem = file
+        .file_stem()
+        .context("file has no stem")?
+        .to_string_lossy()
+        .to_lowercase();
+    let items = photo_core::scan(dir, &ScanOptions::default())?;
+    let item = items
+        .into_iter()
+        .find(|it| it.stem.to_lowercase() == stem)
+        .with_context(|| format!("{} is not a photo in {}", file.display(), dir.display()))?;
     let scheme = ColorClassScheme::default();
-    let current = xmp::read_sidecar(&sidecar)?
-        .map(|m| m.to_marks(&scheme))
-        .unwrap_or_default();
+    let current = items::read_marks(&item, &scheme);
     let next = Marks {
         rating: rating.map(Rating::clamp).unwrap_or(current.rating),
         color_class: class.map(ColorClass::clamp).unwrap_or(current.color_class),
         tagged: tag.unwrap_or(current.tagged),
     };
-    xmp::write_marks(&sidecar, &XmpMarks::from_marks(&next, &scheme))?;
+    let written = items::write(&item, &next, &scheme)?;
+    for p in &written {
+        println!("wrote {}", p.display());
+    }
     println!(
         "{}: rating={} class={} ({}) tagged={}",
-        sidecar.display(),
+        item.display_name(),
         next.rating.0,
         next.color_class.0,
         scheme.name(next.color_class).unwrap_or("none"),

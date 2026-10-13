@@ -268,6 +268,21 @@ pub fn apply(text: &str, marks: &XmpMarks) -> Result<String, XmpError> {
     Ok(out)
 }
 
+/// True when `got` carries every mark that `want` asked for.
+pub fn satisfies(want: &XmpMarks, got: &XmpMarks) -> bool {
+    let check = |w: Option<i64>, g: Option<i64>| w.is_none() || w == g;
+    check(want.rating.map(i64::from), got.rating.map(i64::from))
+        && check(
+            want.color_class.map(i64::from),
+            got.color_class.map(i64::from),
+        )
+        && check(want.tagged.map(i64::from), got.tagged.map(i64::from))
+        && !want.label.as_ref().is_some_and(|l| {
+            let w = if l.is_empty() { None } else { Some(l.clone()) };
+            w != got.label
+        })
+}
+
 /// Write marks into the sidecar at `path`, creating it if needed. Atomic:
 /// writes a temp file beside it and renames.
 pub fn write_marks(path: &Path, marks: &XmpMarks) -> Result<(), XmpError> {
@@ -282,19 +297,7 @@ pub fn write_marks(path: &Path, marks: &XmpMarks) -> Result<(), XmpError> {
     }
     // Read-back check before the file is replaced: if the edited text does
     // not yield the marks we meant to write, leave the original untouched.
-    let back = parse(&updated);
-    let check = |want: Option<i64>, got: Option<i64>| want.is_none() || want == got;
-    if !check(marks.rating.map(i64::from), back.rating.map(i64::from))
-        || !check(
-            marks.color_class.map(i64::from),
-            back.color_class.map(i64::from),
-        )
-        || !check(marks.tagged.map(i64::from), back.tagged.map(i64::from))
-        || marks.label.as_ref().is_some_and(|l| {
-            let want = if l.is_empty() { None } else { Some(l.clone()) };
-            want != back.label
-        })
-    {
+    if !satisfies(marks, &parse(&updated)) {
         return Err(XmpError::Verify(path.to_path_buf()));
     }
     let tmp = path.with_extension(format!("xmp.tmp{}", std::process::id()));

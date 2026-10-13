@@ -10,7 +10,7 @@ use egui::{
 use rayon::prelude::*;
 
 use photo_core::{ColorClass, ColorClassScheme, Marks, PhotoItem, Rating, ScanOptions};
-use photo_metadata::xmp::{self, XmpMarks};
+use photo_metadata::items;
 use photo_metadata::ExifSummary;
 use photo_preview::{Rgb, ThumbCache};
 
@@ -110,13 +110,7 @@ impl App {
                 let scheme = self.scheme.clone();
                 let marks: Vec<Marks> = items
                     .par_iter()
-                    .map(|it| {
-                        xmp::read_sidecar(&it.sidecar_path())
-                            .ok()
-                            .flatten()
-                            .map(|m| m.to_marks(&scheme))
-                            .unwrap_or_default()
-                    })
+                    .map(|it| items::read_marks(it, &scheme))
                     .collect();
                 let n = items.len();
                 self.items = items;
@@ -291,19 +285,20 @@ impl App {
 
     fn persist(&mut self, idx: usize) {
         let it = &self.items[idx];
-        let xm = XmpMarks::from_marks(&self.marks[idx], &self.scheme);
-        match xmp::write_marks(&it.sidecar_path(), &xm) {
-            Ok(()) => {
+        match items::write(it, &self.marks[idx], &self.scheme) {
+            Ok(written) => {
                 let m = self.marks[idx];
                 self.status = format!(
-                    "{}: {} · {} · {}",
+                    "{}: {} · {} · {} → {} file{}",
                     it.display_name(),
                     rating_text(m.rating),
                     self.scheme.name(m.color_class).unwrap_or("no class"),
-                    if m.tagged { "tagged" } else { "untagged" }
+                    if m.tagged { "tagged" } else { "untagged" },
+                    written.len(),
+                    if written.len() == 1 { "" } else { "s" }
                 );
             }
-            Err(e) => self.status = format!("Could not write {}: {e}", it.sidecar_path().display()),
+            Err(e) => self.status = format!("Could not write marks: {e}"),
         }
     }
 

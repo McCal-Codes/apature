@@ -31,6 +31,24 @@ hashed before and after and are byte-identical.
 | `pw scan` | 7802 → rating 3, class 2, tagged true. Our two sidecars untouched by PM. |
 | same three files as RAW+JPEG pairs | **PM showed no marks**: for pairs it takes metadata from the JPEG (confirmed by observation; the exact preference was not inspected). Our sidecar is ignored until we can embed XMP in the JPEG or write marks to both. |
 
+## Embedded XMP in JPEGs (2026-10-13, verified)
+
+`photo_metadata::jpeg_xmp` splices one APP1 XMP segment into a JPEG:
+editing the existing packet in place (the D850 writes its own packet, so
+real camera JPEGs grew by ~155 bytes) or inserting a padded packet after
+the Exif APP1 when none exists. Every other byte is copied; image data is
+never re-encoded. Atomic temp → fsync → rename with a read-back check.
+`photo_metadata::items` applies the policy: RAW → sidecar, JPEG → embedded,
+RAW+JPEG pair → both; reads prefer the sidecar when a RAW exists and report
+disagreements with any JPEG packet.
+
+| check | result |
+|---|---|
+| unit tests on a JPEG skeleton | insert after Exif / after APP0, replace in place, byte-exact outside the segment, oversize and non-JPEG rejected, atomic + idempotent |
+| exiftool on a real D850 JPEG copy after embedding | `-validate` clean; Rating 4, Label Red, ColorClass 1, Tagged Yes; ImageSize and Model unchanged; +155 bytes |
+| Photo Mechanic, pair folder, after `pw mark` embedded into the JPEGs | 7783 red bar, four stars, tagged; 7784 green, two stars: **pairs now round-trip into PM** |
+| Photo Mechanic → us on a pair (Blue, 1 star, tag on 7802) | PM wrote **both** the JPEG packet and `850_7802.XMP`; `pw scan` read rating 1, class 4, tagged; NEFs byte-identical. PM's own behaviour for pairs matches the sidecar+embedded policy. |
+
 Consequences applied in code: the default colour-class names are now the
 ones this PM shows (Red, Yellow, Green, Blue, Purple, Cyan, Brown, Trash)
 with the classic names kept as read aliases; `sidecar_path` reuses an
@@ -61,10 +79,12 @@ source extension like PM; a verbatim PM 2026 sidecar is a test fixture.
    and exiftool all write one Description; a multi-Description document
    from another tool could end up with the rating on a different
    Description than its siblings. Harmless to readers, untidy.
-3. **JPEG-only items:** Photo Mechanic and Lightroom embed XMP inside
-   JPEGs and ignore a sidecar for them. Marks we write for a JPEG-only
-   folder are therefore invisible to those apps until embedding exists
-   (Phase 3). The conflict report makes the divergence visible.
+3. **JPEG writes change the JPEG's mtime**, which invalidates its thumbnail
+   cache entry (the key includes mtime). One extra decode per marked JPEG;
+   a content-hash-free key that ignores mtime for JPEGs would avoid it but
+   would miss real edits. Left as is for now.
+   Extended XMP (`/xmp/extension/` segments) is left untouched; a packet
+   over 65 504 bytes is refused rather than split.
 4. **Sidecar naming:** only `IMG.xmp` is read and written. darktable-style
    `IMG.NEF.xmp` is neither read nor detected.
 5. The colour-class **names** must match the user's Photo Mechanic
