@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Apature: a contact sheet with one picked frame. Charcoal ground, off-white frames, one lavender pick. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232327"/>
+      <stop offset="1" stop-color="#131316"/>
+    </linearGradient>
+    <linearGradient id="pick" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#DCD6FA"/>
+      <stop offset="1" stop-color="#B9B0EC"/>
+    </linearGradient>
+    <clipPath id="squircle"><rect x="64" y="64" width="896" height="896" rx="200"/></clipPath>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#ground)"/>
+  <rect x="64.5" y="64.5" width="895" height="895" rx="200" fill="none" stroke="#FFFFFF" stroke-opacity="0.07"/>
+  <g clip-path="url(#squircle)">
+    <!-- 2 x 2 sheet of 3:2 frames, 16 px gutters at this scale -->
+    <rect x="236" y="296" width="256" height="171" rx="14" fill="url(#pick)"/>
+    <rect x="532" y="296" width="256" height="171" rx="14" fill="#ECEBF3" fill-opacity="0.88"/>
+    <rect x="236" y="557" width="256" height="171" rx="14" fill="#ECEBF3" fill-opacity="0.88"/>
+    <rect x="532" y="557" width="256" height="171" rx="14" fill="#ECEBF3" fill-opacity="0.62"/>
+    <!-- the pick: a small filled star corner mark on the lavender frame -->
+    <circle cx="276" cy="336" r="16" fill="#1A1A1D" fill-opacity="0.9"/>
+  </g>
+</svg>

@@ -28,8 +28,8 @@ fallback.
 
 | phase | scope | files | core API change | tests |
 |---|---|---|---|---|
-| S0 tokens | `ui/tokens.rs`: semantic colours, type scale, spacing; light/dark from system; Reduce Motion flag | new | none | snapshot of token values; contrast computed in a unit test |
-| S1 shell | menu bar, unified toolbar, side panels with dividers and memory, status bar, workspace switcher | `ui/shell.rs`, `platform/macos.rs`, `platform/mod.rs` | none | manual HIG checklist R-1…R-5, R-13 |
+| S0 tokens (**done** 2026-10-13) | `ui/tokens.rs`: semantic colours, type scale, spacing; light/dark from system; Reduce Motion flag | new | none | snapshot of token values; contrast computed in a unit test |
+| S1 shell (**done** 2026-10-13, VoiceOver pass pending) | menu bar, unified toolbar, side panels with dividers and memory, status bar, workspace switcher | `ui/shell.rs`, `platform/macos.rs`, `platform/mod.rs` | none | manual HIG checklist R-1…R-5, R-13 |
 | S2 sheet | new grid with cell accessibility names, selection model, filters, sort | `ui/sheet.rs`, `state/selection.rs` | `apature-core`: a `Marks` predicate helper for filters | unit tests for selection rules; VoiceOver script A1–A5 |
 | S3 preview | overlay, filmstrip, honest zoom, 1:1 | `ui/preview.rs` | `apature-preview`: expose chosen candidate size for the label | latency measured |
 | S4 caption | fields, code replacements, stationery diff | `ui/caption.rs` | `apature-metadata`: IPTC property table on a streaming parser (Phase 3 engine work) | round-trip tests as for marks |
