@@ -55,10 +55,24 @@ with the classic names kept as read aliases; `sidecar_path` reuses an
 existing `.XMP`/`.xmp` of either case and otherwise follows the case of the
 source extension like PM; a verbatim PM 2026 sidecar is a test fixture.
 
+## Capture One (2026-10-13, 16.8.2, read direction verified)
+
+Opening the scratch pair folder in Capture One brought up its Import
+browser, which showed the three pairs as single NEF items with: 7783 red
+tag, four stars; 7784 green, two stars; 7802 blue, one star. Its filter
+counts listed each rating and colour twice, i.e. it read the same values
+from the RAW's sidecar and from the JPEG's embedded packet, so the two
+sources agree in a third reader. The import was cancelled; nothing was
+added to the catalog.
+
+Not done: the write direction. Capture One only writes sidecars when
+Preferences › Image › Metadata › Auto Sync Sidecar XMP is set to Full Sync,
+and marking requires the images in a catalog or session; both change the
+owner's Capture One state, so they wait for explicit approval.
+
 ## Not verified (honest list)
 
-* **Lightroom.** Not installed. Capture One is, and reads `xmp:Rating` /
-  `xmp:Label` from sidecars, so it can stand in.
+* **Lightroom.** Not installed.
 * **Backup copies.** There is no `.xmp.bak` and no operation log. A bad
   edit that passes the read-back check (e.g. a value the user did not
   intend) is not recoverable except by undo in the app, which does not
