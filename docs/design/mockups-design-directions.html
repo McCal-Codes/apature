@@ -1,0 +1,270 @@
+<title>Apature Design Directions</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital@0;1&display=swap">
+<style>
+/* Layout: a short page of three window mockups, one per direction, switched by tabs; each mockup is a fixed-ratio desktop window drawn in CSS. */
+:root {
+  --bg: #0b0b10; --panel: #15151c; --raised: #1d1c27; --fg: #ecebf3; --fg2: #b7b4cb; --dim: #8f8ca6;
+  --line: #25242f; --line2: #3b3a4b; --accent: #cfc8f5; --wash: rgba(207,200,245,.12);
+  --sans: -apple-system, system-ui, "Segoe UI", sans-serif; --mono: ui-monospace, "SF Mono", Menlo, monospace; --serif: "Libre Baskerville", Georgia, serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f4f3f8; --panel: #fff; --raised: #eceaf4; --fg: #16151e; --fg2: #4e4b63; --dim: #6e6b86; --line: #dad8e6; --line2: #b9b6cb; --accent: #5b4fa8; --wash: rgba(91,79,168,.12); color-scheme: light } }
+:root[data-theme="light"] { --bg: #f4f3f8; --panel: #fff; --raised: #eceaf4; --fg: #16151e; --fg2: #4e4b63; --dim: #6e6b86; --line: #dad8e6; --line2: #b9b6cb; --accent: #5b4fa8; --wash: rgba(91,79,168,.12); color-scheme: light }
+html, body { background: var(--bg); color: var(--fg); }
+body { font: 15px/1.5 var(--sans); margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-inline: 16px; }
+h1 { font: 400 28px/1.15 var(--serif); margin: 0 0 6px; text-wrap: balance; }
+.lede { color: var(--fg2); max-width: 65ch; margin: 0 0 20px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tabs button { font: 500 13px var(--sans); color: var(--fg2); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--accent); background: var(--wash); border-color: var(--accent); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dir { display: none; } .dir.on { display: block; }
+.meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 24px; margin: 14px 0 22px; }
+.meta h3 { font: 600 10px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
+.meta p, .meta li { font-size: 13.5px; color: var(--fg2); margin: 0; }
+.meta ul { margin: 0; padding-left: 18px; }
+.note { font: 11px/1.4 var(--mono); color: var(--dim); margin-top: 8px; }
+
+/* ---- window mockup; every colour comes from per-direction tokens on .win ---- */
+.win { --w-bg: #141414; --w-panel: #1a1a1a; --w-raised: #242424; --w-photo: #161616; --w-cell: #202020; --w-fg: #e8e8e8; --w-fg2: #b4b4b4; --w-dim: #8a8a8a; --w-line: #2a2a2a; --w-acc: #c9c2ea; --w-wash: rgba(201,194,234,.12);
+  background: var(--w-bg); color: var(--w-fg); border: 1px solid var(--w-line); border-radius: 10px; overflow: hidden; box-shadow: 0 18px 40px rgba(0,0,0,.45); font-size: 12px; line-height: 1.3; }
+.win * { box-sizing: border-box; }
+.tb { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; background: var(--w-panel); border-bottom: 1px solid var(--w-line); }
+.lights { display: flex; gap: 7px; margin-right: 6px; } .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+.lights i:nth-child(1) { background: #ff5f57 } .lights i:nth-child(2) { background: #febc2e } .lights i:nth-child(3) { background: #28c840 }
+.seg { display: flex; background: var(--w-raised); border-radius: 6px; padding: 2px; }
+.seg span { padding: 4px 10px; border-radius: 4px; color: var(--w-fg2); } .seg span.on { background: var(--w-bg); color: var(--w-fg); }
+.tbtn { padding: 4px 9px; border: 1px solid var(--w-line); border-radius: 6px; color: var(--w-fg2); background: var(--w-raised); }
+.spacer { flex: 1; }
+.slider { width: 90px; height: 3px; background: var(--w-line); border-radius: 2px; position: relative; } .slider::after { content: ""; position: absolute; left: 45%; top: -5px; width: 13px; height: 13px; border-radius: 50%; background: var(--w-fg2); }
+.busy { font-family: var(--mono); font-size: 11px; color: var(--w-dim); }
+.body { display: grid; grid-template-columns: 200px 1fr 250px; min-height: 420px; }
+.side { background: var(--w-panel); border-right: 1px solid var(--w-line); padding: 8px 6px; }
+.side h4 { font: 600 10px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--w-dim); margin: 10px 8px 6px; }
+.side .row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; color: var(--w-fg2); }
+.side .row.on { background: var(--w-wash); color: var(--w-acc); }
+.side .row i { width: 12px; height: 12px; border: 1.5px solid currentColor; border-radius: 3px; display: inline-block; opacity: .8; }
+.grid { background: var(--w-photo); padding: 10px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-content: start; }
+.cell { display: grid; gap: 4px; }
+.cell .img { background: var(--w-cell); aspect-ratio: 1; display: grid; place-items: center; position: relative; }
+.cell .img > b { display: block; width: 100%; aspect-ratio: 3/2; } .cell .img > b.p { width: 66.7%; aspect-ratio: 2/3; }
+.cell .img .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.cell .img .tag { position: absolute; top: 4px; right: 4px; font: 600 9px/1 var(--mono); padding: 3px 4px; border-radius: 3px; background: #2f7fe0; color: #fff; }
+.cell.focus .img { outline: 2px solid var(--w-acc); outline-offset: -2px; }
+.cell.sel .img { outline: 1px solid rgba(255,255,255,.7); outline-offset: -1px; }
+.cell .nm { font: 10.5px/1.2 var(--mono); color: var(--w-fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell .mk { display: flex; justify-content: space-between; align-items: center; font: 10px/1 var(--mono); color: var(--w-fg2); min-height: 12px; }
+.cell .mk .st { color: #e3b341; letter-spacing: 1px; } .cell .mk .rj { color: #e06c6c; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 5px; border-radius: 4px; background: var(--w-raised); color: var(--w-fg); font: 600 9.5px/1 var(--mono); }
+.chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.c1 { background: #dc322f } .c2 { background: #e9b91e } .c3 { background: #42a042 } .c5 { background: #9650c8 }
+/* placeholder "photos": gradients standing in for golf frames */
+.g1 { background: linear-gradient(170deg, #9ec2e6 0 38%, #5f8f3d 38% 70%, #3f6b2a 70%) } .g2 { background: linear-gradient(160deg, #cfd9e3 0 30%, #6d9a46 30% 65%, #2f4f22 65%) }
+.g3 { background: linear-gradient(180deg, #b7cfe8 0 45%, #7aa84f 45%) } .g4 { background: linear-gradient(200deg, #e6d8b5 0 25%, #4e7f35 25% 80%, #243d1c 80%) }
+.g5 { background: linear-gradient(170deg, #a9c6e8 0 50%, #8bb45a 50% 72%, #3a5e2a 72%) } .g6 { background: linear-gradient(190deg, #dfe7ee 0 35%, #5c8a3b 35%) }
+.insp { background: var(--w-panel); border-left: 1px solid var(--w-line); padding: 10px 12px; display: grid; gap: 10px; align-content: start; }
+.insp h4 { font: 600 10px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--w-dim); margin: 0 0 6px; display: flex; justify-content: space-between; }
+.insp h4 span { font-weight: 400; letter-spacing: 0; text-transform: none; }
+.kv { display: grid; grid-template-columns: 68px 1fr; gap: 3px 8px; font: 11px/1.35 var(--mono); }
+.kv b { font-weight: 400; color: var(--w-dim); text-transform: uppercase; font-size: 9.5px; letter-spacing: .06em; padding-top: 1px; }
+.kv span { color: var(--w-fg2); overflow-wrap: anywhere; }
+.insp .cap { font: 11.5px/1.5 var(--sans); color: var(--w-fg2); }
+.insp .head { font: 400 13px/1.3 var(--serif); color: var(--w-fg); }
+.sb { display: flex; gap: 14px; align-items: center; height: 24px; padding: 0 12px; background: var(--w-panel); border-top: 1px solid var(--w-line); font: 10.5px/1 var(--mono); color: var(--w-dim); white-space: nowrap; overflow: hidden; }
+.sb .st { color: #e3b341 } .sb .write { color: var(--w-acc) }
+
+/* direction 1: native editorial, light chrome */
+.d1 .win { --w-bg: #ededf2; --w-panel: #f6f6f9; --w-raised: #e3e2ea; --w-photo: #d4d4d6; --w-cell: #c9c9cc; --w-fg: #1c1b24; --w-fg2: #4b4960; --w-dim: #6e6b86; --w-line: #d6d5de; --w-acc: #5b4fa8; --w-wash: rgba(91,79,168,.12); box-shadow: 0 18px 40px rgba(0,0,0,.25); }
+.d1 .cell .nm { font-family: var(--sans); font-size: 11px; }
+.d1 .cell .img .tag { background: #0a66d6 }
+/* direction 2: darkroom, neutral grey, dense */
+.d2 .win { font-size: 11.5px; }
+.d2 .body { grid-template-columns: 184px 1fr 236px; }
+.d2 .grid { gap: 8px; padding: 8px; grid-template-columns: repeat(6, 1fr); }
+.d2 .cell .nm { font-size: 10px; }
+/* direction 3: minimal, overlays, mccal.dev chrome */
+.d3 .win { --w-bg: #0b0b10; --w-panel: #15151c; --w-raised: #1d1c27; --w-photo: #121214; --w-cell: #1b1b1f; --w-fg: #ecebf3; --w-fg2: #b7b4cb; --w-dim: #8f8ca6; --w-line: #25242f; --w-acc: #cfc8f5; --w-wash: rgba(207,200,245,.1); position: relative; }
+.d3 .body { grid-template-columns: 1fr; }
+.d3 .side, .d3 .insp { display: none; }
+.d3 .tb { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); height: 36px; width: min(640px, 92%); border: 1px solid var(--w-line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.35); z-index: 2; }
+.d3 .lights { display: none; }
+.d3 .grid { padding: 58px 36px 14px; grid-template-columns: repeat(6, 1fr); }
+.d3 .edge { position: absolute; top: 50%; translate: 0 -50%; width: 18px; height: 72px; background: var(--w-panel); border: 1px solid var(--w-line); display: grid; place-items: center; font: 600 9px/1 var(--mono); color: var(--w-dim); writing-mode: vertical-rl; }
+.d3 .edge.l { left: 0; border-left: 0; border-radius: 0 6px 6px 0; } .d3 .edge.r { right: 0; border-right: 0; border-radius: 6px 0 0 6px; }
+.d3 .pop { position: absolute; right: 36px; top: 58px; width: 230px; background: var(--w-panel); border: 1px solid var(--w-line); border-radius: 8px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: grid; gap: 8px; z-index: 2; }
+
+/* caption workspace (direction 2) */
+.capws .body { grid-template-columns: 184px 1fr 300px; }
+.photo { background: var(--w-photo); display: grid; grid-template-rows: 1fr auto; }
+.photo .big { display: grid; place-items: center; padding: 20px; } .photo .big b { display: block; width: 86%; aspect-ratio: 3/2; }
+.photo .nav { display: flex; gap: 14px; justify-content: center; padding: 0 0 10px; font: 10.5px/1 var(--mono); color: var(--w-fg2); }
+.strip { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--w-line); background: var(--w-panel); } .strip b { display: block; width: 64px; aspect-ratio: 3/2; opacity: .55; } .strip b.on { opacity: 1; outline: 2px solid var(--w-acc); outline-offset: -2px; }
+.fields { background: var(--w-panel); border-left: 1px solid var(--w-line); padding: 12px; display: grid; gap: 9px; align-content: start; }
+.fields label { display: grid; gap: 3px; font: 600 9.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--w-dim); }
+.fields .in { font: 11.5px/1.45 var(--sans); color: var(--w-fg); background: var(--w-raised); border: 1px solid var(--w-line); border-radius: 4px; padding: 6px 8px; min-height: 26px; }
+.fields .in.ta { min-height: 74px; } .fields .in.ta em { font-style: normal; background: var(--w-wash); color: var(--w-acc); border-radius: 3px; padding: 0 2px; }
+.fields .in.mixed { color: var(--w-dim); font-style: italic; }
+.fields .codes { font: 10px/1.6 var(--mono); color: var(--w-dim); } .fields .codes b { color: var(--w-fg2); font-weight: 600; }
+.fields .btns { display: flex; gap: 6px; } .fields .btns span { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--w-line); color: var(--w-fg2); } .fields .btns span.pri { background: var(--w-acc); color: var(--w-bg); border-color: transparent; }
+
+@media (max-width: 760px) {
+  .body, .d2 .body, .capws .body { grid-template-columns: 1fr; }
+  .side { display: none; } .insp { border-left: 0; border-top: 1px solid var(--w-line); }
+  .grid, .d2 .grid, .d3 .grid { grid-template-columns: repeat(3, 1fr); }
+  .tb .slider, .tb .busy { display: none; }
+  .d3 .edge, .d3 .pop { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) { .dir.on { animation: in .16s cubic-bezier(.22,1,.36,1); } @keyframes in { from { opacity: .4 } to { opacity: 1 } } }
+</style>
+
+<div class="wrap">
+  <h1>Apature design directions</h1>
+  <p class="lede">Three Contact Sheet mockups for the same assignment: 100726 SPO BGLF WPIAL Championships, a Nikon Z 6II, Photo Mechanic colour classes. Thumbnails are stand-in gradients, not photographs. Everything else is the real data the app would show.</p>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" aria-controls="d1" id="t1">1 · Native Editorial</button>
+    <button role="tab" aria-selected="false" aria-controls="d2" id="t2">2 · Professional Darkroom (recommended)</button>
+    <button role="tab" aria-selected="false" aria-controls="d3" id="t3">3 · Minimal Workspace</button>
+  </div>
+
+  <!-- ============ Direction 1 ============ -->
+  <section class="dir d1 on" id="d1" role="tabpanel" aria-labelledby="t1">
+    <div class="win" aria-label="Native Editorial mockup">
+      <div class="tb"><div class="lights"><i></i><i></i><i></i></div><span class="tbtn">⊞</span>
+        <div class="seg"><span class="on">Sheet</span><span>Preview</span><span>Caption</span><span>Ingest</span></div>
+        <span class="tbtn">Filter ▾</span><span class="tbtn">Capture time ▾</span><span class="spacer"></span><div class="slider"></div><span class="busy">decoding 12</span><span class="tbtn">ⓘ</span></div>
+      <div class="body">
+        <aside class="side"><h4>Favorites</h4><div class="row"><i></i>Assignments 2026</div><div class="row on"><i></i>100726 SPO BGLF</div><div class="row"><i></i>Desk exports</div>
+          <h4>Recent</h4><div class="row"><i></i>SEW TasteOfSewickley</div><div class="row"><i></i>Caleb Thesis</div>
+          <h4>Cards &amp; Volumes</h4><div class="row"><i></i>NIKON Z 6_2 · Ingest…</div><div class="row"><i></i>Work SSD</div></aside>
+        <div class="grid">
+          <div class="cell focus sel"><div class="img"><b class="g1"></b><span class="bar c1"></span><span class="tag">T</span></div><div class="nm">100726-SPO-BGLF-001.NEF</div><div class="mk"><span class="st">★★★★</span><span class="chip"><i class="c1"></i>1 Winner</span></div></div>
+          <div class="cell sel"><div class="img"><b class="g2"></b></div><div class="nm">100726-SPO-BGLF-002.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell sel"><div class="img"><b class="g3 p"></b></div><div class="nm">100726-SPO-BGLF-003.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g4"></b><span class="bar c2"></span></div><div class="nm">100726-SPO-BGLF-004.NEF</div><div class="mk"><span class="st">★★</span><span class="chip"><i class="c2"></i>2 Winner alt</span></div></div>
+          <div class="cell"><div class="img"><b class="g5"></b></div><div class="nm">100726-SPO-BGLF-005.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g6"></b></div><div class="nm">100726-SPO-BGLF-006.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g2 p"></b></div><div class="nm">100726-SPO-BGLF-007.NEF</div><div class="mk"><span class="rj">✕ rejected</span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g1"></b></div><div class="nm">100726-SPO-BGLF-008.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g4"></b></div><div class="nm">100726-SPO-BGLF-009.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g3"></b><span class="bar c3"></span></div><div class="nm">100726-SPO-BGLF-010.NEF</div><div class="mk"><span class="st">★★★</span><span class="chip"><i class="c3"></i>3 Superior</span></div></div>
+        </div>
+        <aside class="insp"><div><h4>Capture <span>▾</span></h4><div class="kv"><b>Camera</b><span>NIKON Z 6_2</span><b>Lens</b><span>NIKKOR Z 70-200mm f/2.8 VR S</span><b>Exposure</b><span>1/1600 · f/2.8 · ISO 400 · 200mm</span><b>Taken</b><span>2026-10-06 14:03:11</span></div></div>
+          <div><h4>Marks <span>▾</span></h4><div class="kv"><b>Rating</b><span class="st" style="color:#e3b341">★★★★</span><b>Class</b><span>1 Winner</span><b>Tagged</b><span>Yes</span></div></div>
+          <div><h4>Caption <span>⌘3</span></h4><div class="head">100726 SPO BGLF WPIAL Championships</div><p class="cap">North Catholic's Christopher Faber tees off on No. 1 in the WPIAL Class 2A Boys Individual Golf Championship held Tuesday, Oct. 6, 2026, at Oakmont Country Club. Caleb McCartney/Special to the Eagle</p></div>
+          <div><h4>Files <span>▾</span></h4><div class="kv"><b>RAW</b><span>001.NEF · 28.4 MB</span><b>JPEG</b><span>001.JPG · 9.1 MB</span><b>Sidecar</b><span>001.xmp · in sync</span></div></div></aside>
+      </div>
+      <div class="sb"><span>114 photos</span><span>3 selected</span><span>100726-SPO-BGLF-001.NEF</span><span>1/1600 f/2.8 ISO 400 200mm</span><span class="st">★★★★</span><span>1 Winner</span><span class="write">sidecar written</span><span class="spacer"></span><span>frame 4 ms</span></div>
+    </div>
+    <div class="meta">
+      <div><h3>Rationale</h3><p>Follows the macOS skeleton exactly: source-list sidebar, unified toolbar, thin dividers, system appearance (light shown). Identity is confined to the lavender focus and selection and the serif assignment headline.</p></div>
+      <div><h3>Wins</h3><ul><li>Fastest path to HIG and VoiceOver compliance</li><li>Discoverable: every command visible in menus and toolbar</li><li>Cheapest to build in egui</li></ul></div>
+      <div><h3>Trade-offs</h3><ul><li>Light chrome and a mid-grey photo ground compete with the image</li><li>Least distinctive; could be any Mac app</li><li>Density is comfortable, not deadline-fast</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ============ Direction 2 ============ -->
+  <section class="dir d2" id="d2" role="tabpanel" aria-labelledby="t2">
+    <div class="win" aria-label="Professional Darkroom mockup">
+      <div class="tb"><div class="lights"><i></i><i></i><i></i></div><span class="tbtn">⊞</span>
+        <div class="seg"><span class="on">Sheet</span><span>Preview</span><span>Caption</span><span>Ingest</span></div>
+        <span class="tbtn">★ ≥ 3 ×</span><span class="tbtn">Class 1–2 ×</span><span class="tbtn">Sort: capture ▾</span><span class="spacer"></span><div class="slider"></div><span class="busy">12 decoding · 0 errors</span><span class="tbtn">ⓘ</span></div>
+      <div class="body">
+        <aside class="side"><h4>Favorites</h4><div class="row"><i></i>Assignments 2026</div><div class="row on"><i></i>100726 SPO BGLF</div><div class="row"><i></i>Desk exports</div>
+          <h4>Recent</h4><div class="row"><i></i>SEW TasteOfSewickley</div><div class="row"><i></i>Caleb Thesis</div>
+          <h4>Cards &amp; Volumes</h4><div class="row"><i></i>NIKON Z 6_2 · Ingest…</div><div class="row"><i></i>Work SSD</div>
+          <h4>Contact sheets</h4><div class="row"><i></i>Print picks (4)</div><div class="row"><i></i>Gallery (23)</div></aside>
+        <div class="grid">
+          <div class="cell focus sel"><div class="img"><b class="g1"></b><span class="bar c1"></span><span class="tag">T</span></div><div class="nm">100726-SPO-BGLF-001.NEF</div><div class="mk"><span class="st">★★★★</span><span class="chip"><i class="c1"></i>1</span></div></div>
+          <div class="cell sel"><div class="img"><b class="g2"></b></div><div class="nm">100726-SPO-BGLF-002.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell sel"><div class="img"><b class="g3 p"></b></div><div class="nm">100726-SPO-BGLF-003.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g4"></b><span class="bar c2"></span></div><div class="nm">100726-SPO-BGLF-004.NEF</div><div class="mk"><span class="st">★★</span><span class="chip"><i class="c2"></i>2</span></div></div>
+          <div class="cell"><div class="img"><b class="g5"></b></div><div class="nm">100726-SPO-BGLF-005.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g6"></b></div><div class="nm">100726-SPO-BGLF-006.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g2 p"></b></div><div class="nm" style="text-decoration:line-through">100726-SPO-BGLF-007.NEF</div><div class="mk"><span class="rj">✕</span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g1"></b></div><div class="nm">100726-SPO-BGLF-008.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g4"></b></div><div class="nm">100726-SPO-BGLF-009.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g3"></b><span class="bar c3"></span></div><div class="nm">100726-SPO-BGLF-010.NEF</div><div class="mk"><span class="st">★★★</span><span class="chip"><i class="c3"></i>3</span></div></div>
+          <div class="cell"><div class="img"><b class="g5 p"></b></div><div class="nm">100726-SPO-BGLF-011.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g6"></b><span class="bar c5"></span></div><div class="nm">100726-SPO-BGLF-012.NEF</div><div class="mk"><span></span><span class="chip"><i class="c5"></i>5</span></div></div>
+        </div>
+        <aside class="insp"><div><h4>Capture <span>▾</span></h4><div class="kv"><b>Camera</b><span>NIKON Z 6_2</span><b>Lens</b><span>NIKKOR Z 70-200 f/2.8 S</span><b>Exp</b><span>1/1600 · f/2.8 · ISO 400 · 200mm</span><b>Taken</b><span>2026-10-06 14:03:11</span><b>Preview</b><span>1620 px embedded</span></div></div>
+          <div><h4>Marks <span>3 selected</span></h4><div class="kv"><b>Rating</b><span style="color:#e3b341">★★★★ <i style="color:var(--w-dim);font-style:normal">mixed</i></span><b>Class</b><span>1 Winner</span><b>Tagged</b><span>Yes</span></div></div>
+          <div><h4>Caption <span>⌘3</span></h4><div class="head">100726 SPO BGLF WPIAL Championships</div><p class="cap">North Catholic's Christopher Faber tees off on No. 1 in the WPIAL Class 2A Boys Individual Golf Championship held Tuesday, Oct. 6, 2026, at Oakmont Country Club. Caleb McCartney/Special to the Eagle</p></div>
+          <div><h4>Files <span>▾</span></h4><div class="kv"><b>RAW</b><span>001.NEF · 28.4 MB</span><b>JPEG</b><span>001.JPG · 9.1 MB</span><b>Sidecar</b><span>001.xmp · in sync</span><b>Conflict</b><span>none</span></div></div></aside>
+      </div>
+      <div class="sb"><span>114 photos · showing 37</span><span>3 selected</span><span>100726-SPO-BGLF-001.NEF</span><span>1/1600 f/2.8 ISO 400 200mm</span><span class="st">★★★★</span><span>1 Winner</span><span>advance after mark: on</span><span class="write">sidecar written 3 ms</span><span class="spacer"></span><span>frame 4 ms · cache 37/37</span></div>
+    </div>
+    <div class="meta">
+      <div><h3>Rationale</h3><p>Everything near a photograph is hue-neutral dark grey; the accent is desaturated lavender and only ever marks focus. Mono uppercase metadata, numbered class chips, a 6-across sheet and a filter bar built for a deadline.</p></div>
+      <div><h3>Wins</h3><ul><li>Best photographic evaluation surface</li><li>Highest useful density; filenames and marks legible at 6 across</li><li>Carries the mccal.dev type hierarchy without its tint</li></ul></div>
+      <div><h3>Trade-offs</h3><ul><li>Needs a designed light theme for daylight laptops</li><li>11 px mono must be checked on 1x displays and with VoiceOver</li><li>Dense toolbars tempt feature creep; the tool-visibility setting from direction 3 keeps it honest</li></ul></div>
+    </div>
+    <h3 style="font:600 10px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:6px 0 10px">Same direction · Caption workspace (⌘3)</h3>
+    <div class="win capws" aria-label="Caption workspace mockup">
+      <div class="tb"><div class="lights"><i></i><i></i><i></i></div><span class="tbtn">⊞</span>
+        <div class="seg"><span>Sheet</span><span>Preview</span><span class="on">Caption</span><span>Ingest</span></div>
+        <span class="tbtn">Stationery: Butler Eagle ▾</span><span class="spacer"></span><span class="busy">12 / 114 · 3 selected</span></div>
+      <div class="body">
+        <aside class="side"><h4>Favorites</h4><div class="row on"><i></i>100726 SPO BGLF</div><div class="row"><i></i>Desk exports</div><h4>Assignments</h4><div class="row"><i></i>Butler Eagle General</div><div class="row on"><i></i>100726 SPO BGLF</div></aside>
+        <div class="photo"><div class="big"><b class="g1"></b></div><div class="nav"><span>←</span><span>100726-SPO-BGLF-012.NEF</span><span style="color:#e3b341">★★★★</span><span>1 Winner</span><span>→</span></div>
+          <div class="strip"><b class="g4"></b><b class="g5"></b><b class="g1 on"></b><b class="g6"></b><b class="g2"></b><b class="g3"></b></div></div>
+        <div class="fields"><div class="head" style="font:400 15px/1.3 var(--serif);color:var(--w-fg)">100726 SPO BGLF WPIAL Championships</div>
+          <label>Caption<div class="in ta"><em>North Catholic's Christopher Faber</em> tees off on No. 1<em> in the WPIAL Class 2A Boys Individual Golf Championship held Tuesday, Oct. 6, 2026, at Oakmont Country Club. Caleb McCartney/Special to the Eagle</em></div></label>
+          <label>Headline<div class="in">100726 SPO BGLF WPIAL Championships</div></label>
+          <label>Keywords<div class="in">WPIAL; golf; Oakmont Country Club; North Catholic</div></label>
+          <label>Sublocation · City · State<div class="in">Oakmont Country Club · Oakmont · Pa.</div></label>
+          <label>Credit · Copyright<div class="in mixed">mixed across 3 selected</div></label>
+          <div class="codes">codes: <b>\cf\</b> Faber · <b>\cc\</b> Campbell · <b>\nc\</b> North Catholic's · <b>\tail\</b> event + date + credit</div>
+          <div class="btns"><span class="pri">Save &amp; next ⌘⏎</span><span>Apply to 3</span></div></div>
+      </div>
+      <div class="sb"><span>caption field has focus · culling keys off</span><span class="spacer"></span><span class="write">unsaved</span></div>
+    </div>
+  </section>
+
+  <!-- ============ Direction 3 ============ -->
+  <section class="dir d3" id="d3" role="tabpanel" aria-labelledby="t3">
+    <div class="win" aria-label="Minimal Workspace mockup">
+      <div class="tb"><span class="tbtn">⊞</span><div class="seg"><span class="on">Sheet</span><span>Preview</span><span>Caption</span><span>Ingest</span></div><span class="tbtn">Filter</span><span class="spacer"></span><div class="slider"></div><span class="busy">12</span><span class="tbtn">Tools ▾</span></div>
+      <div class="body">
+        <div class="grid">
+          <div class="cell focus sel"><div class="img"><b class="g1"></b><span class="bar c1"></span><span class="tag">T</span></div><div class="nm">100726-SPO-BGLF-001.NEF</div><div class="mk"><span class="st">★★★★</span><span class="chip"><i class="c1"></i>1</span></div></div>
+          <div class="cell sel"><div class="img"><b class="g2"></b></div><div class="nm">…-002.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell sel"><div class="img"><b class="g3 p"></b></div><div class="nm">…-003.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g4"></b><span class="bar c2"></span></div><div class="nm">…-004.NEF</div><div class="mk"><span class="st">★★</span><span class="chip"><i class="c2"></i>2</span></div></div>
+          <div class="cell"><div class="img"><b class="g5"></b></div><div class="nm">…-005.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g6"></b></div><div class="nm">…-006.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g2 p"></b></div><div class="nm" style="text-decoration:line-through">…-007.NEF</div><div class="mk"><span class="rj">✕</span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g1"></b></div><div class="nm">…-008.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g4"></b></div><div class="nm">…-009.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g3"></b><span class="bar c3"></span></div><div class="nm">…-010.NEF</div><div class="mk"><span class="st">★★★</span><span class="chip"><i class="c3"></i>3</span></div></div>
+          <div class="cell"><div class="img"><b class="g5 p"></b></div><div class="nm">…-011.NEF</div><div class="mk"><span></span><span></span></div></div>
+          <div class="cell"><div class="img"><b class="g6"></b><span class="bar c5"></span></div><div class="nm">…-012.NEF</div><div class="mk"><span></span><span class="chip"><i class="c5"></i>5</span></div></div>
+        </div>
+        <div class="edge l">FOLDERS</div><div class="edge r">INFO</div>
+        <div class="pop"><div class="kv"><b>Camera</b><span>NIKON Z 6_2</span><b>Exp</b><span>1/1600 · f/2.8 · ISO 400</span><b>Class</b><span>1 Winner</span></div><div style="font:10px/1.4 var(--mono);color:var(--w-dim)">Tools shown: Capture, Marks. Caption and Files are off; enable in Tools ▾</div></div>
+      </div>
+      <div class="sb"><span>114 photos</span><span>3 selected</span><span>100726-SPO-BGLF-001.NEF</span><span class="st">★★★★</span><span>1 Winner</span><span class="write">sidecar written</span><span class="spacer"></span><span>frame 4 ms</span></div>
+    </div>
+    <div class="meta">
+      <div><h3>Rationale</h3><p>The grid is the window. Sidebar and inspector live on the edges and open on hover, key or VoiceOver command; one floating toolbar; tools appear only when enabled, Folio-style. Chrome uses the mccal.dev tokens directly.</p></div>
+      <div><h3>Wins</h3><ul><li>Calmest, most distinctive; the photograph has the whole window</li><li>Customisation is the product idea, not a settings page</li></ul></div>
+      <div><h3>Trade-offs</h3><ul><li>Discoverability and VoiceOver navigation of transient panels are hard problems</li><li>Risks hiding file-operation status, which the brief forbids</li><li>Hover edges do not exist for keyboard-only users; needs duplicated commands</li></ul></div>
+    </div>
+  </section>
+  <p class="note">Recommendation: direction 2's surfaces and density on direction 1's macOS skeleton, with direction 3's tool visibility as a setting. Rationale and sources in docs/design/DESIGN_RESEARCH.md.</p>
+</div>
+<script>
+(function () {
+  var tabs = document.querySelectorAll('[role=tab]');
+  function show(id) {
+    tabs.forEach(function (t) { t.setAttribute('aria-selected', String(t.getAttribute('aria-controls') === id)); });
+    document.querySelectorAll('.dir').forEach(function (s) { s.classList.toggle('on', s.id === id); });
+    try { localStorage.setItem('apature-dir', id); } catch (e) {}
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.getAttribute('aria-controls')); }); });
+  var h = (location.hash || '').replace('#', '');
+  var saved = null; try { saved = localStorage.getItem('apature-dir'); } catch (e) {}
+  if (/^d[123]$/.test(h)) show(h); else if (saved && document.getElementById(saved)) show(saved);
+})();
+</script>
