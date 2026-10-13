@@ -60,7 +60,20 @@ chrome. *Trade-offs:* most distinctive and calm; discoverability and
 VoiceOver navigation of transient overlays are the hard problems; risks
 hiding file-operation status, which the brief forbids.
 
-## Recommendation
+## Decision (owner, 2026-10-13)
+
+Both directions 1 and 2 are kept as **two appearances of one design
+system**: Apature Dark (Professional Darkroom) and Apature Light (Mac
+Studio: off-white, restrained blue accent, open spacing). Direction 3
+survives only as the tool-visibility setting. The mockup page was
+rebuilt around that decision with a shared layout and a single spacing
+scale. Shared requirements: sidebar for folders, collections and drives;
+large adjustable sheet; right-side preview and inspector; optional bottom
+filmstrip; minimal toolbar with strong filtering; keyboard-first culling;
+resizable, collapsible panels; system appearance switching; density
+without clutter.
+
+## Earlier recommendation (superseded by the decision above)
 
 **Professional Darkroom as the base, with Native Editorial's structure.**
 Keep the HIG skeleton of direction 1 (real menu bar, source-list sidebar,
