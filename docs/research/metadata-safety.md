@@ -55,7 +55,29 @@ with the classic names kept as read aliases; `sidecar_path` reuses an
 existing `.XMP`/`.xmp` of either case and otherwise follows the case of the
 source extension like PM; a verbatim PM 2026 sidecar is a test fixture.
 
-## Capture One (2026-10-13, 16.8.2, read direction verified)
+## Capture One (2026-10-13, 16.8.2, both directions verified)
+
+Done by AppleScript against a throwaway session (Capture One refuses to
+browse anything under `/private/tmp`, so the copies were staged in a
+temporary folder under Pictures and deleted afterwards). Its preference
+for sidecar auto-sync was **not** changed; the scripted `sync metadata`
+command writes regardless.
+
+| step | result |
+|---|---|
+| browse the pair folder | six variants: NEF and JPEG of each pair carry identical marks: 7783 rating 4 tag red, 7784 rating 2 tag green, 7802 rating 1 tag blue. Capture One reads the sidecar for the NEF and the embedded packet for the JPEG. |
+| set 7802 (both variants) to rating 5, tag yellow; `sync metadata` | Capture One **rewrote the sidecar in element form**, kept every foreign property (crd, plus, aux, photomechanic Prefs/PMVersion), set `xmp:Rating` 5 and `xmp:Label` Yellow, and **left `photomechanic:ColorClass` at 4**. It did not touch the JPEG (hash identical): it uses the sidecar for JPEGs too. NEFs identical. |
+| `pw scan` | rating 5 and conflicts reported against the JPEG's stale packet (rating 1, Blue). Colour class came back **4 (Blue)** because the reader trusted the number over the label. |
+
+Fix applied: a label that names a known class now wins over a disagreeing
+`photomechanic:ColorClass` (Photo Mechanic keeps the two consistent; a
+mismatch means a label-only writer edited last). Writing back repairs the
+number. The Capture One sidecar is a test fixture.
+
+Colour-tag mapping confirmed: Capture One tags 1 red, 3 yellow, 4 green,
+5 blue correspond to our classes 1, 2, 3, 4 via the label names.
+
+## Earlier read-only observation (superseded)
 
 Opening the scratch pair folder in Capture One brought up its Import
 browser, which showed the three pairs as single NEF items with: 7783 red
@@ -64,11 +86,6 @@ counts listed each rating and colour twice, i.e. it read the same values
 from the RAW's sidecar and from the JPEG's embedded packet, so the two
 sources agree in a third reader. The import was cancelled; nothing was
 added to the catalog.
-
-Not done: the write direction. Capture One only writes sidecars when
-Preferences › Image › Metadata › Auto Sync Sidecar XMP is set to Full Sync,
-and marking requires the images in a catalog or session; both change the
-owner's Capture One state, so they wait for explicit approval.
 
 ## Not verified (honest list)
 

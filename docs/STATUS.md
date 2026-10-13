@@ -15,7 +15,7 @@ app, a measurement); **production-ready** is not claimed for anything.
 | JPEG decode with DCT scaling, orientation, thumbnail | tested | round-trip tests; D850 NEF/JPG runs |
 | Disk thumbnail cache (key: path, size, mtime, size) | tested | unit test; bench warm runs |
 | EXIF summary (make/model/lens/date/exposure/orientation) from TIFF and JPEG APP1 | **verified** | matches exiftool on D850 NEF |
-| XMP sidecar read/write, in-place, atomic, read-back checked | **verified** | exiftool; **Photo Mechanic 2026.6 round trip both directions** (NEF-only and pairs); **Capture One 16.8 reads both sources** consistently; see `docs/research/metadata-safety.md` |
+| XMP sidecar read/write, in-place, atomic, read-back checked | **verified** | exiftool; **Photo Mechanic 2026.6 round trip both directions** (NEF-only and pairs); **Capture One 16.8 round trip both directions** (reads sidecar + embedded; its sidecar rewrite handled, stale ColorClass resolved by label); see `docs/research/metadata-safety.md` |
 | Embedded-XMP read **and write** in JPEG, pair policy (sidecar + embedded), conflict report | **verified** | unit tests; exiftool on a D850 JPEG; Photo Mechanic shows embedded marks for pairs |
 | Verified copy (temp → SHA-256 both sides → rename; never overwrite; never delete source) | tested | unit test only; no card-reader run |
 | CR3 / HEIC / RAF-with-no-TIFF previews | **not implemented** | returns "no embedded JPEG" |

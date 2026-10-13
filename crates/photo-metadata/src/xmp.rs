@@ -28,16 +28,25 @@ pub struct XmpMarks {
 }
 
 impl XmpMarks {
-    /// Convert to in-app marks. Colour class prefers the explicit Photo
-    /// Mechanic property and falls back to mapping the label name.
+    /// Convert to in-app marks.
+    ///
+    /// Colour class: Photo Mechanic writes `photomechanic:ColorClass` and
+    /// `xmp:Label` together and keeps them consistent. Capture One and
+    /// Lightroom only know `xmp:Label`, so after one of them edits a sidecar
+    /// the number is stale (verified with Capture One 16.8: Label "Yellow",
+    /// ColorClass still 4). Therefore a label that names a known class wins
+    /// over a disagreeing number; the number is used when there is no label
+    /// or the label is not a class name we know.
     pub fn to_marks(&self, scheme: &ColorClassScheme) -> Marks {
-        let color_class = match self.color_class {
-            Some(c) => ColorClass::clamp(c),
-            None => self
-                .label
-                .as_deref()
-                .and_then(|l| scheme.class_for_label(l))
-                .unwrap_or_default(),
+        let from_label = self
+            .label
+            .as_deref()
+            .and_then(|l| scheme.class_for_label(l));
+        let color_class = match (self.color_class, from_label) {
+            (Some(c), Some(l)) if c != l.0 => l,
+            (Some(c), _) => ColorClass::clamp(c),
+            (None, Some(l)) => l,
+            (None, None) => ColorClass::NONE,
         };
         Marks {
             rating: Rating::clamp(self.rating.unwrap_or(0)),
@@ -506,6 +515,61 @@ mod tests {
         assert!(out.contains(r#"photomechanic:ColorClass="1""#));
         assert!(out.contains(r#"photomechanic:Tagged="False""#));
         assert_eq!(without_marks(&out), without_marks(PM_2026));
+    }
+
+    /// Sidecar as rewritten by Capture One 16.8 `sync metadata` on 2026-10-13
+    /// over a Photo Mechanic one: element form, Label updated, ColorClass stale.
+    const CAPTURE_ONE: &str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 5.5.0">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+    xmlns:photomechanic="http://ns.camerabits.com/photomechanic/1.0/"
+    xmlns:exif="http://ns.adobe.com/exif/1.0/">
+   <xmp:CreateDate>2025-04-10T19:10:41.62-04:00</xmp:CreateDate>
+   <xmp:Rating>5</xmp:Rating>
+   <xmp:Label>Yellow</xmp:Label>
+   <photoshop:Urgency>7</photoshop:Urgency>
+   <photomechanic:ColorClass>4</photomechanic:ColorClass>
+   <photomechanic:Tagged>True</photomechanic:Tagged>
+   <photomechanic:Prefs>1:7:5:007802</photomechanic:Prefs>
+   <exif:DateTimeOriginal>2025-04-10T19:10:41.62Z</exif:DateTimeOriginal>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+
+    #[test]
+    fn capture_one_label_wins_over_stale_color_class() {
+        let m = parse(CAPTURE_ONE);
+        assert_eq!(m.rating, Some(5));
+        assert_eq!(m.label.as_deref(), Some("Yellow"));
+        assert_eq!(m.color_class, Some(4), "the stale number is still parsed");
+        let scheme = ColorClassScheme::default();
+        assert_eq!(
+            m.to_marks(&scheme).color_class,
+            ColorClass(2),
+            "label wins when it names a known class"
+        );
+        // A label we cannot map leaves the number in charge.
+        let odd = XmpMarks {
+            label: Some("Second edit".into()),
+            color_class: Some(4),
+            ..Default::default()
+        };
+        assert_eq!(odd.to_marks(&scheme).color_class, ColorClass(4));
+        // Writing back repairs the number and keeps element form.
+        let out = apply(
+            CAPTURE_ONE,
+            &XmpMarks::from_marks(&m.to_marks(&scheme), &scheme),
+        )
+        .unwrap();
+        assert!(
+            out.contains("<photomechanic:ColorClass>2</photomechanic:ColorClass>"),
+            "{out}"
+        );
+        assert!(out.contains("<xmp:Label>Yellow</xmp:Label>"));
+        assert!(out.contains("<photoshop:Urgency>7</photoshop:Urgency>"));
     }
 
     #[test]
