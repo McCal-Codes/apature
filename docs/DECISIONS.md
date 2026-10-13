@@ -97,11 +97,18 @@ but are always behind visible ones and still populate the disk cache.
 Threads: `available_parallelism - 1`, clamped to 2..=12. Not yet measured
 under fast scrolling of a 1 000-item folder; see `docs/STATUS.md`.
 
-## ADR-007 (2026-10-13, accepted): colour-class names default to Photo Mechanic's factory names
+## ADR-007 (2026-10-13, accepted, revised same day): colour-class names default to what this Photo Mechanic uses
 
-Photo Mechanic writes the class *name* into `xmp:Label`; exiftool's tag
-table confirms class 1 is "Winner" and class 2 "Winner alt". The owner's
-own workflow refers to them by colour (red = print pick, yellow = gallery,
-green = captioned, purple = needs ID, trash = reject). The scheme is a data
-structure (`ColorClassScheme`) so it can be loaded from preferences; not yet
-wired to a settings file.
+Photo Mechanic writes the class *name* into `xmp:Label`. exiftool's tag
+table describes class 1 as "Winner", but the owner's PM 2026.6 names the
+classes Red, Yellow, Green, Blue, Purple, Cyan, Brown, Trash and wrote
+`xmp:Label="Yellow"` for class 2 in the round-trip test. Defaults now use
+those names; the classic names are accepted when reading. The scheme is a
+data structure (`ColorClassScheme`) so it can be loaded from preferences;
+not yet wired to a settings file.
+
+## ADR-008 (2026-10-13, accepted): sidecar file name case follows Photo Mechanic
+
+PM wrote `850_7802.XMP` for `850_7802.NEF`. An existing sidecar of either
+case is reused; a new one copies the case of the source extension. On APFS
+this is cosmetic; on a case-sensitive filesystem it prevents two sidecars.

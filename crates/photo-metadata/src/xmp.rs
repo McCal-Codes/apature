@@ -436,6 +436,75 @@ mod tests {
         assert_eq!(m.tagged, Some(false));
     }
 
+    /// Shape of a sidecar Photo Mechanic 2026.6 wrote on 2026-10-13 (no xpacket
+    /// wrapper, crd/plus/aux namespaces, Prefs and PMVersion).
+    const PM_2026: &str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 6.0.0">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:crd="http://ns.adobe.com/camera-raw-defaults/1.0/"
+    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+    xmlns:plus="http://ns.useplus.org/ldf/xmp/1.0/"
+    xmlns:photomechanic="http://ns.camerabits.com/photomechanic/1.0/"
+    xmlns:aux="http://ns.adobe.com/exif/1.0/aux/"
+   xmp:CreatorTool="NIKON D850 Ver.1.30     "
+   xmp:CreateDate="2025-04-10T19:10:41.62-04:00"
+   xmp:Label="Yellow"
+   xmp:Rating="3"
+   crd:HueAdjustmentRed="0"
+   photoshop:DateCreated="2025-04-10T19:10:41.62-04:00"
+   plus:DataMining="http://ns.useplus.org/ldf/vocab/DMI-UNSPECIFIED"
+   photomechanic:ColorClass="2"
+   photomechanic:Tagged="True"
+   photomechanic:Prefs="1:2:3:007802"
+   photomechanic:PMVersion="2026.6.9175"
+   aux:ImageNumber="7802"/>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+
+    #[test]
+    fn photo_mechanic_2026_sidecar_round_trips() {
+        let m = parse(PM_2026);
+        assert_eq!(
+            m,
+            XmpMarks {
+                rating: Some(3),
+                label: Some("Yellow".into()),
+                color_class: Some(2),
+                tagged: Some(true)
+            }
+        );
+        let scheme = ColorClassScheme::default();
+        assert_eq!(
+            m.to_marks(&scheme),
+            Marks {
+                rating: Rating(3),
+                color_class: ColorClass(2),
+                tagged: true
+            }
+        );
+        // Edit it the way the app would and check PM's own fields survive.
+        let out = apply(
+            PM_2026,
+            &XmpMarks::from_marks(
+                &Marks {
+                    rating: Rating(5),
+                    color_class: ColorClass(1),
+                    tagged: false,
+                },
+                &scheme,
+            ),
+        )
+        .unwrap();
+        assert!(out.contains(r#"photomechanic:Prefs="1:2:3:007802""#));
+        assert!(out.contains(r#"photomechanic:PMVersion="2026.6.9175""#));
+        assert!(out.contains(r#"xmp:Label="Red""#));
+        assert!(out.contains(r#"photomechanic:ColorClass="1""#));
+        assert!(out.contains(r#"photomechanic:Tagged="False""#));
+        assert_eq!(without_marks(&out), without_marks(PM_2026));
+    }
+
     #[test]
     fn parses_element_form_and_xap_prefix() {
         let t = r#"<rdf:Description xmlns:xap="http://ns.adobe.com/xap/1.0/"><xap:Rating>3</xap:Rating><xap:Label>Red</xap:Label></rdf:Description>"#;
@@ -521,7 +590,7 @@ mod tests {
             .is_none());
         let text = fs::read_to_string(&p).unwrap();
         assert!(text.starts_with("<?xpacket begin="));
-        assert!(text.contains(r#"xmp:Label="Excellent""#));
+        assert!(text.contains(r#"xmp:Label="Purple""#));
     }
 
     /// A Lightroom Classic style sidecar: multi-line Description with crs
@@ -765,7 +834,7 @@ mod tests {
                 "{text}"
             );
             assert!(
-                text.contains("Label                           : Winner alt"),
+                text.contains("Label                           : Yellow"),
                 "{text}"
             );
             assert!(

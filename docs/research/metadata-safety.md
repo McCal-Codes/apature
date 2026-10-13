@@ -18,13 +18,28 @@ automated test exists in `crates/photo-metadata/src/xmp.rs` and passed.
 | Embedded XMP in a sibling JPEG can be read and compared; disagreements are reported | `pw scan` prints `CONFLICT` lines. |
 | Idempotence | applying the same marks twice changes nothing. |
 
+## Photo Mechanic round trip (2026-10-13, PM 2026.6 build 9175, verified)
+
+Done on copies of the three D850 NEFs in a scratch folder; the NEFs were
+hashed before and after and are byte-identical.
+
+| step | result |
+|---|---|
+| `pw mark` 7783 → rating 4, class 1, tagged; 7784 → rating 2, class 3 | sidecars written |
+| open the NEF-only folder in PM | 7783 shows a **red** bar, four stars, tag checked; 7784 **green**, two stars; 7802 unmarked. Both read exactly. |
+| in PM: Image › Set Color Class › Yellow, Set Rating › 3 Stars, Tag Photos on 7802 | PM wrote `850_7802.XMP` (upper-case extension, no xpacket wrapper) with `xmp:Label="Yellow"`, `xmp:Rating="3"`, `photomechanic:ColorClass="2"`, `Tagged="True"`, plus `Prefs`, `PMVersion`, crd/plus/aux fields |
+| `pw scan` | 7802 → rating 3, class 2, tagged true. Our two sidecars untouched by PM. |
+| same three files as RAW+JPEG pairs | **PM showed no marks**: for pairs it takes metadata from the JPEG (confirmed by observation; the exact preference was not inspected). Our sidecar is ignored until we can embed XMP in the JPEG or write marks to both. |
+
+Consequences applied in code: the default colour-class names are now the
+ones this PM shows (Red, Yellow, Green, Blue, Purple, Cyan, Brown, Trash)
+with the classic names kept as read aliases; `sidecar_path` reuses an
+existing `.XMP`/`.xmp` of either case and otherwise follows the case of the
+source extension like PM; a verbatim PM 2026 sidecar is a test fixture.
+
 ## Not verified (honest list)
 
-* **Photo Mechanic and Lightroom reading our sidecars.** Neither was
-  launched. Photo Mechanic is installed; a manual round-trip (mark in
-  photo-workflow → open in PM → check class and rating → change in PM →
-  re-read with `pw scan`) is the next test and takes ten minutes.
-  Lightroom is not installed; Capture One is, and reads `xmp:Rating` /
+* **Lightroom.** Not installed. Capture One is, and reads `xmp:Rating` /
   `xmp:Label` from sidecars, so it can stand in.
 * **Backup copies.** There is no `.xmp.bak` and no operation log. A bad
   edit that passes the read-back check (e.g. a value the user did not
