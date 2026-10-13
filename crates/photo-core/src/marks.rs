@@ -47,7 +47,10 @@ impl ColorClass {
 /// Photo Mechanic writes the class *name* into `xmp:Label` so other apps can
 /// show something sensible; the names here must match what your copy of Photo
 /// Mechanic is configured with for round-tripping to be exact. The defaults
-/// are Photo Mechanic's factory names.
+/// are the names Photo Mechanic 2026.6 shows in Image › Set Color Class
+/// (verified 2026-10-13: it wrote `xmp:Label="Yellow"` for class 2). The
+/// older "Winner / Winner alt / Superior…" names are accepted as aliases
+/// when reading.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ColorClassScheme {
     pub names: [String; 8],
@@ -58,24 +61,24 @@ impl Default for ColorClassScheme {
     fn default() -> Self {
         ColorClassScheme {
             names: [
-                "Winner".into(),
-                "Winner alt".into(),
-                "Superior".into(),
-                "Superior alt".into(),
-                "Excellent".into(),
-                "Excellent alt".into(),
-                "Review".into(),
+                "Red".into(),
+                "Yellow".into(),
+                "Green".into(),
+                "Blue".into(),
+                "Purple".into(),
+                "Cyan".into(),
+                "Brown".into(),
                 "Trash".into(),
             ],
             colors: [
-                [220, 50, 47],   // 1 red
-                [233, 185, 30],  // 2 yellow
-                [66, 160, 66],   // 3 green
-                [55, 120, 220],  // 4 blue
-                [150, 80, 200],  // 5 purple
-                [220, 100, 170], // 6 pink
-                [130, 130, 130], // 7 grey
-                [60, 60, 60],    // 8 trash
+                [220, 50, 47],  // 1 red
+                [233, 185, 30], // 2 yellow
+                [66, 160, 66],  // 3 green
+                [55, 120, 220], // 4 blue
+                [150, 80, 200], // 5 purple
+                [60, 180, 200], // 6 cyan
+                [150, 100, 50], // 7 brown
+                [60, 60, 60],   // 8 trash
             ],
         }
     }
@@ -89,7 +92,7 @@ impl ColorClassScheme {
         c.index().map(|i| self.colors[i])
     }
     /// Reverse lookup from a label string (case-insensitive), also accepting
-    /// Lightroom's plain colour names.
+    /// Photo Mechanic's classic names and Lightroom's colour names.
     pub fn class_for_label(&self, label: &str) -> Option<ColorClass> {
         let l = label.trim().to_lowercase();
         if l.is_empty() {
@@ -99,11 +102,14 @@ impl ColorClassScheme {
             return Some(ColorClass(i as u8 + 1));
         }
         match l.as_str() {
-            "red" => Some(ColorClass(1)),
-            "yellow" => Some(ColorClass(2)),
-            "green" => Some(ColorClass(3)),
-            "blue" => Some(ColorClass(4)),
-            "purple" => Some(ColorClass(5)),
+            "red" | "winner" => Some(ColorClass(1)),
+            "yellow" | "winner alt" => Some(ColorClass(2)),
+            "green" | "superior" => Some(ColorClass(3)),
+            "blue" | "superior alt" => Some(ColorClass(4)),
+            "purple" | "excellent" => Some(ColorClass(5)),
+            "cyan" | "excellent alt" => Some(ColorClass(6)),
+            "brown" | "review" => Some(ColorClass(7)),
+            "trash" => Some(ColorClass(8)),
             _ => None,
         }
     }
@@ -132,9 +138,11 @@ mod tests {
     #[test]
     fn label_round_trip() {
         let s = ColorClassScheme::default();
-        assert_eq!(s.name(ColorClass(1)), Some("Winner"));
+        assert_eq!(s.name(ColorClass(1)), Some("Red"));
         assert_eq!(s.class_for_label("winner alt"), Some(ColorClass(2)));
+        assert_eq!(s.class_for_label("Yellow"), Some(ColorClass(2)));
         assert_eq!(s.class_for_label("Green"), Some(ColorClass(3)));
+        assert_eq!(s.class_for_label("trash"), Some(ColorClass(8)));
         assert_eq!(s.class_for_label(""), None);
         assert_eq!(s.name(ColorClass::NONE), None);
     }

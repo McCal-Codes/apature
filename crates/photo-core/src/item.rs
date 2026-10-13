@@ -67,8 +67,32 @@ impl PhotoItem {
 
     /// Where the XMP sidecar for this item lives: same directory, same stem,
     /// `.xmp` extension. This matches Photo Mechanic and Lightroom.
+    ///
+    /// Case: Photo Mechanic writes `IMG.XMP` next to `IMG.NEF` (it copies the
+    /// case of the source extension). An existing sidecar of either case is
+    /// used as-is so we never create a second file on a case-sensitive
+    /// filesystem; when none exists, the case follows the primary's extension.
     pub fn sidecar_path(&self) -> PathBuf {
-        self.primary.path.with_extension("xmp")
+        let lower = self.primary.path.with_extension("xmp");
+        let upper = self.primary.path.with_extension("XMP");
+        if lower.is_file() {
+            return lower;
+        }
+        if upper.is_file() {
+            return upper;
+        }
+        let ext_is_upper = self
+            .primary
+            .path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.chars().any(|c| c.is_ascii_uppercase()))
+            .unwrap_or(false);
+        if ext_is_upper {
+            upper
+        } else {
+            lower
+        }
     }
 
     pub fn variants(&self) -> impl Iterator<Item = &Variant> {

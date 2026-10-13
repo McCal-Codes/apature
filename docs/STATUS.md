@@ -15,7 +15,7 @@ app, a measurement); **production-ready** is not claimed for anything.
 | JPEG decode with DCT scaling, orientation, thumbnail | tested | round-trip tests; D850 NEF/JPG runs |
 | Disk thumbnail cache (key: path, size, mtime, size) | tested | unit test; bench warm runs |
 | EXIF summary (make/model/lens/date/exposure/orientation) from TIFF and JPEG APP1 | **verified** | matches exiftool on D850 NEF |
-| XMP sidecar read/write, in-place, atomic, read-back checked | **verified** | see `docs/research/metadata-safety.md` |
+| XMP sidecar read/write, in-place, atomic, read-back checked | **verified** | exiftool; **Photo Mechanic 2026.6 round trip both directions** (NEF-only folders); see `docs/research/metadata-safety.md` |
 | Embedded-XMP read in JPEG + conflict report | tested | unit test; `pw scan` |
 | Verified copy (temp → SHA-256 both sides → rename; never overwrite; never delete source) | tested | unit test only; no card-reader run |
 | CR3 / HEIC / RAF-with-no-TIFF previews | **not implemented** | returns "no embedded JPEG" |
@@ -69,7 +69,7 @@ the GUI and from no panics in 10+ minutes of running; it is not verified.
 
 ## Next priorities
 
-1. Manual Photo Mechanic round-trip of a sidecar (10 min, highest value).
+1. ~~Photo Mechanic round trip~~ done; next metadata item is embedding XMP in JPEGs so RAW+JPEG pairs and JPEG-only folders round-trip with PM too.
 2. Design decision from `docs/design/` (owner's call), then the shell:
    menu bar, sidebar, inspector, tokens, light/dark, cell accessibility.
 3. Selection model + filters in the app state (no core change).

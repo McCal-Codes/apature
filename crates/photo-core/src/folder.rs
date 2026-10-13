@@ -126,6 +126,14 @@ mod tests {
         assert!(items[0].is_pair());
         assert_eq!(items[0].secondary[0].kind, Kind::Jpeg);
         assert!(!items[1].is_pair());
+        assert_eq!(
+            items[0].sidecar_path(),
+            dir.path().join("DSC_0001.XMP"),
+            "uppercase source extension → uppercase sidecar, like Photo Mechanic"
+        );
+        assert_eq!(items[2].sidecar_path(), dir.path().join("dsc_0003.xmp"));
+        // An existing sidecar of the other case wins.
+        fs::write(dir.path().join("DSC_0001.xmp"), b"x").unwrap();
         assert_eq!(items[0].sidecar_path(), dir.path().join("DSC_0001.xmp"));
         assert_eq!(
             items.iter().map(|i| i.id).collect::<Vec<_>>(),
