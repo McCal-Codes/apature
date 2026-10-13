@@ -25,7 +25,29 @@ app, a measurement); **production-ready** is not claimed for anything.
 | Ingest planning, renaming, dual destinations, recovery | **not implemented** | Phase 4; only `copy_verified` exists |
 | Catalog | not started | Phase 4+ |
 
-## Desktop prototype (`apps/desktop`, see ADR-000: a probe, not the product UI)
+## Desktop shell (`apps/desktop`, M2, 2026-10-13)
+
+The designed shell replaced the probe. Verified by automated screenshots of
+the running app in both appearances (`apature <folder> --theme dark|light
+--screenshot out.png`) and by querying the native menu bar through System
+Events.
+
+| feature | status |
+|---|---|
+| Tokens for Apature Dark and Light, following the system appearance; egui widgets restyled through them | implemented, **verified** in screenshots |
+| Native menu bar (Apature, File, Edit, View, Image, Window, Help) with accelerators; ⌘ shortcuts owned by the menu | implemented, **verified** via System Events (`Apple, File, Edit, View, Image, Window, Help`; View and Image items listed) |
+| Toolbar 48 pt: sidebar toggle, workspace switcher (Caption/Ingest disabled with the milestone named), Filter and Sort disabled with reasons, size slider, decode counter, inspector toggle | implemented, verified in screenshots |
+| Source-list sidebar: Favorites (add/remove), Recent (10), Drives & cards (/Volumes), Collections placeholder; 26 pt rows; resizable 200–320 with memory | implemented, verified in screenshots |
+| Contact sheet: virtual grid, letterboxed cells, class bar, chip, stars, tag, pair badge, focus ring, ellipsised filenames; cells carry accessibility names | implemented, verified in screenshots; **VoiceOver not yet tested** |
+| Inspector: sharp preview on top with honest size label, Capture / Marks (editable) / Caption (M4) / Files sections, resizable 280–420 with memory | implemented, verified (preview arrives at 1024 px in ~19 ms) |
+| Filmstrip 88 pt (⇧F), Preview workspace with overlay and ±1 prefetch, status bar 28 pt | implemented, run manually |
+| Panel memory and recent/favorites in `~/Library/Application Support/dev.mccal.Apature/prefs.json` | implemented, run manually |
+| Reduce Motion read at startup → animation time 0 | implemented, not tested with the setting on |
+| App icon (assets/icon.svg → icon-256.png, Apature.icns) as window/Dock icon | implemented; Dock shows it when launched; the app-menu title still reads as the launching process until an .app bundle exists (M6) |
+| SF Pro / SF Mono at runtime | **not loaded**: the system variable fonts fail ab_glyph validation, so egui's bundled fonts are used (visible in screenshots) |
+| Multi-select, filters, sort, undo | M3 |
+
+## Previous probe (superseded)
 
 | feature | status |
 |---|---|
@@ -39,10 +61,7 @@ app, a measurement); **production-ready** is not claimed for anything.
 | Multi-select, filters, sort options | **not implemented** |
 | Menu bar, sidebar, inspector, light theme, VoiceOver names, Reduce Motion | **not implemented** (see `docs/design/MACOS_UI_REQUIREMENTS.md`) |
 
-Visual review of the running window was **not possible** in this session
-(unbundled binary; screen-capture permission unavailable to the shell).
-Correct rendering is inferred from the thumbnail cache being populated by
-the GUI and from no panics in 10+ minutes of running; it is not verified.
+The probe could not be screenshotted; the M2 shell can (see above).
 
 ## Verification run (2026-10-13)
 
