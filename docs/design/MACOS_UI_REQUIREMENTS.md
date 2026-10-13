@@ -32,19 +32,19 @@ session capture.
 
 | id | status | evidence |
 |---|---|---|
-| R-1 | **missing** | eframe/winit creates only the default app menu (About/Hide/Quit). No File/Edit/View menus exist. egui 0.33 has no native menu API; needs an AppKit shim (`objc2-app-kit`) or `muda`. |
+| R-1 | **met** (2026-10-13, muda menu, verified via System Events) | eframe/winit creates only the default app menu (About/Hide/Quit). No File/Edit/View menus exist. egui 0.33 has no native menu API; needs an AppKit shim (`objc2-app-kit`) or `muda`. |
 | R-2 | partial | ⌘O opens a folder; ⌘Q/⌘H/⌘M come from the default app menu; ⌘0–5 are used for rating, which collides with the Finder/Photos convention of ⌘1–4 switching views. Photo Mechanic uses ⌘0–5 for ratings on Mac, so this is a documented conflict to resolve in `INTERACTION_SPEC.md`, not an oversight. |
-| R-3 | **missing** | no sidebar. |
-| R-4 | **missing** | fixed top/bottom panels; egui `SidePanel::resizable(true)` exists and gives a draggable divider, so this is cheap to add. |
+| R-3 | met (collapse via ⌃⌘S, View menu, toolbar; auto-collapse on narrow windows not yet) | |
+| R-4 | met (1 pt dividers, ranges 200–320 / 280–420, widths remembered) | |
 | R-5 | partial | resizable; initial 1400×900; frame restore requires `persistence` feature (not enabled); full screen via the green button works through winit (not observed this session); Retina handled by egui `pixels_per_point` (thumbs are decoded at 320 px for ≤ 180 pt cells, i.e. ≥ 1.8 px/pt, sufficient at 2x only for cells ≤ 160 pt — **cells above 160 pt are upscaled on Retina**). |
 | R-6 | met | `rfd::FileDialog::pick_folder` uses NSOpenPanel. |
-| R-7 | **failing** | `app.rs` hard-codes `Color32::from_gray(24/34/58)` and yellow focus; egui's own widgets follow the system theme, so a light-mode user gets light buttons on a dark grid. |
+| R-7 | met (tokens for both appearances follow `ctx.theme()`; verified in screenshots) | |
 | R-8 | unknown | no explicit animations in our code; egui's ScrollArea momentum is on by default and is not gated on Reduce Motion. |
 | R-9 | partial | focus (cursor) exists; **no selection set**, so focus = selection; rating, class, tag are distinct fields; reject is rating −1 (shares state with rating, which is also Lightroom's model); no filters. Colour class is shown as a colour bar **and nothing else** → fails "not colour-only". |
 | R-10 | partial | virtual grid via `show_rows`; letterboxed; slider + +/−; frame-time stat added this session but not yet measured under load. |
 | R-11 | **failing** | no ICC handling: embedded previews are drawn as sRGB. Nikon bodies set to Adobe RGB will look desaturated. Zoom labels are not shown at all. |
 | R-12 | partial | "decoding N…" count in the toolbar; no cancel; sidecar write errors go to the status line. |
-| R-13 | **missing** | |
+| R-13 | met (sidebar, inspector, filmstrip; per-app memory, not yet per-workspace) | |
 | R-14 | **missing** | |
 
 ## egui capability notes (verified against egui/eframe 0.33 API and source)
