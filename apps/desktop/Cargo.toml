@@ -21,3 +21,8 @@ rayon.workspace = true
 directories.workspace = true
 log.workspace = true
 env_logger.workspace = true
+serde.workspace = true
+image = { workspace = true, features = ["png"] }
+muda = "0.21"
+serde_json = "1"
+ab_glyph = "0.2"

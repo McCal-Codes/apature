@@ -1,12 +1,12 @@
+//! Application state and the single command dispatcher. Drawing lives in
+//! `ui/`; native integration in `platform/`; decoding in `worker.rs`.
+
 use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use egui::{
-    Align2, Color32, ColorImage, CornerRadius, FontId, Key, Pos2, Rect, Sense, Stroke, StrokeKind,
-    TextureHandle, TextureOptions, Vec2,
-};
+use egui::{ColorImage, Key, TextureHandle, TextureOptions};
 use rayon::prelude::*;
 
 use apature_core::{ColorClass, ColorClassScheme, Marks, PhotoItem, Rating, ScanOptions};
@@ -14,58 +14,63 @@ use apature_metadata::items;
 use apature_metadata::ExifSummary;
 use apature_preview::{Rgb, ThumbCache};
 
+use crate::commands::{Command, Workspace};
+use crate::platform::Platform;
+use crate::prefs::Prefs;
+use crate::ui::{self, tokens::Theme};
 use crate::worker::{Job, JobKind, Pool};
+use crate::Launch;
 
 const THUMB_PX: u32 = 320;
-const GAP: f32 = 8.0;
-const LABEL_H: f32 = 18.0;
 const PREFETCH_ROWS: usize = 3;
 const KEEP_ROWS: usize = 12;
 const PREVIEW_LRU: usize = 6;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Mode {
-    Sheet,
-    Preview,
-}
-
 #[derive(Default)]
-struct Stats {
-    thumbs_done: usize,
-    cache_hits: usize,
-    decode_ms_total: f32,
-    scan_ms: f32,
-    /// Exponential moving average of frame time in ms (UI thread).
-    frame_ms_ema: f32,
-    frame_ms_max: f32,
-    textures_uploaded: usize,
+pub struct Stats {
+    pub thumbs_done: usize,
+    pub cache_hits: usize,
+    pub decode_ms_total: f32,
+    pub scan_ms: f32,
+    pub frame_ms_ema: f32,
+    pub frame_ms_max: f32,
+    pub textures_uploaded: usize,
 }
 
 pub struct App {
-    folder: Option<PathBuf>,
-    items: Vec<PhotoItem>,
-    marks: Vec<Marks>,
-    exif: Vec<Option<ExifSummary>>,
-    thumbs: Vec<Option<TextureHandle>>,
-    thumb_err: Vec<Option<String>>,
-    previews: HashMap<usize, TextureHandle>,
+    pub folder: Option<PathBuf>,
+    pub items: Vec<PhotoItem>,
+    pub marks: Vec<Marks>,
+    pub conflicts: Vec<Vec<String>>,
+    pub exif: Vec<Option<ExifSummary>>,
+    pub thumbs: Vec<Option<TextureHandle>>,
+    pub thumb_err: Vec<Option<String>>,
+    /// Decoded previews with the long side they were decoded at.
+    pub previews: HashMap<usize, (TextureHandle, u32)>,
     preview_lru: VecDeque<usize>,
-    pool: Pool,
+    pub pool: Pool,
     generation: u64,
-    cursor: usize,
-    mode: Mode,
-    cell: f32,
-    cols: usize,
-    last_visible_rows: Range<usize>,
-    scroll_to_cursor: bool,
-    scheme: ColorClassScheme,
-    stats: Stats,
-    status: String,
-    opened_at: Option<Instant>,
+    pub cursor: usize,
+    pub workspace: Workspace,
+    pub cols: usize,
+    pub last_visible_rows: Range<usize>,
+    pub scroll_to_cursor: bool,
+    pub scheme: ColorClassScheme,
+    pub stats: Stats,
+    pub status: String,
+    pub prefs: Prefs,
+    pub prefs_dirty: bool,
+    prefs_saved_at: Instant,
+    pub volumes: Vec<(String, PathBuf)>,
+    platform: Platform,
+    reduce_motion: bool,
+    launch: Launch,
+    frames: u64,
+    screenshot_requested: bool,
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, folder: Option<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
         let cache = directories::ProjectDirs::from("dev", "mccal", "Apature")
             .and_then(|d| ThumbCache::new(d.cache_dir().join("thumbs")).ok());
         let threads = std::thread::available_parallelism()
@@ -73,10 +78,22 @@ impl App {
             .unwrap_or(4);
         let threads = (threads.saturating_sub(1)).clamp(2, 12);
         let pool = Pool::new(cc.egui_ctx.clone(), cache, threads);
+        if let Some(theme) = launch.theme {
+            cc.egui_ctx.set_theme(theme);
+        }
+        ui::tokens::install_fonts(&cc.egui_ctx);
+        let prefs = Prefs::load();
+        let platform = Platform::new();
+        platform.sync_toggles(
+            prefs.sidebar_visible,
+            prefs.inspector_visible,
+            prefs.filmstrip_visible,
+        );
         let mut app = App {
             folder: None,
             items: Vec::new(),
             marks: Vec::new(),
+            conflicts: Vec::new(),
             exif: Vec::new(),
             thumbs: Vec::new(),
             thumb_err: Vec::new(),
@@ -85,55 +102,102 @@ impl App {
             pool,
             generation: 0,
             cursor: 0,
-            mode: Mode::Sheet,
-            cell: 180.0,
+            workspace: Workspace::Sheet,
             cols: 1,
             last_visible_rows: 0..0,
             scroll_to_cursor: false,
             scheme: ColorClassScheme::default(),
             stats: Stats::default(),
-            status: "Open a folder (⌘O) or pass one on the command line.".into(),
-            opened_at: None,
+            status: String::new(),
+            prefs,
+            prefs_dirty: false,
+            prefs_saved_at: Instant::now(),
+            volumes: Vec::new(),
+            platform,
+            reduce_motion: Platform::reduce_motion(),
+            launch: launch.clone(),
+            frames: 0,
+            screenshot_requested: false,
         };
-        if let Some(f) = folder {
+        app.refresh_volumes();
+        let first = launch
+            .folder
+            .clone()
+            .or_else(|| app.prefs.recent.first().cloned())
+            .filter(|f| f.is_dir());
+        if let Some(f) = first {
             app.open_folder(&f);
         }
         app
     }
 
-    fn open_folder(&mut self, dir: &Path) {
+    // ----- folders -----------------------------------------------------------
+
+    fn refresh_volumes(&mut self) {
+        let mut v = Vec::new();
+        if let Ok(rd) = std::fs::read_dir("/Volumes") {
+            for e in rd.flatten() {
+                let p = e.path();
+                let name = e.file_name().to_string_lossy().into_owned();
+                if p.is_dir() && !name.starts_with('.') {
+                    v.push((name, p));
+                }
+            }
+        }
+        v.sort();
+        self.volumes = v;
+    }
+
+    pub fn open_folder(&mut self, dir: &Path) {
         let t0 = Instant::now();
         match apature_core::scan(dir, &ScanOptions::default()) {
             Ok(items) => {
                 self.pool.clear_pending();
                 self.generation += 1;
                 let scheme = self.scheme.clone();
-                let marks: Vec<Marks> = items
+                let read: Vec<(Marks, Vec<String>)> = items
                     .par_iter()
-                    .map(|it| items::read_marks(it, &scheme))
+                    .map(|it| {
+                        let src = items::read(it);
+                        let m = src.effective(it, &scheme);
+                        let c = src
+                            .conflicts()
+                            .into_iter()
+                            .map(|(p, c)| {
+                                format!(
+                                    "{}: sidecar {} vs {} {}",
+                                    c.field,
+                                    c.sidecar,
+                                    p.file_name()
+                                        .map(|n| n.to_string_lossy().into_owned())
+                                        .unwrap_or_default(),
+                                    c.embedded
+                                )
+                            })
+                            .collect();
+                        (m, c)
+                    })
                     .collect();
                 let n = items.len();
                 self.items = items;
-                self.marks = marks;
+                self.marks = read.iter().map(|(m, _)| *m).collect();
+                self.conflicts = read.into_iter().map(|(_, c)| c).collect();
                 self.exif = vec![None; n];
                 self.thumbs = vec![None; n];
                 self.thumb_err = vec![None; n];
                 self.previews.clear();
                 self.preview_lru.clear();
                 self.cursor = 0;
-                self.mode = Mode::Sheet;
+                self.workspace = Workspace::Sheet;
                 self.folder = Some(dir.to_path_buf());
                 self.stats = Stats {
                     scan_ms: t0.elapsed().as_secs_f32() * 1000.0,
                     ..Default::default()
                 };
-                self.opened_at = Some(Instant::now());
-                self.status = format!(
-                    "{} photos in {} ({:.0} ms scan)",
-                    n,
-                    dir.display(),
-                    self.stats.scan_ms
-                );
+                self.status = String::new();
+                self.prefs.note_recent(dir);
+                self.prefs_dirty = true;
+                self.refresh_volumes();
             }
             Err(e) => self.status = format!("Could not open {}: {e}", dir.display()),
         }
@@ -175,7 +239,13 @@ impl App {
                             self.stats.decode_ms_total += done.millis;
                         }
                         JobKind::Preview => {
-                            self.previews.insert(done.idx, tex);
+                            log::debug!(
+                                "preview {} ready at {} px in {:.0} ms",
+                                done.idx,
+                                rgb.long_side(),
+                                done.millis
+                            );
+                            self.previews.insert(done.idx, (tex, rgb.long_side()));
                             self.preview_lru.retain(|&i| i != done.idx);
                             self.preview_lru.push_back(done.idx);
                             self.evict_previews();
@@ -209,8 +279,8 @@ impl App {
         }
     }
 
-    fn request_thumb(&self, idx: usize, prio: u32) {
-        if self.thumbs[idx].is_some() || self.thumb_err[idx].is_some() {
+    pub fn request_thumb(&self, idx: usize, prio: u32) {
+        if idx >= self.items.len() || self.thumbs[idx].is_some() || self.thumb_err[idx].is_some() {
             return;
         }
         let it = &self.items[idx];
@@ -228,9 +298,15 @@ impl App {
         );
     }
 
-    fn request_preview(&self, idx: usize, long_side: u32, prio: u32) {
-        if idx >= self.items.len() || self.previews.contains_key(&idx) {
+    pub fn request_preview(&self, idx: usize, long_side: u32, prio: u32) {
+        if idx >= self.items.len() {
             return;
+        }
+        if let Some((_, have)) = self.previews.get(&idx) {
+            if *have >= long_side.min(6000) || *have >= 1600 && long_side > *have {
+                // Either big enough, or already the largest embedded preview we will get.
+                return;
+            }
         }
         let it = &self.items[idx];
         self.pool.request(
@@ -247,10 +323,7 @@ impl App {
         );
     }
 
-    /// Request thumbnails for visible rows (priority by distance), prefetch
-    /// a few rows around them, and drop textures far away so GPU memory stays
-    /// bounded no matter how big the folder is.
-    fn schedule_thumbs(&mut self, visible: Range<usize>) {
+    pub fn schedule_thumbs(&mut self, visible: Range<usize>) {
         if self.items.is_empty() || self.cols == 0 {
             return;
         }
@@ -273,7 +346,7 @@ impl App {
         let keep_last = (visible.end + KEEP_ROWS).min(rows);
         for row in (0..keep_first).chain(keep_last..rows) {
             for idx in row * self.cols..((row + 1) * self.cols).min(self.items.len()) {
-                if self.thumbs[idx].is_some() {
+                if self.thumbs[idx].is_some() && idx != self.cursor {
                     self.thumbs[idx] = None;
                     self.stats.thumbs_done = self.stats.thumbs_done.saturating_sub(1);
                 }
@@ -287,11 +360,12 @@ impl App {
         let it = &self.items[idx];
         match items::write(it, &self.marks[idx], &self.scheme) {
             Ok(written) => {
+                self.conflicts[idx].clear();
                 let m = self.marks[idx];
                 self.status = format!(
                     "{}: {} · {} · {} → {} file{}",
                     it.display_name(),
-                    rating_text(m.rating),
+                    ui::rating_text(m.rating),
                     self.scheme.name(m.color_class).unwrap_or("no class"),
                     if m.tagged { "tagged" } else { "untagged" },
                     written.len(),
@@ -302,46 +376,9 @@ impl App {
         }
     }
 
-    fn set_rating(&mut self, r: i8) {
-        if self.items.is_empty() {
-            return;
-        }
-        let i = self.cursor;
-        self.marks[i].rating = Rating::clamp(r);
-        self.persist(i);
-    }
-
-    fn set_class(&mut self, c: u8) {
-        if self.items.is_empty() {
-            return;
-        }
-        let i = self.cursor;
-        self.marks[i].color_class = ColorClass::clamp(c);
-        self.persist(i);
-    }
-
-    fn toggle_tag(&mut self) {
-        if self.items.is_empty() {
-            return;
-        }
-        let i = self.cursor;
-        self.marks[i].tagged = !self.marks[i].tagged;
-        self.persist(i);
-    }
-
     // ----- navigation --------------------------------------------------------
 
-    fn move_cursor(&mut self, delta: isize) {
-        if self.items.is_empty() {
-            return;
-        }
-        let n = self.items.len() as isize;
-        let next = (self.cursor as isize + delta).clamp(0, n - 1);
-        self.cursor = next as usize;
-        self.scroll_to_cursor = true;
-    }
-
-    fn row_count(&self) -> usize {
+    pub fn row_count(&self) -> usize {
         if self.cols == 0 {
             0
         } else {
@@ -349,386 +386,325 @@ impl App {
         }
     }
 
-    fn row_height(&self) -> f32 {
-        self.cell + LABEL_H + GAP
-    }
-
-    fn handle_keys(&mut self, ctx: &egui::Context) {
-        let (cmd, shift) = ctx.input(|i| (i.modifiers.command, i.modifiers.shift));
-        let pressed = |k: Key| ctx.input(|i| i.key_pressed(k));
-
-        if cmd && pressed(Key::O) {
-            self.pick_folder();
-            return;
-        }
+    fn move_cursor(&mut self, delta: isize) {
         if self.items.is_empty() {
             return;
         }
-        let cols = self.cols.max(1) as isize;
-        let page = (self.last_visible_rows.len().max(1) as isize) * cols;
-
-        match self.mode {
-            Mode::Sheet => {
-                if pressed(Key::ArrowLeft) {
-                    self.move_cursor(-1);
-                }
-                if pressed(Key::ArrowRight) {
-                    self.move_cursor(1);
-                }
-                if pressed(Key::ArrowUp) {
-                    self.move_cursor(-cols);
-                }
-                if pressed(Key::ArrowDown) {
-                    self.move_cursor(cols);
-                }
-                if pressed(Key::PageUp) {
-                    self.move_cursor(-page);
-                }
-                if pressed(Key::PageDown) {
-                    self.move_cursor(page);
-                }
-                if pressed(Key::Enter) || pressed(Key::Space) {
-                    self.mode = Mode::Preview;
-                }
-                if !cmd && pressed(Key::Plus) || pressed(Key::Equals) {
-                    self.cell = (self.cell * 1.2).min(600.0);
-                    self.scroll_to_cursor = true;
-                }
-                if !cmd && pressed(Key::Minus) {
-                    self.cell = (self.cell / 1.2).max(80.0);
-                    self.scroll_to_cursor = true;
-                }
-            }
-            Mode::Preview => {
-                if pressed(Key::ArrowLeft) || pressed(Key::ArrowUp) || pressed(Key::PageUp) {
-                    self.move_cursor(-1);
-                }
-                if pressed(Key::ArrowRight)
-                    || pressed(Key::ArrowDown)
-                    || pressed(Key::PageDown)
-                    || pressed(Key::Space)
-                {
-                    self.move_cursor(1);
-                }
-                if pressed(Key::Escape) || pressed(Key::Enter) {
-                    self.mode = Mode::Sheet;
-                    self.scroll_to_cursor = true;
-                }
-            }
-        }
-        if pressed(Key::Home) {
-            self.cursor = 0;
-            self.scroll_to_cursor = true;
-        }
-        if pressed(Key::End) {
-            self.cursor = self.items.len() - 1;
-            self.scroll_to_cursor = true;
-        }
-
-        // Photo Mechanic conventions: 1–8 colour class, 0 clears it,
-        // ⌘0–⌘5 star rating, T toggles tag, X rejects.
-        let digits = [
-            Key::Num0,
-            Key::Num1,
-            Key::Num2,
-            Key::Num3,
-            Key::Num4,
-            Key::Num5,
-            Key::Num6,
-            Key::Num7,
-            Key::Num8,
-        ];
-        for (n, k) in digits.iter().enumerate() {
-            if pressed(*k) {
-                if cmd {
-                    if n <= 5 {
-                        self.set_rating(n as i8);
-                    }
-                } else {
-                    self.set_class(n as u8);
-                }
-            }
-        }
-        if pressed(Key::T) && !cmd {
-            self.toggle_tag();
-        }
-        if pressed(Key::X) && !cmd && !shift {
-            self.set_rating(-1);
-        }
+        let n = self.items.len() as isize;
+        self.cursor = (self.cursor as isize + delta).clamp(0, n - 1) as usize;
+        self.scroll_to_cursor = true;
     }
 
-    // ----- drawing -----------------------------------------------------------
-
-    fn draw_sheet(&mut self, ui: &mut egui::Ui) {
-        let avail_w = ui.available_width();
-        let avail_h = ui.available_height();
-        self.cols = (((avail_w - GAP) / (self.cell + GAP)).floor() as usize).max(1);
-        let rows = self.row_count();
-        let row_h = self.row_height();
-
-        let mut area = egui::ScrollArea::vertical().auto_shrink([false, false]);
-        if self.scroll_to_cursor && self.cols > 0 {
-            let row = self.cursor / self.cols;
-            let vis = &self.last_visible_rows;
-            // Only jump when the cursor row is outside the rows seen last frame.
-            if row < vis.start || row + 1 > vis.end.saturating_sub(1) {
-                let target = if row < vis.start {
-                    row as f32 * row_h
-                } else {
-                    ((row + 1) as f32 * row_h - avail_h + GAP).max(0.0)
-                };
-                area = area.vertical_scroll_offset(target);
-            }
-            self.scroll_to_cursor = false;
-        }
-
-        let mut clicked: Option<usize> = None;
-        let mut opened: Option<usize> = None;
-        let mut visible = 0..0;
-        let cols = self.cols;
-        let cell = self.cell;
-        let n = self.items.len();
-
-        area.show_rows(ui, row_h, rows, |ui, range| {
-            visible = range.clone();
-            for row in range {
-                ui.horizontal(|ui| {
-                    ui.add_space(GAP);
-                    for col in 0..cols {
-                        let idx = row * cols + col;
-                        if idx >= n {
-                            break;
-                        }
-                        let (rect, resp) =
-                            ui.allocate_exact_size(Vec2::new(cell, cell + LABEL_H), Sense::click());
-                        self.draw_cell(ui, rect, idx);
-                        if resp.double_clicked() {
-                            opened = Some(idx);
-                        } else if resp.clicked() {
-                            clicked = Some(idx);
-                        }
-                        ui.add_space(GAP);
-                    }
-                });
-                ui.add_space(GAP);
-            }
-        });
-
-        self.last_visible_rows = visible.clone();
-        if let Some(i) = clicked {
-            self.cursor = i;
-        }
-        if let Some(i) = opened {
-            self.cursor = i;
-            self.mode = Mode::Preview;
-        }
-        self.schedule_thumbs(visible);
+    pub fn set_cell(&mut self, cell: f32) {
+        self.prefs.cell = cell.clamp(80.0, 600.0);
+        self.prefs_dirty = true;
+        self.scroll_to_cursor = true;
     }
 
-    fn draw_cell(&self, ui: &egui::Ui, rect: Rect, idx: usize) {
-        let p = ui.painter();
-        let selected = idx == self.cursor;
-        let img_rect = Rect::from_min_size(rect.min, Vec2::splat(self.cell));
-        p.rect_filled(
-            img_rect,
-            CornerRadius::same(3),
-            Color32::from_gray(if selected { 58 } else { 34 }),
-        );
-
-        if let Some(tex) = &self.thumbs[idx] {
-            let size = tex.size_vec2();
-            let s = (self.cell / size.x).min(self.cell / size.y);
-            let fitted = Rect::from_center_size(img_rect.center(), size * s);
-            p.image(
-                tex.id(),
-                fitted,
-                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-                Color32::WHITE,
-            );
-        } else if let Some(err) = &self.thumb_err[idx] {
-            p.text(
-                img_rect.center(),
-                Align2::CENTER_CENTER,
-                "no preview",
-                FontId::proportional(12.0),
-                Color32::from_gray(140),
-            );
-            let _ = err;
-        } else {
-            p.text(
-                img_rect.center(),
-                Align2::CENTER_CENTER,
-                "…",
-                FontId::proportional(18.0),
-                Color32::from_gray(110),
-            );
-        }
-
-        let m = &self.marks[idx];
-        if let Some(c) = self.scheme.color(m.color_class) {
-            let bar = Rect::from_min_max(
-                Pos2::new(img_rect.left(), img_rect.bottom() - 6.0),
-                img_rect.right_bottom(),
-            );
-            p.rect_filled(bar, CornerRadius::ZERO, Color32::from_rgb(c[0], c[1], c[2]));
-        }
-        if selected {
-            p.rect_stroke(
-                img_rect.expand(1.5),
-                CornerRadius::same(4),
-                Stroke::new(3.0, Color32::from_rgb(255, 200, 40)),
-                StrokeKind::Outside,
-            );
-        }
-        if m.tagged {
-            let r = Rect::from_min_size(
-                Pos2::new(img_rect.right() - 20.0, img_rect.top() + 4.0),
-                Vec2::new(16.0, 16.0),
-            );
-            p.rect_filled(r, CornerRadius::same(3), Color32::from_rgb(40, 140, 255));
-            p.text(
-                r.center(),
-                Align2::CENTER_CENTER,
-                "T",
-                FontId::proportional(11.0),
-                Color32::WHITE,
-            );
-        }
-        if self.items[idx].is_pair() {
-            p.text(
-                Pos2::new(img_rect.left() + 4.0, img_rect.top() + 3.0),
-                Align2::LEFT_TOP,
-                "R+J",
-                FontId::proportional(10.0),
-                Color32::from_gray(200),
-            );
-        }
-
-        let name = self.items[idx].display_name();
-        let label_y = img_rect.bottom() + 3.0;
-        p.text(
-            Pos2::new(rect.left() + 2.0, label_y),
-            Align2::LEFT_TOP,
-            name,
-            FontId::proportional(11.0),
-            Color32::from_gray(210),
-        );
-        let stars = rating_text(m.rating);
-        if !stars.is_empty() {
-            p.text(
-                Pos2::new(rect.right() - 2.0, label_y),
-                Align2::RIGHT_TOP,
-                stars,
-                FontId::proportional(11.0),
-                Color32::from_rgb(255, 200, 40),
-            );
-        }
-    }
-
-    fn draw_preview(&mut self, ui: &mut egui::Ui) {
-        let rect = ui.available_rect_before_wrap();
-        let ppp = ui.ctx().pixels_per_point();
-        let long_side = ((rect.width().max(rect.height())) * ppp).ceil() as u32;
-        self.request_preview(self.cursor, long_side, 0);
-        self.request_preview(self.cursor + 1, long_side, 1);
-        if self.cursor > 0 {
-            self.request_preview(self.cursor - 1, long_side, 2);
-        }
-        let idx = self.cursor;
-        let p = ui.painter();
-        p.rect_filled(rect, CornerRadius::ZERO, Color32::from_gray(18));
-        let tex = self.previews.get(&idx).or(self.thumbs[idx].as_ref());
-        if let Some(tex) = tex {
-            let size = tex.size_vec2();
-            let s = (rect.width() / size.x)
-                .min(rect.height() / size.y)
-                .min(ppp.max(1.0));
-            let fitted = Rect::from_center_size(rect.center(), size * s);
-            p.image(
-                tex.id(),
-                fitted,
-                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-                Color32::WHITE,
-            );
-            if !self.previews.contains_key(&idx) {
-                p.text(
-                    rect.center_bottom() - Vec2::new(0.0, 12.0),
-                    Align2::CENTER_BOTTOM,
-                    "loading full preview…",
-                    FontId::proportional(12.0),
-                    Color32::from_gray(160),
-                );
-            }
-        } else {
-            p.text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                "loading…",
-                FontId::proportional(16.0),
-                Color32::from_gray(140),
-            );
-        }
+    pub fn cell_accessible_name(&self, idx: usize) -> String {
         let m = self.marks[idx];
-        let overlay = format!(
-            "{}  {}/{}   {}   {}",
-            self.items[idx].display_name(),
-            idx + 1,
-            self.items.len(),
-            rating_text(m.rating),
-            self.scheme.name(m.color_class).unwrap_or("")
-        );
-        p.text(
-            rect.left_top() + Vec2::new(12.0, 10.0),
-            Align2::LEFT_TOP,
-            overlay,
-            FontId::proportional(13.0),
-            Color32::from_gray(230),
-        );
-        if let Some(c) = self.scheme.color(m.color_class) {
-            let bar = Rect::from_min_size(rect.left_top(), Vec2::new(6.0, rect.height()));
-            p.rect_filled(bar, CornerRadius::ZERO, Color32::from_rgb(c[0], c[1], c[2]));
-        }
-        // Keep the sheet's thumbnails warm around the cursor for when we return.
-        if self.cols > 0 {
-            let row = idx / self.cols;
-            let rows = self.row_count();
-            self.schedule_thumbs(row.saturating_sub(1)..(row + 2).min(rows));
-        }
-    }
-
-    fn status_line(&self) -> String {
-        let Some(it) = self.items.get(self.cursor) else {
-            return self.status.clone();
-        };
-        let m = self.marks[self.cursor];
-        let mut parts = vec![
-            format!("{}/{}", self.cursor + 1, self.items.len()),
-            it.display_name(),
-        ];
-        if let Some(e) = &self.exif[self.cursor] {
-            if let Some(d) = &e.date_time_original {
-                parts.push(d.clone());
-            }
-            let cam = e.camera_line();
-            if !cam.is_empty() {
-                parts.push(cam);
-            }
-            let ex = e.exposure_line();
-            if !ex.is_empty() {
-                parts.push(ex);
-            }
-        }
-        let stars = rating_text(m.rating);
-        if !stars.is_empty() {
-            parts.push(stars);
+        let mut parts = vec![self.items[idx].display_name()];
+        if m.rating.is_rejected() {
+            parts.push("rejected".into());
+        } else if m.rating.stars() > 0 {
+            parts.push(format!("{} stars", m.rating.stars()));
         }
         if let Some(n) = self.scheme.name(m.color_class) {
-            parts.push(n.to_string());
+            parts.push(format!("class {} {n}", m.color_class.0));
         }
         if m.tagged {
             parts.push("tagged".into());
         }
-        parts.join("   ")
+        parts.push(format!("{} of {}", idx + 1, self.items.len()));
+        parts.join(", ")
+    }
+
+    pub fn status_parts(&self) -> Vec<String> {
+        let mut parts = Vec::new();
+        match &self.folder {
+            None => parts.push("No folder open · ⌘O".into()),
+            Some(f) => {
+                parts.push(format!(
+                    "{} · {} photos",
+                    f.file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    self.items.len()
+                ));
+            }
+        }
+        if let Some(it) = self.items.get(self.cursor) {
+            parts.push(format!(
+                "{}/{} {}",
+                self.cursor + 1,
+                self.items.len(),
+                it.display_name()
+            ));
+            if let Some(e) = &self.exif[self.cursor] {
+                let ex = e.exposure_line();
+                if !ex.is_empty() {
+                    parts.push(ex);
+                }
+            }
+            let m = self.marks[self.cursor];
+            let stars = ui::rating_text(m.rating);
+            if !stars.is_empty() {
+                parts.push(stars);
+            }
+            if let Some(n) = self.scheme.name(m.color_class) {
+                parts.push(format!("{} {n}", m.color_class.0));
+            }
+            if m.tagged {
+                parts.push("tagged".into());
+            }
+        }
+        parts
+    }
+
+    // ----- commands ----------------------------------------------------------
+
+    pub fn dispatch(&mut self, ctx: &egui::Context, cmd: Command) {
+        match cmd {
+            Command::OpenFolder(p) => self.open_folder(&p),
+            Command::PickFolder => self.pick_folder(),
+            Command::AddFavorite => {
+                if let Some(f) = self.folder.clone() {
+                    if !self.prefs.favorites.contains(&f) {
+                        self.prefs.favorites.push(f);
+                        self.prefs_dirty = true;
+                    }
+                }
+            }
+            Command::RemoveFavorite(p) => {
+                self.prefs.favorites.retain(|f| f != &p);
+                self.prefs_dirty = true;
+            }
+            Command::RevealInFinder => {
+                if let Some(it) = self.items.get(self.cursor) {
+                    Platform::reveal(it.path());
+                }
+            }
+            Command::ToggleSidebar => {
+                self.prefs.sidebar_visible = !self.prefs.sidebar_visible;
+                self.prefs_dirty = true;
+            }
+            Command::ToggleInspector => {
+                self.prefs.inspector_visible = !self.prefs.inspector_visible;
+                self.prefs_dirty = true;
+            }
+            Command::ToggleFilmstrip => {
+                self.prefs.filmstrip_visible = !self.prefs.filmstrip_visible;
+                self.prefs_dirty = true;
+            }
+            Command::SetWorkspace(w) => {
+                if w.available().is_ok() && !self.items.is_empty() {
+                    self.workspace = w;
+                    self.scroll_to_cursor = true;
+                }
+            }
+            Command::ZoomIn => self.set_cell(self.prefs.cell * 1.2),
+            Command::ZoomOut => self.set_cell(self.prefs.cell / 1.2),
+            Command::Move(d) => self.move_cursor(d),
+            Command::MovePage(d) => {
+                let page = (self.last_visible_rows.len().max(1) * self.cols.max(1)) as isize;
+                self.move_cursor(d * page);
+            }
+            Command::Home => {
+                self.cursor = 0;
+                self.scroll_to_cursor = true;
+            }
+            Command::End => {
+                if !self.items.is_empty() {
+                    self.cursor = self.items.len() - 1;
+                    self.scroll_to_cursor = true;
+                }
+            }
+            Command::SetRating(r) => {
+                if !self.items.is_empty() {
+                    let i = self.cursor;
+                    self.marks[i].rating = Rating::clamp(r);
+                    self.persist(i);
+                }
+            }
+            Command::SetClass(c) => {
+                if !self.items.is_empty() {
+                    let i = self.cursor;
+                    self.marks[i].color_class = ColorClass::clamp(c);
+                    self.persist(i);
+                }
+            }
+            Command::ToggleTag => {
+                if !self.items.is_empty() {
+                    let i = self.cursor;
+                    self.marks[i].tagged = !self.marks[i].tagged;
+                    self.persist(i);
+                }
+            }
+            Command::Escape => {
+                if self.workspace == Workspace::Preview {
+                    self.workspace = Workspace::Sheet;
+                    self.scroll_to_cursor = true;
+                }
+            }
+            Command::Activate => {
+                if self.workspace == Workspace::Sheet && !self.items.is_empty() {
+                    self.workspace = Workspace::Preview;
+                } else if self.workspace == Workspace::Preview {
+                    self.workspace = Workspace::Sheet;
+                    self.scroll_to_cursor = true;
+                }
+            }
+        }
+        self.platform.sync_toggles(
+            self.prefs.sidebar_visible,
+            self.prefs.inspector_visible,
+            self.prefs.filmstrip_visible,
+        );
+        ctx.request_repaint();
+    }
+
+    /// Keyboard → commands. Command-modified keys are the native menu's job
+    /// when a menu exists; without one (other platforms) they are handled here.
+    fn keyboard_commands(&self, ctx: &egui::Context) -> Vec<Command> {
+        let mut out = Vec::new();
+        let typing = ctx.memory(|m| m.focused().is_some()) && ctx.wants_keyboard_input();
+        if typing {
+            return out;
+        }
+        ctx.input(|i| {
+            let cmd = i.modifiers.command;
+            let shift = i.modifiers.shift;
+            let has_menu = self.platform.has_menu();
+            let cols = self.cols.max(1) as isize;
+            let in_preview = self.workspace == Workspace::Preview;
+            let pressed = |k: Key| i.key_pressed(k);
+            if cmd {
+                if has_menu {
+                    return;
+                }
+                if pressed(Key::O) {
+                    out.push(Command::PickFolder);
+                }
+                if pressed(Key::Equals) || pressed(Key::Plus) {
+                    out.push(Command::ZoomIn);
+                }
+                if pressed(Key::Minus) {
+                    out.push(Command::ZoomOut);
+                }
+                for (n, k) in [
+                    Key::Num0,
+                    Key::Num1,
+                    Key::Num2,
+                    Key::Num3,
+                    Key::Num4,
+                    Key::Num5,
+                ]
+                .iter()
+                .enumerate()
+                {
+                    if pressed(*k) {
+                        out.push(Command::SetRating(n as i8));
+                    }
+                }
+                return;
+            }
+            if pressed(Key::ArrowLeft) {
+                out.push(Command::Move(-1));
+            }
+            if pressed(Key::ArrowRight) {
+                out.push(Command::Move(1));
+            }
+            if pressed(Key::ArrowUp) {
+                out.push(Command::Move(if in_preview { -1 } else { -cols }));
+            }
+            if pressed(Key::ArrowDown) {
+                out.push(Command::Move(if in_preview { 1 } else { cols }));
+            }
+            if pressed(Key::PageUp) {
+                out.push(Command::MovePage(-1));
+            }
+            if pressed(Key::PageDown) {
+                out.push(Command::MovePage(1));
+            }
+            if pressed(Key::Home) {
+                out.push(Command::Home);
+            }
+            if pressed(Key::End) {
+                out.push(Command::End);
+            }
+            if pressed(Key::Enter) {
+                out.push(Command::Activate);
+            }
+            if pressed(Key::Space) {
+                out.push(if in_preview {
+                    Command::Move(1)
+                } else {
+                    Command::Activate
+                });
+            }
+            if pressed(Key::Escape) {
+                out.push(Command::Escape);
+            }
+            if !has_menu {
+                for (n, k) in [
+                    Key::Num0,
+                    Key::Num1,
+                    Key::Num2,
+                    Key::Num3,
+                    Key::Num4,
+                    Key::Num5,
+                    Key::Num6,
+                    Key::Num7,
+                    Key::Num8,
+                ]
+                .iter()
+                .enumerate()
+                {
+                    if pressed(*k) {
+                        out.push(Command::SetClass(n as u8));
+                    }
+                }
+                if pressed(Key::T) {
+                    out.push(Command::ToggleTag);
+                }
+                if pressed(Key::X) && !shift {
+                    out.push(Command::SetRating(-1));
+                }
+                if pressed(Key::F) && shift {
+                    out.push(Command::ToggleFilmstrip);
+                }
+            }
+        });
+        out
+    }
+
+    fn maybe_screenshot(&mut self, ctx: &egui::Context) {
+        let Some(path) = self.launch.screenshot.clone() else {
+            return;
+        };
+        self.frames += 1;
+        if self.frames == self.launch.screenshot_frame && !self.screenshot_requested {
+            self.screenshot_requested = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+        }
+        let shot = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                _ => None,
+            })
+        });
+        if let Some(img) = shot {
+            let [w, h] = img.size;
+            if let Some(buf) = image::RgbaImage::from_raw(w as u32, h as u32, img.as_raw().to_vec())
+            {
+                match buf.save(&path) {
+                    Ok(()) => log::info!("screenshot saved to {}", path.display()),
+                    Err(e) => log::error!("screenshot failed: {e}"),
+                }
+            }
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        ctx.request_repaint();
     }
 }
 
@@ -743,79 +719,75 @@ impl eframe::App for App {
             };
             self.stats.frame_ms_max = self.stats.frame_ms_max.max(dt_ms);
         }
+        let t = Theme::for_ctx(ctx);
+        t.apply(ctx, self.reduce_motion);
+        self.platform.on_first_frame();
+
         self.drain_results(ctx);
-        self.handle_keys(ctx);
+        for c in self.platform.drain_menu() {
+            self.dispatch(ctx, c);
+        }
+        for c in self.keyboard_commands(ctx) {
+            self.dispatch(ctx, c);
+        }
 
-        egui::TopBottomPanel::top("top").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if ui.button("Open folder…").clicked() {
-                    self.pick_folder();
-                }
-                if let Some(f) = &self.folder {
-                    ui.label(f.display().to_string());
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add(
-                        egui::Slider::new(&mut self.cell, 80.0..=600.0)
-                            .show_value(false)
-                            .text("size"),
-                    );
-                    let pending = self.pool.pending();
-                    if pending > 0 {
-                        ui.label(format!("decoding {pending}…"));
-                    }
-                });
-            });
-        });
-
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(self.status_line());
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let avg = if self.stats.thumbs_done > 0 {
-                        self.stats.decode_ms_total / self.stats.thumbs_done as f32
-                    } else {
-                        0.0
-                    };
-                    ui.label(format!(
-                        "thumbs {} ({} cached, {avg:.0} ms avg) · uploads {} · frame {:.1} ms (max {:.0})",
-                        self.stats.thumbs_done, self.stats.cache_hits, self.stats.textures_uploaded,
-                        self.stats.frame_ms_ema, self.stats.frame_ms_max
-                    ));
-                });
-            });
-            ui.horizontal(|ui| {
-                ui.small(&self.status);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.small("←→↑↓ move · ⏎/space preview · esc back · 1–8 class · 0 clear · ⌘0–5 stars · X reject · T tag · +/- size");
-                });
-            });
-        });
+        ui::toolbar::show(self, ctx, &t);
+        ui::status::show(self, ctx, &t);
+        ui::sidebar::show(self, ctx, &t);
+        ui::inspector::show(self, ctx, &t);
+        ui::filmstrip::show(self, ctx, &t);
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(Color32::from_gray(24)))
+            .frame(egui::Frame::NONE.fill(t.photo))
             .show(ctx, |ui| {
                 if self.items.is_empty() {
-                    ui.centered_and_justified(|ui| ui.label(&self.status));
+                    ui.centered_and_justified(|ui| {
+                        let msg = if self.folder.is_some() {
+                            "No photos in this folder"
+                        } else {
+                            "Open a folder with ⌘O, or pick one in the sidebar"
+                        };
+                        ui.label(egui::RichText::new(msg).size(15.0).color(t.muted));
+                    });
                     return;
                 }
-                match self.mode {
-                    Mode::Sheet => self.draw_sheet(ui),
-                    Mode::Preview => self.draw_preview(ui),
+                match self.workspace {
+                    Workspace::Sheet => ui::sheet::show(self, ui, &t),
+                    Workspace::Preview => ui::preview::show(self, ui, &t),
+                    Workspace::Caption | Workspace::Ingest => {}
                 }
             });
+        // Toolbar underline, drawn last so it sits above panel fills.
+        let r = ctx.content_rect();
+        ctx.layer_painter(egui::LayerId::background()).line_segment(
+            [
+                egui::pos2(r.left(), r.top() + ui::tokens::TOOLBAR_H),
+                egui::pos2(r.right(), r.top() + ui::tokens::TOOLBAR_H),
+            ],
+            egui::Stroke::new(1.0, t.line),
+        );
+        ctx.layer_painter(egui::LayerId::background()).line_segment(
+            [
+                egui::pos2(r.left(), r.bottom() - ui::tokens::STATUS_H),
+                egui::pos2(r.right(), r.bottom() - ui::tokens::STATUS_H),
+            ],
+            egui::Stroke::new(1.0, t.line),
+        );
+
+        if self.prefs_dirty && self.prefs_saved_at.elapsed().as_secs_f32() > 1.0 {
+            self.prefs.save();
+            self.prefs_dirty = false;
+            self.prefs_saved_at = Instant::now();
+        }
+        self.maybe_screenshot(ctx);
+    }
+
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        self.prefs.save();
     }
 }
 
 fn upload(ctx: &egui::Context, name: &str, rgb: &Rgb) -> TextureHandle {
     let img = ColorImage::from_rgb([rgb.width as usize, rgb.height as usize], &rgb.data);
     ctx.load_texture(name, img, TextureOptions::LINEAR)
-}
-
-fn rating_text(r: Rating) -> String {
-    if r.is_rejected() {
-        "✕".into()
-    } else {
-        "★".repeat(r.stars() as usize)
-    }
 }
