@@ -1,0 +1,17 @@
+[package]
+name = "photo-preview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Embedded-JPEG preview extraction, decoding and thumbnail caching"
+
+[dependencies]
+photo-core.workspace = true
+thiserror.workspace = true
+memmap2.workspace = true
+jpeg-decoder.workspace = true
+image.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

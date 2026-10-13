@@ -1,0 +1,20 @@
+[package]
+name = "photo-workflow-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Command-line front end for photo-workflow: scan, inspect previews, benchmark, mark"
+
+[[bin]]
+name = "pw"
+path = "src/main.rs"
+
+[dependencies]
+photo-core.workspace = true
+photo-preview.workspace = true
+photo-metadata.workspace = true
+photo-ingest.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+rayon.workspace = true
+directories.workspace = true

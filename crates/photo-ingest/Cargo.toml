@@ -1,0 +1,13 @@
+[package]
+name = "photo-ingest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Verified copying for card ingest: copy to a temp name, hash both sides, then rename"
+
+[dependencies]
+thiserror.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

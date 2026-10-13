@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+.DS_Store
+# Raw/JPEG fixtures are not committed; point PW_FIXTURE_DIR at a folder instead.
+/tests/fixtures/*.NEF
+/tests/fixtures/*.nef
+/tests/fixtures/*.JPG
+/tests/fixtures/*.jpg
+/tests/fixtures/*.xmp

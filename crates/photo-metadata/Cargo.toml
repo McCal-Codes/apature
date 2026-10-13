@@ -1,0 +1,16 @@
+[package]
+name = "photo-metadata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "EXIF reading and XMP sidecar read/write compatible with Photo Mechanic and Lightroom"
+
+[dependencies]
+photo-core.workspace = true
+thiserror.workspace = true
+regex.workspace = true
+memmap2.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

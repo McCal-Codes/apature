@@ -1,0 +1,57 @@
+# Metadata safety findings (XMP sidecars), 2026-10-13
+
+What was verified, how, and what remains open. "Verified" means an
+automated test exists in `crates/photo-metadata/src/xmp.rs` and passed.
+
+## Verified
+
+| claim | how |
+|---|---|
+| Unrelated metadata survives a marks write byte-for-byte | A Lightroom-style sidecar (crs develop settings, dc bags/seq/alt with a real Butler Eagle caption, xmpMM history, aux lens data, a custom `myvendor:` namespace with an escaped value) is applied to; the output with the four owned properties stripped equals the input with them stripped. |
+| Photo Mechanic-style attributes update in place, no duplicates | `xmp:Rating`/`xmp:Label`/`photomechanic:ColorClass`/`photomechanic:Tagged` replaced; counted once. |
+| Element form (`<xmp:Rating>3</xmp:Rating>`) and legacy `xap:` prefix are read and updated under their own prefix | test `legacy_xap_prefix_is_updated_not_duplicated`. |
+| Missing properties are inserted on the first `rdf:Description`, declaring the namespace only if the document binds none | Lightroom and Camera-Raw-only fixtures. |
+| Clearing a colour class removes `xmp:Label` rather than writing an empty one | `clearing_label_removes_it`. |
+| Writes are atomic: temp file, fsync, rename; a failed write leaves the original untouched and no temp file behind | read-only directory test. |
+| Read-back check before replacing the file | the edited text is parsed and compared with the requested marks; mismatch → `XmpError::Verify`, original kept. |
+| ExifTool validates our fresh and edited sidecars with no errors and reads Rating, Label, ColorClass ("2 (Winner alt)"), Tagged and the preserved Headline | `exiftool -validate` test, runs when exiftool is installed (13.x here). |
+| Embedded XMP in a sibling JPEG can be read and compared; disagreements are reported | `pw scan` prints `CONFLICT` lines. |
+| Idempotence | applying the same marks twice changes nothing. |
+
+## Not verified (honest list)
+
+* **Photo Mechanic and Lightroom reading our sidecars.** Neither was
+  launched. Photo Mechanic is installed; a manual round-trip (mark in
+  photo-workflow → open in PM → check class and rating → change in PM →
+  re-read with `pw scan`) is the next test and takes ten minutes.
+  Lightroom is not installed; Capture One is, and reads `xmp:Rating` /
+  `xmp:Label` from sidecars, so it can stand in.
+* **Backup copies.** There is no `.xmp.bak` and no operation log. A bad
+  edit that passes the read-back check (e.g. a value the user did not
+  intend) is not recoverable except by undo in the app, which does not
+  exist yet. Recommendation for 0.2: an append-only operation log per
+  folder (Apature's `operation_log` pattern), not per-file backups.
+* **Extended XMP** (`/xmp/extension/` APP1 chunks) is not reassembled
+  when reading embedded packets; ratings never live there.
+
+## Known limitations of the approach
+
+1. The reader is regex-based and **does not understand XML comments or
+   CDATA**: a commented-out `<rdf:Description` or `xmp:Rating` would be
+   treated as live. No known sidecar writer emits comments; still a
+   reason to move to a streaming XML parser (quick-xml, as Apature did)
+   once IPTC fields are added and the property set grows.
+2. Properties are located anywhere in the document and insertion targets
+   the **first** `rdf:Description`. Lightroom, Photo Mechanic, Capture One
+   and exiftool all write one Description; a multi-Description document
+   from another tool could end up with the rating on a different
+   Description than its siblings. Harmless to readers, untidy.
+3. **JPEG-only items:** Photo Mechanic and Lightroom embed XMP inside
+   JPEGs and ignore a sidecar for them. Marks we write for a JPEG-only
+   folder are therefore invisible to those apps until embedding exists
+   (Phase 3). The conflict report makes the divergence visible.
+4. **Sidecar naming:** only `IMG.xmp` is read and written. darktable-style
+   `IMG.NEF.xmp` is neither read nor detected.
+5. The colour-class **names** must match the user's Photo Mechanic
+   preferences for `xmp:Label` to round-trip textually; the numeric
+   `photomechanic:ColorClass` is what we trust on read.
