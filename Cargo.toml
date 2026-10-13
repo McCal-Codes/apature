@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/photo-core",
-    "crates/photo-preview",
-    "crates/photo-metadata",
-    "crates/photo-ingest",
+    "crates/apature-core",
+    "crates/apature-preview",
+    "crates/apature-metadata",
+    "crates/apature-ingest",
     "apps/cli",
     "apps/desktop",
 ]
@@ -13,14 +13,14 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/McCal-Codes/photo-workflow"
+repository = "https://github.com/McCal-Codes/apature"
 rust-version = "1.80"
 
 [workspace.dependencies]
-photo-core = { path = "crates/photo-core" }
-photo-preview = { path = "crates/photo-preview" }
-photo-metadata = { path = "crates/photo-metadata" }
-photo-ingest = { path = "crates/photo-ingest" }
+apature-core = { path = "crates/apature-core" }
+apature-preview = { path = "crates/apature-preview" }
+apature-metadata = { path = "crates/apature-metadata" }
+apature-ingest = { path = "crates/apature-ingest" }
 
 anyhow = "1"
 thiserror = "2"

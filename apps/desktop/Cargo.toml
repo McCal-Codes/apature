@@ -1,18 +1,18 @@
 [package]
-name = "photo-workflow"
+name = "apature"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Keyboard-first contact sheet and culling for photojournalists"
+description = "Apature: keyboard-first contact sheet, culling and metadata for photojournalists"
 
 [[bin]]
-name = "photo-workflow"
+name = "apature"
 path = "src/main.rs"
 
 [dependencies]
-photo-core.workspace = true
-photo-preview.workspace = true
-photo-metadata.workspace = true
+apature-core.workspace = true
+apature-preview.workspace = true
+apature-metadata.workspace = true
 eframe.workspace = true
 egui.workspace = true
 rfd.workspace = true

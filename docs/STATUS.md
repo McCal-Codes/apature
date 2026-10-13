@@ -9,7 +9,7 @@ app, a measurement); **production-ready** is not claimed for anything.
 
 | feature | status | evidence |
 |---|---|---|
-| Folder scan, RAW+JPEG pairing, sort | tested | unit tests; `pw scan` on 3 folders |
+| Folder scan, RAW+JPEG pairing, sort | tested | unit tests; `apature-cli scan` on 3 folders |
 | TIFF/IFD reader | tested | unit tests incl. hostile input |
 | Embedded preview discovery (IFD chain, SubIFDs, Exif IFD, Nikon MakerNote PreviewIFD, plain JPEG) | **verified** | identical previews and byte counts to exiftool on D850 NEF; synthetic TIFF tests |
 | JPEG decode with DCT scaling, orientation, thumbnail | tested | round-trip tests; D850 NEF/JPG runs |
@@ -73,5 +73,5 @@ the GUI and from no panics in 10+ minutes of running; it is not verified.
 2. Design decision from `docs/design/` (owner's call), then the shell:
    menu bar, sidebar, inspector, tokens, light/dark, cell accessibility.
 3. Selection model + filters in the app state (no core change).
-4. IPTC fields in `photo-metadata` with the same in-place discipline, on a
+4. IPTC fields in `apature-metadata` with the same in-place discipline, on a
    streaming XML parser.

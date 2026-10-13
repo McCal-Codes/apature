@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 
-use photo_core::{ColorClass, ColorClassScheme, Marks, Rating};
+use apature_core::{ColorClass, ColorClassScheme, Marks, Rating};
 
 pub const NS_XMP: &str = "http://ns.adobe.com/xap/1.0/";
 pub const NS_PM: &str = "http://ns.camerabits.com/photomechanic/1.0/";
@@ -153,7 +153,7 @@ pub fn read_sidecar(path: &Path) -> Result<Option<XmpMarks>, XmpError> {
 
 fn empty_sidecar() -> String {
     "<?xpacket begin=\"\u{FEFF}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n\
-<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"photo-workflow 0.1\">\n\
+<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"Apature 0.1\">\n\
  <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n\
   <rdf:Description rdf:about=\"\">\n\
   </rdf:Description>\n\

@@ -7,7 +7,7 @@
 - [x] keyboard culling: stars, colour class, tag, reject
 - [x] XMP sidecars written in place, PM/Lightroom compatible
 - [x] full-screen preview with prefetch of neighbours
-- [x] `pw` CLI and benchmarks
+- [x] `apature-cli` CLI and benchmarks
 - [x] benchmarks recorded (docs/benchmarks/2026-10-13-m1pro.md); a real 1 000-NEF assignment is still outstanding
 - [ ] multi-select and shift-range marking
 - [ ] filter the sheet by rating / class / tag
@@ -17,7 +17,7 @@
 - [ ] IPTC stationery: headline, caption, byline, credit, copyright, location, keywords
 - [ ] code replacements and `{variables}` compatible with the existing Butler Eagle files
 - [ ] caption editor with the "type subject, append saved tail" flow
-- [ ] ingest UI on top of `photo-ingest`: card detection, two destinations, rename template, report
+- [ ] ingest UI on top of `apature-ingest`: card detection, two destinations, rename template, report
 - [ ] write IPTC into JPEG exports (sidecar stays the source for RAW)
 
 ## 0.3 — professional workflow

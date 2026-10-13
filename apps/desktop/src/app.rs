@@ -9,10 +9,10 @@ use egui::{
 };
 use rayon::prelude::*;
 
-use photo_core::{ColorClass, ColorClassScheme, Marks, PhotoItem, Rating, ScanOptions};
-use photo_metadata::items;
-use photo_metadata::ExifSummary;
-use photo_preview::{Rgb, ThumbCache};
+use apature_core::{ColorClass, ColorClassScheme, Marks, PhotoItem, Rating, ScanOptions};
+use apature_metadata::items;
+use apature_metadata::ExifSummary;
+use apature_preview::{Rgb, ThumbCache};
 
 use crate::worker::{Job, JobKind, Pool};
 
@@ -66,7 +66,7 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, folder: Option<PathBuf>) -> Self {
-        let cache = directories::ProjectDirs::from("", "", "photo-workflow")
+        let cache = directories::ProjectDirs::from("dev", "mccal", "Apature")
             .and_then(|d| ThumbCache::new(d.cache_dir().join("thumbs")).ok());
         let threads = std::thread::available_parallelism()
             .map(|n| n.get())
@@ -103,7 +103,7 @@ impl App {
 
     fn open_folder(&mut self, dir: &Path) {
         let t0 = Instant::now();
-        match photo_core::scan(dir, &ScanOptions::default()) {
+        match apature_core::scan(dir, &ScanOptions::default()) {
             Ok(items) => {
                 self.pool.clear_pending();
                 self.generation += 1;

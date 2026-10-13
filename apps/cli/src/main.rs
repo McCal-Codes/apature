@@ -1,4 +1,4 @@
-//! `pw`: the engine without the window. Useful for testing format support
+//! `apature-cli`: the engine without the window. Useful for testing format support
 //! and for benchmarking without GUI overhead.
 
 use std::path::{Path, PathBuf};
@@ -9,12 +9,12 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
 
-use photo_core::{ColorClass, ColorClassScheme, Marks, Rating, ScanOptions};
-use photo_metadata::items;
-use photo_preview::{Source, ThumbCache};
+use apature_core::{ColorClass, ColorClassScheme, Marks, Rating, ScanOptions};
+use apature_metadata::items;
+use apature_preview::{Source, ThumbCache};
 
 #[derive(Parser)]
-#[command(name = "pw", version, about = "photo-workflow command line")]
+#[command(name = "apature-cli", version, about = "Apature command line")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -90,7 +90,7 @@ fn main() -> Result<()> {
             tag,
         } => mark(&file, rating, class, tag),
         Cmd::Copy { src, dst } => {
-            let r = photo_ingest::copy_verified(&src, &dst)?;
+            let r = apature_ingest::copy_verified(&src, &dst)?;
             println!(
                 "copied {} bytes to {} (sha256 {})",
                 r.bytes,
@@ -108,13 +108,13 @@ fn main() -> Result<()> {
 
 fn cache_dir() -> Result<PathBuf> {
     let dirs =
-        directories::ProjectDirs::from("", "", "photo-workflow").context("no home directory")?;
+        directories::ProjectDirs::from("dev", "mccal", "Apature").context("no home directory")?;
     Ok(dirs.cache_dir().join("thumbs"))
 }
 
 fn scan(dir: &Path, recursive: bool) -> Result<()> {
     let t0 = Instant::now();
-    let items = photo_core::scan(dir, &ScanOptions { recursive })?;
+    let items = apature_core::scan(dir, &ScanOptions { recursive })?;
     let scheme = ColorClassScheme::default();
     for it in &items {
         let src = items::read(it);
@@ -131,7 +131,7 @@ fn scan(dir: &Path, recursive: bool) -> Result<()> {
         } else {
             String::new()
         };
-        let has_any = |m: &photo_metadata::XmpMarks| {
+        let has_any = |m: &apature_metadata::XmpMarks| {
             m.rating.is_some() || m.label.is_some() || m.color_class.is_some() || m.tagged.is_some()
         };
         let marked = src.sidecar.as_ref().is_some_and(has_any)
@@ -203,7 +203,7 @@ fn extract(file: &Path, out: &Path) -> Result<()> {
 }
 
 fn exif(file: &Path) -> Result<()> {
-    let s = photo_metadata::exif::read(file)?;
+    let s = apature_metadata::exif::read(file)?;
     println!("camera:      {}", s.camera_line());
     println!("lens:        {}", s.lens.as_deref().unwrap_or("-"));
     println!(
@@ -229,7 +229,7 @@ fn bench(
             .ok();
     }
     let t0 = Instant::now();
-    let items = photo_core::scan(dir, &ScanOptions { recursive })?;
+    let items = apature_core::scan(dir, &ScanOptions { recursive })?;
     let scan_ms = t0.elapsed().as_secs_f64() * 1000.0;
     let cache = if use_cache {
         Some(ThumbCache::new(cache_dir()?)?)
@@ -253,12 +253,12 @@ fn bench(
             }
             let result = (|| -> Result<()> {
                 let src = Source::open(it.path())?;
-                let orientation = photo_metadata::exif::from_bytes(src.data())
+                let orientation = apature_metadata::exif::from_bytes(src.data())
                     .map(|e| e.orientation)
                     .unwrap_or(1);
                 let rgb = src.decode_for(size * 2)?;
-                let rgb = photo_preview::rotate(rgb, orientation);
-                let thumb = photo_preview::thumbnail(&rgb, size);
+                let rgb = apature_preview::rotate(rgb, orientation);
+                let thumb = apature_preview::thumbnail(&rgb, size);
                 if let Some(c) = &cache {
                     c.put(&key, &thumb)?;
                 }
@@ -313,7 +313,7 @@ fn mark(file: &Path, rating: Option<i8>, class: Option<u8>, tag: Option<bool>) -
         .context("file has no stem")?
         .to_string_lossy()
         .to_lowercase();
-    let items = photo_core::scan(dir, &ScanOptions::default())?;
+    let items = apature_core::scan(dir, &ScanOptions::default())?;
     let item = items
         .into_iter()
         .find(|it| it.stem.to_lowercase() == stem)

@@ -120,8 +120,8 @@ platform integration isolated from business logic.
 
 ## Architecture
 
-Cargo workspace: `crates/photo-core`, `photo-preview`, `photo-metadata`,
-`photo-ingest`, `photo-catalog` (later); `apps/desktop`; `docs/`
+Cargo workspace: `crates/apature-core`, `apature-preview`, `apature-metadata`,
+`apature-ingest`, `photo-catalog` (later); `apps/desktop`; `docs/`
 (architecture, design, research, benchmarks). Business logic independent of
 rendering. Typed commands, explicit state transitions, testable interfaces,
 bounded concurrency. No premature abstraction.

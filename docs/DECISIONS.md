@@ -10,7 +10,7 @@ The brief says: "Do not scaffold the entire desktop application yet"; Phase 0
 research and a Phase 1 preview benchmark come first. The first session built
 the workspace, engine crates, CLI and an egui window in one pass, before the
 brief existed. Rather than throw that away, the code is reclassified: the
-engine crates and `pw bench` **are** the Phase 1 feasibility experiment, and
+engine crates and `apature-cli bench` **are** the Phase 1 feasibility experiment, and
 `apps/desktop` is a throwaway rendering probe, not the product UI. The design
 process in `docs/design/` decides what the real UI is; nothing in
 `apps/desktop/src/app.rs` is treated as settled.
@@ -83,7 +83,7 @@ of the property; not observed in Lightroom or Photo Mechanic output.
 Mechanic and Lightroom do for the RAW. **Known gap:** both of those apps
 embed XMP *inside* JPEGs rather than reading a sidecar for a JPEG-only item,
 so marks we write for JPEG-only folders are invisible to them until we can
-embed (Phase 3). `pw scan` reports conflicts between a sidecar and a
+embed (Phase 3). `apature-cli scan` reports conflicts between a sidecar and a
 sibling JPEG's embedded XMP so the gap is visible rather than silent. **Revised the same day:** marks
 are now written to both the sidecar and every JPEG variant (ADR-009).
 

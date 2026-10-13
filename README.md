@@ -1,8 +1,11 @@
-# photo-workflow
+# Apature
 
-A fast, keyboard-first contact sheet and culling tool for photojournalists,
-written in Rust. Think of the ingest → cull → caption → deliver loop of Photo
-Mechanic, rebuilt as an independent open-source application.
+> Renamed from `photo-workflow` on 2026-10-13; history is continuous.
+
+Apature is a fast, keyboard-first contact sheet, culling and metadata tool
+for photojournalists, written in Rust, macOS first. The ingest → cull →
+caption → deliver loop of Photo Mechanic, rebuilt as an independent
+open-source application.
 
 **Status: 0.1 engine proof of concept with a throwaway UI probe.** The
 engine opens a folder of RAW/JPEG files, finds the camera-embedded previews
@@ -17,15 +20,15 @@ being designed.
 ## Run it
 
 ```bash
-cargo run --release -p photo-workflow -- /path/to/assignment
+cargo run --release -p apature -- /path/to/assignment
 ```
 
 Or use the engine from the command line:
 
 ```bash
-cargo run --release -p photo-workflow-cli -- previews DSC_0001.NEF   # what previews are embedded
-cargo run --release -p photo-workflow-cli -- bench ./assignment --cache  # thumbnail throughput
-cargo run --release -p photo-workflow-cli -- mark DSC_0001.NEF --rating 4 --class 1
+cargo run --release -p apature-cli -- previews DSC_0001.NEF   # what previews are embedded
+cargo run --release -p apature-cli -- bench ./assignment --cache  # thumbnail throughput
+cargo run --release -p apature-cli -- mark DSC_0001.NEF --rating 4 --class 1
 ```
 
 Keys in the app (Photo Mechanic conventions): arrows move, Enter/Space opens
@@ -37,13 +40,13 @@ the full preview, Esc returns, `1`–`8` set a colour class, `0` clears it,
 
 ```
 crates/
-  photo-core/      file model, RAW+JPEG pairing, folder scan, marks, tiny TIFF reader
-  photo-preview/   find embedded JPEGs in RAW files, decode with DCT downscaling, disk cache
-  photo-metadata/  EXIF summary; XMP sidecar read/write that edits in place
-  photo-ingest/    verified copy (temp name → hash both sides → rename), never deletes
+  apature-core/      file model, RAW+JPEG pairing, folder scan, marks, tiny TIFF reader
+  apature-preview/   find embedded JPEGs in RAW files, decode with DCT downscaling, disk cache
+  apature-metadata/  EXIF summary; XMP sidecar read/write that edits in place
+  apature-ingest/    verified copy (temp name → hash both sides → rename), never deletes
 apps/
   desktop/         egui/eframe contact sheet and preview
-  cli/             `pw`: scan, previews, extract, exif, bench, mark, copy
+  cli/             `apature-cli`: scan, previews, extract, exif, bench, mark, copy
 docs/
   architecture/    design and the preview pipeline
   research/        how Photo Mechanic behaves, and how REA is used to study it

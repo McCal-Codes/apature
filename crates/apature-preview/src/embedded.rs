@@ -1,6 +1,6 @@
 //! Locate JPEG previews embedded in TIFF-based RAW files.
 
-use photo_core::tiff::{tag, ByteOrder, Ifd, Tiff};
+use apature_core::tiff::{tag, ByteOrder, Ifd, Tiff};
 
 use crate::jpeg_info;
 
@@ -197,7 +197,7 @@ fn candidates_in_ifd(tiff: &Tiff, ifd: &Ifd, name: &str, out: &mut Vec<EmbeddedJ
 /// Nikon MakerNote: "Nikon\0" + 4 bytes version, then a complete TIFF header
 /// at +10 whose offsets are relative to that header. Tag 0x0011 points at a
 /// PreviewIFD holding a JPEGInterchangeFormat pair, also relative to +10.
-fn nikon_makernote(tiff: &Tiff, e: &photo_core::tiff::Entry, out: &mut Vec<EmbeddedJpeg>) {
+fn nikon_makernote(tiff: &Tiff, e: &apature_core::tiff::Entry, out: &mut Vec<EmbeddedJpeg>) {
     let Some(mn) = tiff.value_bytes(e) else {
         return;
     };
@@ -245,7 +245,7 @@ fn nikon_makernote(tiff: &Tiff, e: &photo_core::tiff::Entry, out: &mut Vec<Embed
 #[cfg(test)]
 mod tests {
     use super::*;
-    use photo_core::tiff::testutil::build_le;
+    use apature_core::tiff::testutil::build_le;
 
     fn fake_jpeg(w: u16, h: u16) -> Vec<u8> {
         let mut v = vec![0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 8];
