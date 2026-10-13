@@ -12,8 +12,8 @@ use std::time::{Instant, SystemTime};
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
-use photo_metadata::ExifSummary;
-use photo_preview::{Rgb, Source, ThumbCache};
+use apature_metadata::ExifSummary;
+use apature_preview::{Rgb, Source, ThumbCache};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum JobKind {
@@ -171,7 +171,7 @@ fn run(s: &Shared, job: &Job) -> Done {
 
     let result: Result<(Rgb, Option<ExifSummary>), String> = (|| {
         let src = Source::open(&job.path).map_err(|e| e.to_string())?;
-        let exif = photo_metadata::exif::from_bytes(src.data());
+        let exif = apature_metadata::exif::from_bytes(src.data());
         let orientation = exif.as_ref().map(|e| e.orientation).unwrap_or(1);
 
         if job.kind == JobKind::Thumb {
@@ -191,9 +191,9 @@ fn run(s: &Shared, job: &Job) -> Done {
             JobKind::Preview => job.long_side,
         };
         let rgb = src.decode_for(target).map_err(|e| e.to_string())?;
-        let rgb = photo_preview::rotate(rgb, orientation);
+        let rgb = apature_preview::rotate(rgb, orientation);
         let rgb = match job.kind {
-            JobKind::Thumb => photo_preview::thumbnail(&rgb, job.long_side),
+            JobKind::Thumb => apature_preview::thumbnail(&rgb, job.long_side),
             JobKind::Preview => rgb,
         };
         if job.kind == JobKind::Thumb {

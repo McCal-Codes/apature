@@ -1,13 +1,14 @@
 [package]
-name = "photo-ingest"
+name = "apature-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Verified copying for card ingest: copy to a temp name, hash both sides, then rename"
+description = "Models, folder scanning and TIFF primitives for Apature"
 
 [dependencies]
+serde.workspace = true
 thiserror.workspace = true
-sha2.workspace = true
+walkdir.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

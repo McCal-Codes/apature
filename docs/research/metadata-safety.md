@@ -1,7 +1,7 @@
 # Metadata safety findings (XMP sidecars), 2026-10-13
 
 What was verified, how, and what remains open. "Verified" means an
-automated test exists in `crates/photo-metadata/src/xmp.rs` and passed.
+automated test exists in `crates/apature-metadata/src/xmp.rs` and passed.
 
 ## Verified
 
@@ -15,7 +15,7 @@ automated test exists in `crates/photo-metadata/src/xmp.rs` and passed.
 | Writes are atomic: temp file, fsync, rename; a failed write leaves the original untouched and no temp file behind | read-only directory test. |
 | Read-back check before replacing the file | the edited text is parsed and compared with the requested marks; mismatch → `XmpError::Verify`, original kept. |
 | ExifTool validates our fresh and edited sidecars with no errors and reads Rating, Label, ColorClass ("2 (Winner alt)"), Tagged and the preserved Headline | `exiftool -validate` test, runs when exiftool is installed (13.x here). |
-| Embedded XMP in a sibling JPEG can be read and compared; disagreements are reported | `pw scan` prints `CONFLICT` lines. |
+| Embedded XMP in a sibling JPEG can be read and compared; disagreements are reported | `apature-cli scan` prints `CONFLICT` lines. |
 | Idempotence | applying the same marks twice changes nothing. |
 
 ## Photo Mechanic round trip (2026-10-13, PM 2026.6 build 9175, verified)
@@ -25,20 +25,20 @@ hashed before and after and are byte-identical.
 
 | step | result |
 |---|---|
-| `pw mark` 7783 → rating 4, class 1, tagged; 7784 → rating 2, class 3 | sidecars written |
+| `apature-cli mark` 7783 → rating 4, class 1, tagged; 7784 → rating 2, class 3 | sidecars written |
 | open the NEF-only folder in PM | 7783 shows a **red** bar, four stars, tag checked; 7784 **green**, two stars; 7802 unmarked. Both read exactly. |
 | in PM: Image › Set Color Class › Yellow, Set Rating › 3 Stars, Tag Photos on 7802 | PM wrote `850_7802.XMP` (upper-case extension, no xpacket wrapper) with `xmp:Label="Yellow"`, `xmp:Rating="3"`, `photomechanic:ColorClass="2"`, `Tagged="True"`, plus `Prefs`, `PMVersion`, crd/plus/aux fields |
-| `pw scan` | 7802 → rating 3, class 2, tagged true. Our two sidecars untouched by PM. |
+| `apature-cli scan` | 7802 → rating 3, class 2, tagged true. Our two sidecars untouched by PM. |
 | same three files as RAW+JPEG pairs | **PM showed no marks**: for pairs it takes metadata from the JPEG (confirmed by observation; the exact preference was not inspected). Our sidecar is ignored until we can embed XMP in the JPEG or write marks to both. |
 
 ## Embedded XMP in JPEGs (2026-10-13, verified)
 
-`photo_metadata::jpeg_xmp` splices one APP1 XMP segment into a JPEG:
+`apature_metadata::jpeg_xmp` splices one APP1 XMP segment into a JPEG:
 editing the existing packet in place (the D850 writes its own packet, so
 real camera JPEGs grew by ~155 bytes) or inserting a padded packet after
 the Exif APP1 when none exists. Every other byte is copied; image data is
 never re-encoded. Atomic temp → fsync → rename with a read-back check.
-`photo_metadata::items` applies the policy: RAW → sidecar, JPEG → embedded,
+`apature_metadata::items` applies the policy: RAW → sidecar, JPEG → embedded,
 RAW+JPEG pair → both; reads prefer the sidecar when a RAW exists and report
 disagreements with any JPEG packet.
 
@@ -46,8 +46,8 @@ disagreements with any JPEG packet.
 |---|---|
 | unit tests on a JPEG skeleton | insert after Exif / after APP0, replace in place, byte-exact outside the segment, oversize and non-JPEG rejected, atomic + idempotent |
 | exiftool on a real D850 JPEG copy after embedding | `-validate` clean; Rating 4, Label Red, ColorClass 1, Tagged Yes; ImageSize and Model unchanged; +155 bytes |
-| Photo Mechanic, pair folder, after `pw mark` embedded into the JPEGs | 7783 red bar, four stars, tagged; 7784 green, two stars: **pairs now round-trip into PM** |
-| Photo Mechanic → us on a pair (Blue, 1 star, tag on 7802) | PM wrote **both** the JPEG packet and `850_7802.XMP`; `pw scan` read rating 1, class 4, tagged; NEFs byte-identical. PM's own behaviour for pairs matches the sidecar+embedded policy. |
+| Photo Mechanic, pair folder, after `apature-cli mark` embedded into the JPEGs | 7783 red bar, four stars, tagged; 7784 green, two stars: **pairs now round-trip into PM** |
+| Photo Mechanic → us on a pair (Blue, 1 star, tag on 7802) | PM wrote **both** the JPEG packet and `850_7802.XMP`; `apature-cli scan` read rating 1, class 4, tagged; NEFs byte-identical. PM's own behaviour for pairs matches the sidecar+embedded policy. |
 
 Consequences applied in code: the default colour-class names are now the
 ones this PM shows (Red, Yellow, Green, Blue, Purple, Cyan, Brown, Trash)
@@ -67,7 +67,7 @@ command writes regardless.
 |---|---|
 | browse the pair folder | six variants: NEF and JPEG of each pair carry identical marks: 7783 rating 4 tag red, 7784 rating 2 tag green, 7802 rating 1 tag blue. Capture One reads the sidecar for the NEF and the embedded packet for the JPEG. |
 | set 7802 (both variants) to rating 5, tag yellow; `sync metadata` | Capture One **rewrote the sidecar in element form**, kept every foreign property (crd, plus, aux, photomechanic Prefs/PMVersion), set `xmp:Rating` 5 and `xmp:Label` Yellow, and **left `photomechanic:ColorClass` at 4**. It did not touch the JPEG (hash identical): it uses the sidecar for JPEGs too. NEFs identical. |
-| `pw scan` | rating 5 and conflicts reported against the JPEG's stale packet (rating 1, Blue). Colour class came back **4 (Blue)** because the reader trusted the number over the label. |
+| `apature-cli scan` | rating 5 and conflicts reported against the JPEG's stale packet (rating 1, Blue). Colour class came back **4 (Blue)** because the reader trusted the number over the label. |
 
 Fix applied: a label that names a known class now wins over a disagreeing
 `photomechanic:ColorClass` (Photo Mechanic keeps the two consistent; a

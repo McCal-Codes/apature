@@ -4,10 +4,10 @@
 
 | crate | owns | must not |
 |---|---|---|
-| `photo-core` | `PhotoItem`/`Variant` model, RAW+JPEG pairing, folder scan, `Marks`, TIFF/IFD reader | touch pixels, know about the UI |
-| `photo-preview` | embedded-JPEG discovery, JPEG decode with DCT scaling, orientation, thumbnailing, disk cache | parse metadata beyond what it needs for preview offsets |
-| `photo-metadata` | EXIF summary, XMP sidecar read/write | decode images |
-| `photo-ingest` | verified copy | delete anything |
+| `apature-core` | `PhotoItem`/`Variant` model, RAW+JPEG pairing, folder scan, `Marks`, TIFF/IFD reader | touch pixels, know about the UI |
+| `apature-preview` | embedded-JPEG discovery, JPEG decode with DCT scaling, orientation, thumbnailing, disk cache | parse metadata beyond what it needs for preview offsets |
+| `apature-metadata` | EXIF summary, XMP sidecar read/write | decode images |
+| `apature-ingest` | verified copy | delete anything |
 | `apps/desktop` | egui window, background pool, keyboard model | file-format knowledge |
 | `apps/cli` | same engine, no window; the benchmarking surface | — |
 
@@ -62,7 +62,7 @@ reading.
 ## Not yet
 
 * IPTC captions, code replacements, stationery (Phase 2)
-* Ingest UI, renaming templates (Phase 2; `photo-ingest::copy_verified` exists)
+* Ingest UI, renaming templates (Phase 2; `apature-ingest::copy_verified` exists)
 * HEIC/CR3 previews (not TIFF containers; need a different locator)
 * Multi-select, filtering by marks, sort orders
 * Catalog database (Phase 4)

@@ -1,16 +1,15 @@
 [package]
-name = "photo-preview"
+name = "apature-metadata"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Embedded-JPEG preview extraction, decoding and thumbnail caching"
+description = "EXIF reading and XMP sidecar read/write compatible with Photo Mechanic and Lightroom"
 
 [dependencies]
-photo-core.workspace = true
+apature-core.workspace = true
 thiserror.workspace = true
+regex.workspace = true
 memmap2.workspace = true
-jpeg-decoder.workspace = true
-image.workspace = true
 log.workspace = true
 
 [dev-dependencies]

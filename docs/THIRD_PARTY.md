@@ -33,7 +33,7 @@ whenever dependencies change.
 
 No GPL, AGPL or CDDL code is in the graph. **LibRaw (LGPL-2.1/CDDL) and
 rawler (LGPL-2.1) are deliberately not used**; embedded-preview extraction is
-implemented in `photo-core::tiff` + `photo-preview::embedded` under our own
+implemented in `apature-core::tiff` + `apature-preview::embedded` under our own
 licence. If a RAW *decode* fallback is ever added, that decision must revisit
 this file (see `docs/DECISIONS.md`, ADR-002).
 

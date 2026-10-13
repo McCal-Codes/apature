@@ -40,12 +40,12 @@ npx rea-agents setup     # choose Claude Code; review the files it adds
 
 | question | how | feeds |
 |---|---|---|
-| Which preview does PM show at thumbnail / fit / 100 %? | open a NEF, watch file reads with `fs_usage`, compare bytes to `pw previews` | `photo-preview::Source::best_for` |
-| What does PM write when you press `1`, `⌘3`, `T`? | mark a file, diff the sidecar | `photo-metadata::xmp` tests |
+| Which preview does PM show at thumbnail / fit / 100 %? | open a NEF, watch file reads with `fs_usage`, compare bytes to `apature-cli previews` | `apature-preview::Source::best_for` |
+| What does PM write when you press `1`, `⌘3`, `T`? | mark a file, diff the sidecar | `apature-metadata::xmp` tests |
 | Does PM write `xmp:Label` with the class *name* or colour? | same diff, after renaming a class in prefs | `ColorClassScheme` |
 | How are pairs shown when only one side has a sidecar? | create `a.NEF`, `a.JPG`, mark one | pairing rules |
-| Time to first thumbnail on a 1 000-file folder, cold vs warm | stopwatch + `fs_usage`; compare to `pw bench` | benchmarks |
-| What does Ingest write besides the copy? | ingest to a temp folder, list everything | `photo-ingest` |
+| Time to first thumbnail on a 1 000-file folder, cold vs warm | stopwatch + `fs_usage`; compare to `apature-cli bench` | benchmarks |
+| What does Ingest write besides the copy? | ingest to a temp folder, list everything | `apature-ingest` |
 
 Findings go in this folder as dated markdown files with the evidence
 attached (sidecar diffs, timings, screenshots), one topic per file.

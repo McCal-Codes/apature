@@ -1,4 +1,4 @@
-//! Desktop contact sheet. `photo-workflow [folder]`.
+//! Apature desktop contact sheet. `apature [folder]`.
 
 mod app;
 mod worker;
@@ -12,11 +12,11 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1400.0, 900.0])
             .with_min_inner_size([640.0, 400.0])
-            .with_title("Photo Workflow"),
+            .with_title("Apature"),
         ..Default::default()
     };
     eframe::run_native(
-        "photo-workflow",
+        "dev.mccal.apature",
         options,
         Box::new(move |cc| Ok(Box::new(app::App::new(cc, folder)))),
     )

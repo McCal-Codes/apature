@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use photo_core::{ColorClassScheme, Kind, Marks, PhotoItem};
+use apature_core::{ColorClassScheme, Kind, Marks, PhotoItem};
 
 use crate::jpeg_xmp;
 use crate::xmp::{self, Conflict, XmpMarks};
@@ -122,7 +122,7 @@ pub fn write(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use photo_core::{ColorClass, Rating, ScanOptions};
+    use apature_core::{ColorClass, Rating, ScanOptions};
     use std::fs;
 
     fn jpeg_skeleton() -> Vec<u8> {
@@ -140,7 +140,7 @@ mod tests {
         fs::write(dir.path().join("DSC_0001.NEF"), b"not a real nef").unwrap();
         fs::write(dir.path().join("DSC_0001.JPG"), jpeg_skeleton()).unwrap();
         fs::write(dir.path().join("DSC_0002.JPG"), jpeg_skeleton()).unwrap();
-        let items = photo_core::scan(dir.path(), &ScanOptions::default()).unwrap();
+        let items = apature_core::scan(dir.path(), &ScanOptions::default()).unwrap();
         let scheme = ColorClassScheme::default();
         let marks = Marks {
             rating: Rating(3),

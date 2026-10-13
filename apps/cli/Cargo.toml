@@ -1,19 +1,19 @@
 [package]
-name = "photo-workflow-cli"
+name = "apature-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Command-line front end for photo-workflow: scan, inspect previews, benchmark, mark"
+description = "Apature command line: scan, inspect previews, benchmark, mark"
 
 [[bin]]
-name = "pw"
+name = "apature-cli"
 path = "src/main.rs"
 
 [dependencies]
-photo-core.workspace = true
-photo-preview.workspace = true
-photo-metadata.workspace = true
-photo-ingest.workspace = true
+apature-core.workspace = true
+apature-preview.workspace = true
+apature-metadata.workspace = true
+apature-ingest.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 rayon.workspace = true

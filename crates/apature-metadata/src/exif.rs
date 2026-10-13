@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use photo_core::tiff::{tag, Tiff};
+use apature_core::tiff::{tag, Tiff};
 
 /// The EXIF fields worth showing on a contact sheet.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -75,7 +75,7 @@ pub enum ExifError {
 /// Read the summary from a file (RAW/TIFF or JPEG).
 pub fn read(path: &Path) -> Result<ExifSummary, ExifError> {
     let file = File::open(path)?;
-    // SAFETY: read-only mapping, see photo_preview::Source for the rationale.
+    // SAFETY: read-only mapping, see apature_preview::Source for the rationale.
     let map = unsafe { memmap2::Mmap::map(&file)? };
     from_bytes(&map).ok_or(ExifError::NotFound)
 }
@@ -178,7 +178,7 @@ fn exif_segment_in_jpeg(data: &[u8]) -> Option<&[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use photo_core::tiff::testutil::build_le;
+    use apature_core::tiff::testutil::build_le;
 
     #[test]
     fn reads_fields_from_tiff_and_jpeg_wrapper() {
