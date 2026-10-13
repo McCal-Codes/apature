@@ -84,7 +84,19 @@ Mechanic and Lightroom do for the RAW. **Known gap:** both of those apps
 embed XMP *inside* JPEGs rather than reading a sidecar for a JPEG-only item,
 so marks we write for JPEG-only folders are invisible to them until we can
 embed (Phase 3). `pw scan` reports conflicts between a sidecar and a
-sibling JPEG's embedded XMP so the gap is visible rather than silent.
+sibling JPEG's embedded XMP so the gap is visible rather than silent. **Revised the same day:** marks
+are now written to both the sidecar and every JPEG variant (ADR-009).
+
+## ADR-009 (2026-10-13, accepted): pairs get the sidecar and the embedded packet
+
+Photo Mechanic reads a pair's metadata from the JPEG and ignored our
+sidecar; Lightroom reads the sidecar for the RAW and the packet for the
+JPEG. Writing both keeps every reader consistent. Cost: the JPEG file
+changes (mtime, +~150 bytes with an existing packet, ~2.5 KB without),
+which the brief's "originals are never modified" rule tolerates only
+because the edit is a byte-exact splice of one metadata segment, atomic,
+and read-back checked; image data is never re-encoded. Reads prefer the
+sidecar when a RAW exists and report conflicts with the JPEG.
 
 ## ADR-006 (2026-10-13, accepted): priority queue keyed by viewport distance; no cancellation
 
