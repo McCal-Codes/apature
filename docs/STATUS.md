@@ -61,6 +61,23 @@ Events.
 | Motion: sidebar/inspector/filmstrip collapse and reveal eased; tab highlight slides and the new sheet fades in (160 ms); Preview grows out of the focused cell; filter chips, drop overlay and status text fade in (120 ms); ingest progress eases; all durations 0 under Reduce Motion (`App::anim`) | implemented; motion cannot be judged from stills, so **unreviewed by eye**; builds, runs, 60 tests |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
 
+## End-to-end ingest in the app (2026-10-14, tested)
+
+`apature --ingest-run --ingest-source <card> --ingest-dest <dir>
+[--screenshot out.png]` runs the real desktop path (plan on a worker,
+copy+verify, pad, open-after-ingest) without a mouse and prints the report.
+Against a mounted FAT32 disk image named "NIKON Z6" (DCIM/100NZ6_2 and
+101NZ6_2, three NEF+JPG pairs, AppleDouble `._` files present): 6 files
+planned, 6 verified, 242.6 MB in 2.2 s; SHA-256 of source and copy match;
+`._` files ignored; the ingested folder opened as a new tab with the marks
+from the embedded XMP showing; the second run planned 0 files (ledger).
+CLI with the owner's PM templates produced
+`2025/04 April/Apr 10 100726 SPO BGLF/250410100726 SPO BGLF001.NEF` at both
+destinations (485 MB in 4.4 s). Not yet tried: a physical card over USB/SD
+reader (expected identical; the volume list is `/Volumes`).
+
+Motion and polish research: `docs/design/MOTION_RESEARCH.md`.
+
 ## Ingest variables (2026-10-14)
 
 Photo Mechanic's spellings (`{year4}` `{iyr2}` `{month0}` `{imn0}`
