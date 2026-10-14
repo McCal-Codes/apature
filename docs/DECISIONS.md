@@ -214,3 +214,16 @@ capture time and camera survive; a JPEG source keeps its whole EXIF with
 Orientation reset and pixel dimensions patched. (5) Marks (rating, class,
 tag) are not written into delivery files. (6) Export never overwrites.
 **Status:** implemented and tested (see STATUS.md M7).
+
+## ADR-018 — Rename and Trash (2026-10-14)
+
+**Decisions.** Rename acts on the whole photo (every variant and the
+sidecar), is planned and shown before it runs, refuses collisions, and
+runs in two phases so swaps and case changes work with rollback on any
+error. There is no undo entry for a rename: the plan preview is the
+safeguard, and a second rename reverses it. Trash goes through
+NSFileManager on macOS (the `trash` crate's `NsFileManager` method) because
+the Finder-scripting default needs an Automation permission and timed out
+in testing; the cost is that Finder may not offer Put Back for those
+items, which the dialog says. Apature still never deletes.
+**Status:** implemented, CLI-tested, dialogs seen.

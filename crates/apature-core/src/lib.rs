@@ -5,6 +5,7 @@
 //! This crate has no I/O beyond directory scanning and never touches image
 //! pixels.
 
+pub mod fileops;
 pub mod folder;
 pub mod item;
 pub mod marks;

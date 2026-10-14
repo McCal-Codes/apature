@@ -48,6 +48,9 @@ pub struct Launch {
     pub preview: bool,
     pub zoom11: bool,
     pub compare: bool,
+    /// Open the Rename / Trash dialog at start (screenshots).
+    pub rename_dialog: bool,
+    pub trash_dialog: bool,
     /// Open the Settings window at start (screenshots).
     pub settings: bool,
     /// Extra folders to open as tabs.
@@ -86,6 +89,8 @@ fn parse_args() -> Launch {
                 l.ingest_run = true;
             }
             "--settings" => l.settings = true,
+            "--rename-dialog" => l.rename_dialog = true,
+            "--trash-dialog" => l.trash_dialog = true,
             "--preview" => l.preview = true,
             "--zoom11" => {
                 l.preview = true;

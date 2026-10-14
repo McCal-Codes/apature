@@ -73,6 +73,8 @@ pub struct Prefs {
     /// When a volume with a DCIM folder mounts, switch to Ingest with it as the source.
     pub open_ingest_on_card: bool,
     pub export: ExportPrefs,
+    /// Last template used in Rename Photos.
+    pub rename_template: String,
 }
 
 impl Default for Prefs {
@@ -100,6 +102,7 @@ impl Default for Prefs {
             open_after_ingest: true,
             open_ingest_on_card: true,
             export: ExportPrefs::default(),
+            rename_template: String::new(),
         }
     }
 }

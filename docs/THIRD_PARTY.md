@@ -18,6 +18,7 @@ whenever dependencies change.
 | rfd | 0.17 | MIT | native NSOpenPanel folder picker |
 | directories | 6 | MIT OR Apache-2.0 | cache location |
 | walkdir | 2 | Unlicense OR MIT | folder scan |
+| trash | 5 | MIT | move files to the system Trash (NSFileManager on macOS) |
 | sha2 | 0.10 | MIT OR Apache-2.0 | ingest verification |
 | clap, anyhow, thiserror, serde, log, env_logger | current | MIT OR Apache-2.0 | plumbing |
 

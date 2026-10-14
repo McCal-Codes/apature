@@ -79,6 +79,17 @@ impl MenuBar {
             &item(Command::ExportStart, "Export…", acc(cmd, Code::KeyE)),
             &PredefinedMenuItem::separator(),
             &item(
+                Command::RenamePhotos,
+                "Rename Photos…",
+                acc(cmd_shift, Code::KeyR),
+            ),
+            &item(
+                Command::MoveToTrash,
+                "Move to Trash",
+                acc(cmd, Code::Backspace),
+            ),
+            &PredefinedMenuItem::separator(),
+            &item(
                 Command::RevealInFinder,
                 "Reveal in Finder",
                 acc(cmd, Code::KeyR),
