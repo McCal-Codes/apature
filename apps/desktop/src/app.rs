@@ -77,6 +77,8 @@ pub struct IngestState {
     pub opts: apature_ingest::Options,
     pub plan: Option<apature_ingest::Plan>,
     pub plan_error: Option<String>,
+    /// When the current plan arrived (the plan card fades in).
+    pub plan_since: Option<Instant>,
     pub planning: bool,
     pub generation: u64,
     pub running: Option<Running>,
@@ -153,7 +155,12 @@ pub struct App {
     pub preview_since: Option<Instant>,
     pub preview_from: Option<egui::Rect>,
     pub cursor_cell_rect: Option<egui::Rect>,
+    /// Keyboard focus moved: the ring slides from `focus_from` over 160 ms.
+    pub focus_from: Option<egui::Rect>,
+    pub focus_since: Option<Instant>,
     pub status_since: Option<Instant>,
+    /// `/Volumes` is polled every 2 s so a card shows up when it mounts.
+    volumes_checked: Instant,
     last_status: String,
     launch: Launch,
     quit_after_frame: bool,
@@ -231,6 +238,9 @@ impl App {
             preview_since: None,
             preview_from: None,
             cursor_cell_rect: None,
+            focus_from: None,
+            focus_since: None,
+            volumes_checked: Instant::now(),
             status_since: None,
             last_status: String::new(),
             launch: launch.clone(),
@@ -336,7 +346,10 @@ impl App {
                     }
                     self.ingest.planning = false;
                     match result {
-                        Ok(p) => self.ingest.plan = Some(p),
+                        Ok(p) => {
+                            self.ingest.plan = Some(p);
+                            self.ingest.plan_since = Some(Instant::now());
+                        }
                         Err(e) => self.ingest.plan_error = Some(e),
                     }
                     if self.launch.ingest_run && self.ingest.running.is_none() {
@@ -378,6 +391,13 @@ impl App {
                             }
                             apature_ingest::Event::Verified { index, .. } => {
                                 r.verified_count += 1;
+                                r.bytes_done += self
+                                    .ingest
+                                    .plan
+                                    .as_ref()
+                                    .and_then(|p| p.entries.get(index))
+                                    .map(|e| e.size)
+                                    .unwrap_or(0);
                                 if let Some(s) = r.statuses.get_mut(index) {
                                     if *s != FileStatus::Failed {
                                         *s = FileStatus::Verified;
@@ -415,6 +435,7 @@ impl App {
                             format!("Ingest finished with {} failed file(s)", rep.files_failed())
                         };
                         r.done = Some(rep);
+                        r.done_since = Some(Instant::now());
                     }
                     if open_after {
                         self.dispatch_later = Some(Command::IngestOpenResult);
@@ -1222,12 +1243,43 @@ impl App {
         }
     }
 
+    /// Remember where the focus ring was so it can slide to the new cell.
+    fn note_focus_move(&mut self, new_cursor: usize) {
+        if new_cursor != self.cursor {
+            self.focus_from = self.cursor_cell_rect;
+            self.focus_since = Some(Instant::now());
+        }
+    }
+
+    /// Re-read `/Volumes`; a newly mounted volume with a DCIM folder is a
+    /// camera card: say so, and open Ingest on it when the pref is on.
+    fn poll_volumes(&mut self) {
+        let before: Vec<PathBuf> = self.volumes.iter().map(|(_, p)| p.clone()).collect();
+        self.refresh_volumes();
+        let new_cards: Vec<(String, PathBuf)> = self
+            .volumes
+            .iter()
+            .filter(|(_, p)| !before.contains(p) && p.join("DCIM").is_dir())
+            .cloned()
+            .collect();
+        if let Some((name, path)) = new_cards.first() {
+            self.status = format!("Card mounted: {name}");
+            if self.prefs.open_ingest_on_card && self.ingest.running.is_none() {
+                self.ingest.opts.source = path.clone();
+                self.ingest.opts.include_subfolders = true;
+                self.workspace = Workspace::Ingest;
+                self.ingest_options_changed();
+            }
+        }
+    }
+
     fn move_focus(&mut self, delta: isize, mods: Mods) {
         if self.view.is_empty() {
             return;
         }
         let n = self.view.len() as isize;
         let p = (self.cursor_pos() as isize + delta).clamp(0, n - 1) as usize;
+        self.note_focus_move(self.view[p]);
         self.cursor = self.view[p];
         self.selection.focus_moved(self.cursor, mods, &self.view);
         self.scroll_to_cursor = true;
@@ -1235,6 +1287,7 @@ impl App {
 
     fn focus_to_pos(&mut self, p: usize, mods: Mods) {
         if let Some(&idx) = self.view.get(p) {
+            self.note_focus_move(idx);
             self.cursor = idx;
             self.selection.focus_moved(idx, mods, &self.view);
             self.scroll_to_cursor = true;
@@ -1826,13 +1879,25 @@ impl eframe::App for App {
         let live = |s: Option<Instant>, secs: f32| {
             s.is_some_and(|i| i.elapsed().as_secs_f32() < secs + 0.05)
         };
+        let ingest_live =
+            self.ingest.running.as_ref().is_some_and(|r| {
+                r.started.elapsed().as_secs_f32() < 0.6 || live(r.done_since, 0.6)
+            });
         if !self.reduce_motion
             && (live(self.sheet_fade_since, 0.16)
                 || live(self.preview_since, 0.16)
-                || live(self.status_since, 0.12))
+                || live(self.focus_since, 0.16)
+                || live(self.status_since, 0.12)
+                || live(self.ingest.plan_since, 0.16)
+                || ingest_live)
         {
             ctx.request_repaint();
         }
+        if self.volumes_checked.elapsed().as_secs_f32() >= 2.0 {
+            self.volumes_checked = Instant::now();
+            self.poll_volumes();
+        }
+        ctx.request_repaint_after(std::time::Duration::from_secs(2));
         if let Some(c) = self.dispatch_later.take() {
             self.dispatch(ctx, c);
         }

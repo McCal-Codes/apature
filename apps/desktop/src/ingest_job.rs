@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
@@ -36,6 +37,10 @@ pub struct Running {
     pub statuses: Vec<FileStatus>,
     pub errors: Vec<Option<String>>,
     pub verified_count: usize,
+    /// Bytes verified so far (one count per destination), drives the bar.
+    pub bytes_done: u64,
+    pub started: Instant,
+    pub done_since: Option<Instant>,
     pub done: Option<Report>,
     pub pad: Option<(usize, usize)>,
 }
@@ -131,6 +136,9 @@ impl IngestJobs {
             statuses: vec![FileStatus::Pending; n],
             errors: vec![None; n],
             verified_count: 0,
+            bytes_done: 0,
+            started: Instant::now(),
+            done_since: None,
             done: None,
             pad: None,
         }
