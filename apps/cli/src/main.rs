@@ -66,6 +66,29 @@ enum Cmd {
     },
     /// Verified copy of one file (refuses to overwrite).
     Copy { src: PathBuf, dst: PathBuf },
+    /// Apply an assignment file's IPTC pad (and nothing else) to photos.
+    Pad {
+        /// The key: value assignment file.
+        #[arg(long)]
+        assignment: PathBuf,
+        files: Vec<PathBuf>,
+    },
+    /// Set the caption (and optionally headline/keywords) on photos, expanding
+    /// \code\ replacements from the assignment.
+    Caption {
+        #[arg(long)]
+        assignment: Option<PathBuf>,
+        #[arg(long)]
+        text: String,
+        #[arg(long)]
+        headline: Option<String>,
+        /// Semicolon-separated.
+        #[arg(long)]
+        keywords: Option<String>,
+        files: Vec<PathBuf>,
+    },
+    /// Print the IPTC fields of a photo.
+    Iptc { file: PathBuf },
     /// Print where the thumbnail cache lives.
     CacheDir,
 }
@@ -97,6 +120,20 @@ fn main() -> Result<()> {
                 r.destination.display(),
                 r.sha256
             );
+            Ok(())
+        }
+        Cmd::Pad { assignment, files } => pad(&assignment, &files),
+        Cmd::Caption {
+            assignment,
+            text,
+            headline,
+            keywords,
+            files,
+        } => caption(assignment.as_deref(), &text, headline, keywords, &files),
+        Cmd::Iptc { file } => {
+            let item = item_for(&file)?;
+            let i = items::read_iptc(&item);
+            println!("{}", serde_json::to_string_pretty(&i)?);
             Ok(())
         }
         Cmd::CacheDir => {
@@ -305,8 +342,8 @@ fn bench(
     Ok(())
 }
 
-fn mark(file: &Path, rating: Option<i8>, class: Option<u8>, tag: Option<bool>) -> Result<()> {
-    // Resolve the file to its item so a pair gets both the sidecar and the JPEG.
+/// Resolve a file to its item so a pair gets both the sidecar and the JPEG.
+fn item_for(file: &Path) -> Result<apature_core::PhotoItem> {
     let dir = file.parent().context("file has no parent directory")?;
     let stem = file
         .file_stem()
@@ -314,10 +351,81 @@ fn mark(file: &Path, rating: Option<i8>, class: Option<u8>, tag: Option<bool>) -
         .to_string_lossy()
         .to_lowercase();
     let items = apature_core::scan(dir, &ScanOptions::default())?;
-    let item = items
+    items
         .into_iter()
         .find(|it| it.stem.to_lowercase() == stem)
-        .with_context(|| format!("{} is not a photo in {}", file.display(), dir.display()))?;
+        .with_context(|| format!("{} is not a photo in {}", file.display(), dir.display()))
+}
+
+fn pad(assignment: &Path, files: &[PathBuf]) -> Result<()> {
+    let a = apature_metadata::stationery::Assignment::parse(&std::fs::read_to_string(assignment)?)?;
+    let fields = a.iptc();
+    for f in files {
+        let item = item_for(f)?;
+        let w = items::write_iptc(&item, &fields)?;
+        println!("{}: pad applied → {} file(s)", item.display_name(), w.len());
+    }
+    Ok(())
+}
+
+fn caption(
+    assignment: Option<&Path>,
+    text: &str,
+    headline: Option<String>,
+    keywords: Option<String>,
+    files: &[PathBuf],
+) -> Result<()> {
+    use apature_metadata::codes::{self, Vars};
+    let a = match assignment {
+        Some(p) => Some(apature_metadata::stationery::Assignment::parse(
+            &std::fs::read_to_string(p)?,
+        )?),
+        None => None,
+    };
+    let codes_table = a.as_ref().map(|a| a.codes()).unwrap_or_default();
+    for f in files {
+        let item = item_for(f)?;
+        let current = items::read_iptc(&item);
+        let exif_date = apature_metadata::exif::read(item.path())
+            .ok()
+            .and_then(|e| e.date_time_original);
+        let date = current
+            .date_created
+            .as_deref()
+            .and_then(codes::parse_date)
+            .or_else(|| exif_date.as_deref().and_then(codes::parse_date));
+        let vars = Vars {
+            date,
+            credit: current
+                .credit
+                .clone()
+                .or_else(|| a.as_ref().and_then(|a| a.credit_line())),
+            headline: current.headline.clone(),
+        };
+        let expanded = codes::expand(text, &codes_table, &vars, '\\');
+        let fields = apature_metadata::Iptc {
+            description: Some(expanded.clone()),
+            headline: headline.clone(),
+            keywords: keywords.as_ref().map(|k| {
+                k.split(';')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            }),
+            ..Default::default()
+        };
+        let w = items::write_iptc(&item, &fields)?;
+        println!(
+            "{}: {expanded}\n  → {} file(s)",
+            item.display_name(),
+            w.len()
+        );
+    }
+    Ok(())
+}
+
+fn mark(file: &Path, rating: Option<i8>, class: Option<u8>, tag: Option<bool>) -> Result<()> {
+    let item = item_for(file)?;
     let scheme = ColorClassScheme::default();
     let current = items::read_marks(&item, &scheme);
     let next = Marks {

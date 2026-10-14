@@ -88,7 +88,7 @@ static RE_TAGGED: OnceLock<Regex> = OnceLock::new();
 static RE_DESC_OPEN: OnceLock<Regex> = OnceLock::new();
 
 /// Matches `prefix:Name="v"` or `<prefix:Name>v</prefix:Name>`; group 2 or 4 is the value.
-fn prop_pattern(prefixes: &str, name: &str) -> String {
+pub(crate) fn prop_pattern(prefixes: &str, name: &str) -> String {
     format!(
         r#"(?s)(?:\b(?:{p}):{n}\s*=\s*"([^"]*)")|(?:<(?:{p}):{n}(?:\s[^>]*)?>\s*(.*?)\s*</(?:{p}):{n}\s*>)"#,
         p = prefixes,
@@ -96,12 +96,12 @@ fn prop_pattern(prefixes: &str, name: &str) -> String {
     )
 }
 
-fn value_of(re: &Regex, text: &str) -> Option<String> {
+pub(crate) fn value_of(re: &Regex, text: &str) -> Option<String> {
     let c = re.captures(text)?;
     c.get(1).or_else(|| c.get(2)).map(|m| unescape(m.as_str()))
 }
 
-fn unescape(s: &str) -> String {
+pub(crate) fn unescape(s: &str) -> String {
     s.replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
@@ -109,7 +109,7 @@ fn unescape(s: &str) -> String {
         .replace("&amp;", "&")
 }
 
-fn escape(s: &str) -> String {
+pub(crate) fn escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -151,7 +151,7 @@ pub fn read_sidecar(path: &Path) -> Result<Option<XmpMarks>, XmpError> {
     }
 }
 
-fn empty_sidecar() -> String {
+pub(crate) fn empty_sidecar() -> String {
     "<?xpacket begin=\"\u{FEFF}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n\
 <x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"Apature 0.1\">\n\
  <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n\
@@ -164,7 +164,7 @@ fn empty_sidecar() -> String {
 }
 
 /// Find the prefix a document binds to a namespace URI, if any.
-fn declared_prefix(text: &str, ns: &str) -> Option<String> {
+pub(crate) fn declared_prefix(text: &str, ns: &str) -> Option<String> {
     let pat = Regex::new(&format!(
         r#"xmlns:([A-Za-z_][\w.-]*)\s*=\s*"{}""#,
         regex::escape(ns)
@@ -181,7 +181,7 @@ fn declared_prefix(text: &str, ns: &str) -> Option<String> {
 /// otherwise an attribute is inserted on the first `rdf:Description`, using
 /// whatever prefix the document already binds to `ns` (declaring
 /// `prefixes[0]` if it binds none). `value = None` removes the property.
-fn set_prop(
+pub(crate) fn set_prop(
     text: &mut String,
     prefixes: &[&str],
     ns: &str,
@@ -290,6 +290,39 @@ pub fn satisfies(want: &XmpMarks, got: &XmpMarks) -> bool {
             let w = if l.is_empty() { None } else { Some(l.clone()) };
             w != got.label
         })
+}
+
+/// Generic atomic sidecar edit: read (or start empty), `edit` the text,
+/// `verify` the result, then temp → fsync → rename. The original is never
+/// touched unless verification passes.
+pub fn write_sidecar_with(
+    path: &Path,
+    edit: impl FnOnce(&str) -> Result<String, XmpError>,
+    verify: impl FnOnce(&str) -> bool,
+) -> Result<(), XmpError> {
+    let existing = match fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e.into()),
+    };
+    let updated = edit(&existing)?;
+    if updated == existing {
+        return Ok(());
+    }
+    if !verify(&updated) {
+        return Err(XmpError::Verify(path.to_path_buf()));
+    }
+    let tmp = path.with_extension(format!("xmp.tmp{}", std::process::id()));
+    let result = (|| {
+        fs::write(&tmp, updated.as_bytes())?;
+        fs::File::open(&tmp)?.sync_all()?;
+        fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result?;
+    Ok(())
 }
 
 /// Write marks into the sidecar at `path`, creating it if needed. Atomic:

@@ -21,7 +21,9 @@ app, a measurement); **production-ready** is not claimed for anything.
 | CR3 / HEIC / RAF-with-no-TIFF previews | **not implemented** | returns "no embedded JPEG" |
 | RAW decode fallback when no preview | **not implemented** | |
 | ICC colour management | **not implemented** | previews shown as sRGB |
-| IPTC fields, captions, code replacements, templates | **not implemented** | Phase 3 |
+| IPTC Core fields (title, headline, caption, keywords, creator, credit, source, copyright, caption writer, city, state, country, country code, sublocation, date created, instructions, transmission ref, usage terms) read/written in place incl. rdf:Alt/Seq/Bag | **verified** | unit tests on Lightroom/PM-style sidecars and self-closing Descriptions; exiftool validates sidecar and JPEG after a write; marks survive |
+| Code replacements (PM file format, `\code\`, `{iptcdow} {iptcmonthnameap} {iptcday} {iptcyear4} {credit} {headline}`) | **verified** | unit tests; `\cf\ tees off on No. 1\tail\` expands to the full AP caption |
+| Assignment stationery from the owner's `key: value` generator file → IPTC pad, caption template, code table | **verified** | unit tests; `apature-cli pad` and `caption` on the scratch pair, exiftool read-back |
 | Ingest planning, renaming, dual destinations, recovery | **not implemented** | Phase 4; only `copy_verified` exists |
 | Catalog | not started | Phase 4+ |
 
@@ -50,6 +52,23 @@ Events.
 | Sort: name, capture time, rating, class, reverse; EXIF read for all items at open | implemented, unit-tested |
 | Undo/redo, one entry per action (⌘Z/⌘⇧Z, Edit menu) | implemented, unit-tested (`undo.rs`); writes files on undo |
 | Advance after mark (Image menu toggle, shown in the status bar) | implemented |
+| Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
+
+## M4 notes (2026-10-14)
+
+* Structured XMP (Alt/Seq/Bag) is edited with the same regex-based in-place
+  approach as marks rather than the planned quick-xml port (ADR-011). It
+  passed the same tests and exiftool validation; the port stays an option
+  if a sidecar shape defeats it.
+* IPTC edits have no undo yet (marks do). The draft's Revert covers the
+  unsaved case only.
+* IPTC-IIM (APP13) is not written into JPEGs; readers that ignore XMP will
+  not see captions. Photo Mechanic, Lightroom, Capture One and exiftool
+  read XMP first.
+* The caption field is egui's TextEdit: no system spell-check or dictation.
+  Watch for this being the reason to add a native text view.
+* Photo Mechanic's display of our captions was not visually checked this
+  session (exiftool read-back was); worth a ten-minute look.
 
 ## M3 notes (2026-10-14)
 

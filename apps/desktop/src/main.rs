@@ -23,6 +23,10 @@ pub struct Launch {
     pub screenshot_frame: u64,
     /// Hidden: select everything and open the filter popup, for screenshots.
     pub demo: bool,
+    /// Start in the Caption workspace (screenshots).
+    pub caption: bool,
+    /// Load this assignment file at start.
+    pub assignment: Option<PathBuf>,
 }
 
 fn parse_args() -> Launch {
@@ -42,6 +46,8 @@ fn parse_args() -> Launch {
             }
             "--screenshot" => l.screenshot = args.next().map(PathBuf::from),
             "--demo" => l.demo = true,
+            "--caption" => l.caption = true,
+            "--assignment" => l.assignment = args.next().map(PathBuf::from),
             "--frames" => {
                 l.screenshot_frame = args.next().and_then(|v| v.parse().ok()).unwrap_or(120)
             }

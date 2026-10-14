@@ -10,11 +10,20 @@
 //!   splicing one APP1 segment and copying every other byte.
 //! * [`items`] is the policy layer: RAW → sidecar, JPEG → embedded, pair →
 //!   both, with conflict reporting.
+//! * [`iptc`] reads and writes the editorial IPTC Core fields with the same
+//!   in-place discipline, including `rdf:Alt`/`Seq`/`Bag` structures.
+//! * [`codes`] expands Photo Mechanic-style code replacements with date and
+//!   credit variables; [`stationery`] turns an assignment config into an
+//!   IPTC pad, a caption template and a code table.
 
+pub mod codes;
 pub mod exif;
+pub mod iptc;
 pub mod items;
 pub mod jpeg_xmp;
+pub mod stationery;
 pub mod xmp;
 
 pub use exif::ExifSummary;
+pub use iptc::Iptc;
 pub use xmp::XmpMarks;

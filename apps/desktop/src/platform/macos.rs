@@ -65,6 +65,9 @@ impl MenuBar {
             &item(Command::PickFolder, "Open Folder…", acc(cmd, Code::KeyO)),
             &item(Command::AddFavorite, "Add Folder to Favorites", None),
             &PredefinedMenuItem::separator(),
+            &item(Command::LoadAssignment, "Load Assignment…", None),
+            &item(Command::LoadCodes, "Load Code Replacements…", None),
+            &PredefinedMenuItem::separator(),
             &item(
                 Command::RevealInFinder,
                 "Reveal in Finder",
@@ -132,7 +135,11 @@ impl MenuBar {
                 "Preview",
                 acc(cmd_shift, Code::Digit2),
             ),
-            &disabled("Caption (M4)"),
+            &item(
+                Command::SetWorkspace(Workspace::Caption),
+                "Caption",
+                acc(cmd_shift, Code::Digit3),
+            ),
             &disabled("Ingest (M5)"),
             &PredefinedMenuItem::separator(),
             &sidebar,
@@ -229,6 +236,13 @@ impl MenuBar {
                 "Toggle Tag",
                 Some(Accelerator::new(Modifiers::empty(), Code::KeyT)),
             ),
+            &PredefinedMenuItem::separator(),
+            &item(
+                Command::ApplyStationery,
+                "Apply Assignment Pad to Selection",
+                None,
+            ),
+            &item(Command::SaveCaption, "Save Caption", None),
             &PredefinedMenuItem::separator(),
             &advance,
         ])?;
