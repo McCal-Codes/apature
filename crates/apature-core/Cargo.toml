@@ -6,6 +6,7 @@ license.workspace = true
 description = "Models, folder scanning and TIFF primitives for Apature"
 
 [dependencies]
+trash.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 walkdir.workspace = true

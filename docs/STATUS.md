@@ -61,6 +61,28 @@ Events.
 | Motion: sidebar/inspector/filmstrip collapse and reveal eased; tab highlight slides and the new sheet fades in (160 ms); Preview grows out of the focused cell; filter chips, drop overlay and status text fade in (120 ms); ingest progress eases; all durations 0 under Reduce Motion (`App::anim`) | implemented; motion cannot be judged from stills, so **unreviewed by eye**; builds, runs, 60 tests |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
 
+## M9 Rename in place and Move to Trash (2026-10-14)
+
+`apature-core::fileops`: a rename plan names every file of each photo
+(RAW, JPEG, XMP sidecar) and refuses any collision (existing file, or two
+photos to one name); execution is two-phase (all to temporary names, then
+to targets) so swaps and case-only changes work, and any failure rolls
+back. Trash moves all of a photo's files to the system Trash through
+NSFileManager (the crate's Finder-scripting default timed out here and
+would need an automation prompt); nothing is ever deleted. Desktop: File ›
+Rename Photos… (⌘⇧R) opens a modal with the naming template (same tokens
+as ingest and export, last template remembered), sequence start, the full
+old → new list and any collisions, Enter or Rename applies and the items
+update in place with the view re-sorted; File › Move to Trash (⌘⌫) asks
+first, listing the photos and the file count, then reloads the folder
+with the focus kept in place. Shortcuts are held while a dialog is open.
+CLI: `apature-cli rename <paths> --template T [--seq-start N] [--dry-run]`,
+`apature-cli trash <paths>`. Tested: CLI rename of three pairs with
+sidecars (marks still read afterwards), collision refusal, a trashed pair
+left the folder; both dialogs seen in screenshots. Not done: undo for
+rename (the dialog shows the plan instead), copy/paste metadata, Trash
+"Put Back" is up to macOS for NSFileManager-trashed files.
+
 ## M8 Preview 1:1 and compare (2026-10-14)
 
 Preview workspace: **Z** (View › Zoom 1:1 / Fit, or double-click at the
