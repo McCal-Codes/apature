@@ -110,6 +110,18 @@ happy sound; owners get the joke), **Cutline**, **Mitts** (the AFA white-paw
 pattern), **Fitch** (old English for polecat; big trademark neighbours).
 Kit is literally a baby ferret and is Firefox's name; avoid.
 
+## 4b. What Firefox actually ships for Kit
+
+Read from the source (`docs/design/research/kit-animation.md`): animation
+is baked into the SVG assets as CSS keyframes and played once via `<img>`
+(a 5 s head-tilt loop gated to "earned moments", a 4.04 s one-shot easter
+egg shown once per conversation with a 4 200 ms timer, a 1.6 s mask intro
+with a 6 % anticipation rise, a 3.36 s GIF at 25 fps with two eye darts),
+each asset carrying its own reduced-motion guard. Apature keeps springs
+for interruptible moments and may bake the set pieces (first-launch rise,
+war dance) as frames; both follow the same gating: earned moment, once
+per session, hard timer, acknowledged even when skipped.
+
 ## 5. Implementation in Apature (egui 0.33, glow backend)
 
 **What epaint can and cannot do (primary, docs.rs 0.33):** cubic and
