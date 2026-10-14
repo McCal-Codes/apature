@@ -181,14 +181,19 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     }
                 }
                 for (label, clause) in app.filter.chips(&app.scheme) {
+                    let a = ctx.animate_bool_with_time(
+                        egui::Id::new(("chip", &label)),
+                        true,
+                        app.anim(0.12),
+                    );
                     let chip = ui.add(
                         egui::Button::new(
                             RichText::new(format!("{label}  ×"))
                                 .size(12.0)
-                                .color(t.accent),
+                                .color(t.accent.gamma_multiply(a)),
                         )
-                        .fill(t.accent_wash)
-                        .stroke(egui::Stroke::new(1.0, t.accent)),
+                        .fill(t.accent_wash.gamma_multiply(a))
+                        .stroke(egui::Stroke::new(1.0, t.accent.gamma_multiply(a))),
                     );
                     if chip.on_hover_text("Remove this filter").clicked() {
                         cmds.push(Command::ClearFilter(Some(clause)));

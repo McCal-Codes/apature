@@ -25,7 +25,7 @@
 - [x] **Tabs** (2026-10-14): in-app tab strip, per-tab view/selection/filter/undo, ⌘T/⌘W/⌘⇧]/⌘⇧[, restored at launch.
 - [x] **Settings window** (2026-10-14): appearance, colour classes, metadata files + delimiter, ingest defaults, cache, shortcut table (profiles still to come).
 
-## Requested 2026-10-14 (owner): clean animations
+## Requested 2026-10-14 (owner): clean animations — implemented 2026-10-14 (ui/motion.rs); keep the exclusions below as the rule
 Restrained motion that makes state changes legible, never slows culling,
 and switches off under Reduce Motion. Candidates, in priority order:
 - Sidebar / inspector / filmstrip collapse and reveal: a 160 ms width ease

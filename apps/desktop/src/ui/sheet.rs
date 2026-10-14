@@ -53,6 +53,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     let (rect, resp) =
                         ui.allocate_exact_size(Vec2::new(cell, cell + LABEL_H), Sense::click());
                     draw_cell(app, ui, t, rect, idx);
+                    if idx == app.cursor {
+                        app.cursor_cell_rect =
+                            Some(Rect::from_min_size(rect.min, Vec2::splat(cell)));
+                    }
                     resp.widget_info(|| {
                         egui::WidgetInfo::labeled(
                             egui::WidgetType::Button,
@@ -99,11 +103,13 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
         let size = tex.size_vec2();
         let s = (cell / size.x).min(cell / size.y);
         let fitted = Rect::from_center_size(img_rect.center(), size * s);
+        // Tab switch: the new sheet fades in over 160 ms.
+        let a = super::motion::progress(app.sheet_fade_since, app.anim(0.16));
         p.image(
             tex.id(),
             fitted,
             Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-            Color32::WHITE,
+            Color32::WHITE.gamma_multiply(a),
         );
     } else if app.thumb_err[idx].is_some() {
         p.text(

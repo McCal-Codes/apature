@@ -60,9 +60,6 @@ fn section<R>(
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
-    if !app.prefs.inspector_visible {
-        return;
-    }
     let mut cmds: Vec<Command> = Vec::new();
     let resp = egui::SidePanel::right("inspector")
         .resizable(true)
@@ -74,7 +71,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 .inner_margin(egui::Margin::same(S3 as i8))
                 .stroke(egui::Stroke::NONE),
         )
-        .show(ctx, |ui| {
+        .show_animated(ctx, app.prefs.inspector_visible, |ui| {
             ui.spacing_mut().item_spacing.y = S2;
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
@@ -380,8 +377,17 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     });
                 });
         });
+    let Some(resp) = resp else {
+        for c in cmds {
+            app.dispatch(ctx, c);
+        }
+        return;
+    };
     let w = resp.response.rect.width();
-    if (w - app.prefs.inspector_width).abs() > 0.5 {
+    if app.prefs.inspector_visible
+        && (w - app.prefs.inspector_width).abs() > 0.5
+        && INSPECTOR_RANGE.contains(&w)
+    {
         app.prefs.inspector_width = w;
         app.prefs_dirty = true;
     }
