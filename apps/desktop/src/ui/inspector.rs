@@ -224,6 +224,11 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                     -1
                                 }));
                             }
+                            if rating_mixed {
+                                ui.label(
+                                    RichText::new("mixed").size(10.0).italics().color(t.muted),
+                                );
+                            }
                         });
                         ui.horizontal(|ui| {
                             ui.add_sized(
@@ -272,7 +277,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                             );
                             let mut tagged = m.tagged;
                             if ui
-                                .checkbox(&mut tagged, "")
+                                .checkbox(&mut tagged, if tag_mixed { "mixed" } else { "" })
                                 .on_hover_text("Toggle tag (T)")
                                 .changed()
                             {
