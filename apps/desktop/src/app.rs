@@ -48,7 +48,8 @@ pub struct TabState {
     pub exif: Vec<Option<ExifSummary>>,
     pub thumbs: Vec<Option<TextureHandle>>,
     pub thumb_err: Vec<Option<String>>,
-    pub previews: HashMap<usize, (TextureHandle, u32)>,
+    /// Preview textures: (texture, long side in px, is the full resolution).
+    pub previews: HashMap<usize, (TextureHandle, u32, bool)>,
     pub preview_lru: VecDeque<usize>,
     pub generation: u64,
     pub cursor: usize,
@@ -85,6 +86,40 @@ pub struct IngestState {
     pub apply_pad: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ZoomMode {
+    #[default]
+    Fit,
+    OneToOne,
+}
+
+/// Preview workspace view state: zoom, pan and the compare set. Shared by
+/// every pane in compare so zoom and pan stay in sync.
+pub struct PreviewView {
+    pub mode: ZoomMode,
+    /// Image point (0..1 × 0..1) shown at the pane centre when at 1:1.
+    pub center: egui::Vec2,
+    pub zoom_since: Option<Instant>,
+    pub zoom_from: Option<egui::Rect>,
+    /// Where the focused photo was last drawn (the zoom animation starts there).
+    pub last_rect: Option<egui::Rect>,
+    /// Item indices shown side by side, when comparing.
+    pub compare: Option<Vec<usize>>,
+}
+
+impl Default for PreviewView {
+    fn default() -> Self {
+        PreviewView {
+            mode: ZoomMode::Fit,
+            center: egui::Vec2::splat(0.5),
+            zoom_since: None,
+            zoom_from: None,
+            last_rect: None,
+            compare: None,
+        }
+    }
+}
+
 /// Export workspace state; settings live in `Prefs::export`.
 #[derive(Default)]
 pub struct ExportState {
@@ -115,7 +150,8 @@ pub struct App {
     pub exif: Vec<Option<ExifSummary>>,
     pub thumbs: Vec<Option<TextureHandle>>,
     pub thumb_err: Vec<Option<String>>,
-    pub previews: HashMap<usize, (TextureHandle, u32)>,
+    /// Preview textures: (texture, long side in px, is the full resolution).
+    pub previews: HashMap<usize, (TextureHandle, u32, bool)>,
     preview_lru: VecDeque<usize>,
     pub pool: Pool,
     generation: u64,
@@ -146,6 +182,7 @@ pub struct App {
     pub ingest: IngestState,
     pub export: ExportState,
     export_jobs: crate::export_job::ExportJobs,
+    pub pv: PreviewView,
     ingest_jobs: IngestJobs,
     /// Files currently being dragged over the window, for the drop overlay.
     pub drag_hover: usize,
@@ -235,6 +272,7 @@ impl App {
             codes: CodeTable::default(),
             ingest: IngestState::default(),
             export: ExportState::default(),
+            pv: PreviewView::default(),
             export_jobs: crate::export_job::ExportJobs::new(cc.egui_ctx.clone()),
             ingest_jobs: IngestJobs::new(cc.egui_ctx.clone(), ledger_path),
             drag_hover: 0,
@@ -326,6 +364,29 @@ impl App {
         if launch.ingest {
             app.workspace = Workspace::Ingest;
             app.ingest_options_changed();
+        }
+        if launch.preview && !app.view.is_empty() {
+            app.enter_preview();
+            app.preview_since = None;
+            if launch.compare {
+                let picks: Vec<usize> = app.view.iter().take(3).copied().collect();
+                app.selection.only(picks[0]);
+                for &i in &picks[1..] {
+                    app.selection.click(
+                        i,
+                        Mods {
+                            shift: false,
+                            command: true,
+                        },
+                        &app.view,
+                    );
+                }
+                app.toggle_compare();
+            }
+            if launch.zoom11 {
+                app.toggle_zoom(Some(egui::Vec2::new(0.5, 0.35)), None);
+                app.pv.zoom_since = None;
+            }
         }
         if launch.export {
             app.workspace = Workspace::Export;
@@ -1132,6 +1193,64 @@ impl App {
         self.preview_since = Some(Instant::now());
     }
 
+    /// Toggle 1:1 and fit. `at` is the image point (0..1) to zoom into (the
+    /// pointer on a double-click, else the current centre); `from` is where
+    /// the photo is drawn now, so the zoom eases from there.
+    pub fn toggle_zoom(&mut self, at: Option<egui::Vec2>, from: Option<egui::Rect>) {
+        if self.workspace != Workspace::Preview {
+            if self.items.is_empty() {
+                return;
+            }
+            self.enter_preview();
+        }
+        self.pv.mode = match self.pv.mode {
+            ZoomMode::Fit => {
+                if let Some(a) = at {
+                    self.pv.center = egui::Vec2::new(a.x.clamp(0.0, 1.0), a.y.clamp(0.0, 1.0));
+                }
+                ZoomMode::OneToOne
+            }
+            ZoomMode::OneToOne => ZoomMode::Fit,
+        };
+        self.pv.zoom_from = from.or(self.pv.last_rect);
+        self.pv.zoom_since = Some(Instant::now());
+    }
+
+    /// Compare the selection (two to four photos) side by side; a single
+    /// photo is compared with the next one in the view. Toggles off.
+    fn toggle_compare(&mut self) {
+        if self.pv.compare.is_some() {
+            self.pv.compare = None;
+            self.status = String::new();
+            return;
+        }
+        if self.items.is_empty() {
+            return;
+        }
+        let mut set: Vec<usize> = self.selection.targets(self.cursor);
+        set.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
+        set.truncate(4);
+        if set.len() < 2 {
+            if let Some(n) = self.view_neighbor(1).or_else(|| self.view_neighbor(-1)) {
+                if !set.contains(&n) {
+                    set.push(n);
+                }
+            }
+        }
+        if set.len() < 2 {
+            self.status = "Select two to four photos to compare".into();
+            return;
+        }
+        if !set.contains(&self.cursor) {
+            self.cursor = set[0];
+        }
+        if self.workspace != Workspace::Preview {
+            self.enter_preview();
+        }
+        self.status = format!("Comparing {} photos · C to stop", set.len());
+        self.pv.compare = Some(set);
+    }
+
     pub fn cache_dir(&self) -> PathBuf {
         directories::ProjectDirs::from("dev", "mccal", "Apature")
             .map(|d| d.cache_dir().join("thumbs"))
@@ -1211,7 +1330,8 @@ impl App {
                             self.stats.decode_ms_total += done.millis;
                         }
                         JobKind::Preview => {
-                            self.previews.insert(done.idx, (tex, rgb.long_side()));
+                            self.previews
+                                .insert(done.idx, (tex, rgb.long_side(), done.full));
                             self.preview_lru.retain(|&i| i != done.idx);
                             self.preview_lru.push_back(done.idx);
                             self.evict_previews();
@@ -1234,9 +1354,27 @@ impl App {
         }
     }
 
+    /// Keep at most `PREVIEW_LRU` previews and about `PREVIEW_BUDGET` bytes
+    /// of texture (a 45 MP 1:1 preview is 180 MB), never the focused photo,
+    /// its neighbours or the compare set.
     fn evict_previews(&mut self) {
-        while self.preview_lru.len() > PREVIEW_LRU {
-            let keep = |i: usize| i + 1 >= self.cursor && i <= self.cursor + 1;
+        const PREVIEW_BUDGET: usize = 768 << 20;
+        loop {
+            let total: usize = self
+                .previews
+                .values()
+                .map(|(t, ..)| {
+                    let [w, h] = t.size();
+                    w * h * 4
+                })
+                .sum();
+            if self.preview_lru.len() <= PREVIEW_LRU && total <= PREVIEW_BUDGET {
+                break;
+            }
+            let keep = |i: usize| {
+                (i + 1 >= self.cursor && i <= self.cursor + 1)
+                    || self.pv.compare.as_ref().is_some_and(|c| c.contains(&i))
+            };
             let Some(p) = self.preview_lru.iter().position(|&i| !keep(i)) else {
                 break;
             };
@@ -1268,8 +1406,9 @@ impl App {
         if idx >= self.items.len() {
             return;
         }
-        if let Some((_, have)) = self.previews.get(&idx) {
-            if *have >= long_side.min(6000) || *have >= 1600 && long_side > *have {
+        if let Some((_, have, full)) = self.previews.get(&idx) {
+            // Already have it, it is the whole file, or the window only grew a little.
+            if *full || *have >= long_side || (*have >= 1600 && long_side <= have * 5 / 4) {
                 return;
             }
         }
@@ -1741,6 +1880,8 @@ impl App {
                     self.open_folder(&d);
                 }
             }
+            Command::ToggleZoom => self.toggle_zoom(None, self.pv.last_rect),
+            Command::ToggleCompare => self.toggle_compare(),
             Command::IngestStart => self.ingest_start(),
             Command::IngestCancel => {
                 if let Some(r) = &self.ingest.running {
@@ -1804,6 +1945,12 @@ impl App {
             Command::Escape => {
                 if self.filter_popup_open {
                     self.filter_popup_open = false;
+                } else if self.workspace == Workspace::Preview && self.pv.compare.is_some() {
+                    self.pv.compare = None;
+                    self.status = String::new();
+                } else if self.workspace == Workspace::Preview && self.pv.mode == ZoomMode::OneToOne
+                {
+                    self.toggle_zoom(None, self.pv.last_rect);
                 } else if self.workspace == Workspace::Preview {
                     self.workspace = Workspace::Sheet;
                     self.scroll_to_cursor = true;
@@ -1954,6 +2101,12 @@ impl App {
                 if pressed(Key::F) && shift {
                     out.push(Command::ToggleFilmstrip);
                 }
+                if pressed(Key::Z) && !shift {
+                    out.push(Command::ToggleZoom);
+                }
+                if pressed(Key::C) && !shift {
+                    out.push(Command::ToggleCompare);
+                }
             }
         });
         out
@@ -2085,6 +2238,7 @@ impl eframe::App for App {
             && (live(self.sheet_fade_since, 0.16)
                 || live(self.preview_since, 0.16)
                 || live(self.focus_since, 0.16)
+                || live(self.pv.zoom_since, 0.16)
                 || live(self.status_since, 0.12)
                 || live(self.ingest.plan_since, 0.16)
                 || ingest_live)

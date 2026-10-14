@@ -76,6 +76,10 @@ pub enum Command {
     ExportStart,
     ExportCancel,
     ExportOpenResult,
+    /// Preview: toggle 1:1 and fit.
+    ToggleZoom,
+    /// Preview: compare the selection side by side.
+    ToggleCompare,
     CloseTab,
     NextTab,
     PrevTab,
@@ -134,6 +138,8 @@ impl Command {
             Command::OpenSettings => "app.settings".into(),
             Command::ZoomIn => "view.zoomin".into(),
             Command::ZoomOut => "view.zoomout".into(),
+            Command::ToggleZoom => "view.zoom11".into(),
+            Command::ToggleCompare => "view.compare".into(),
             Command::SetRating(r) => format!("image.rating.{r}"),
             Command::SetClass(c) => format!("image.class.{c}"),
             Command::ToggleTag => "image.tag".into(),
@@ -173,6 +179,8 @@ impl Command {
             "app.settings" => Command::OpenSettings,
             "view.zoomin" => Command::ZoomIn,
             "view.zoomout" => Command::ZoomOut,
+            "view.zoom11" => Command::ToggleZoom,
+            "view.compare" => Command::ToggleCompare,
             "image.tag" => Command::ToggleTag,
             _ => {
                 if let Some(k) = id.strip_prefix("view.sort.") {
