@@ -57,6 +57,15 @@ Keep captioning separate; this is about getting bytes somewhere safe and
 named. Needs: folder watching (`notify`), a daemon mode for the CLI, and
 the erase/unmount gates designed first.
 
+## From the Photo Mechanic gap analysis (docs/research/pm-feature-gap.md, 2026-10-14)
+1. Export / Save As (M7) — resize, quality, sRGB, keep metadata + IIM, rename, batch.
+2. Preview 1:1 + pan, compare view.
+3. Rename in place, move to trash, copy/paste metadata, persistent {seqn} counters.
+4. Ingest polish: card-mount trigger, unmount, preserve structure, WAV companions, auto-suffix, open sheet while ingesting, multi-source.
+5. Rotate, ICC previews.
+6. Live Ingest (watched folders) → camera FTP.
+7. FTP/SFTP delivery.
+
 ## 0.3 — professional workflow
 - [ ] export presets (long side, quality, sRGB, keep metadata, naming)
 - [ ] saved assignment presets (the `generator/` text files become first-class)
