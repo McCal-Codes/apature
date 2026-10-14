@@ -23,6 +23,12 @@ being designed.
 cargo run --release -p apature -- /path/to/assignment
 ```
 
+Build a double-clickable app (ad-hoc signed, local use):
+
+```bash
+scripts/bundle.sh --install   # → /Applications/Apature.app
+```
+
 Or use the engine from the command line:
 
 ```bash
