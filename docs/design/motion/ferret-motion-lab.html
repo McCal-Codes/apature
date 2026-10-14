@@ -103,7 +103,8 @@ ul.rules li { margin-bottom:4px; }
       <button data-ev="hello"><b>Hello</b><span>first launch</span></button>
       <button data-ev="stash"><b>Card mounted</b><span>stash the card</span></button>
       <button data-ev="picked"><b>Picked</b><span>five stars</span></button>
-      <button data-ev="cheer"><b>Job finished</b><span>every file verified</span></button>
+      <button data-ev="dook"><b>Job finished</b><span>the war dance: every file verified</span></button>
+      <button data-ev="cheer"><b>Cheer</b><span>paws up, the quieter success</span></button>
       <button data-ev="oops"><b>Failure</b><span>a copy failed</span></button>
       <button data-ev="sleep"><b>Empty folder</b><span>nothing open</span></button>
       <button data-ev="look"><b>Glance</b><span>eyes follow the pointer, 1 s</span></button>
@@ -114,6 +115,7 @@ ul.rules li { margin-bottom:4px; }
     <label class="row"><span>Bounce</span><span class="val" id="vBounce">0.18</span><input id="bounce" type="range" min="0" max="0.45" step="0.01" value="0.18"></label>
     <label class="row"><span>Tail drag (follow-through)</span><span class="val" id="vDrag">0.35</span><input id="drag" type="range" min="0" max="0.7" step="0.05" value="0.35"></label>
     <label class="row"><span>Squash on landing</span><span class="val" id="vSquash">6 %</span><input id="squash" type="range" min="0" max="12" step="1" value="6"></label>
+    <label class="toggle"><input type="checkbox" id="feel" checked> Use the per-event feel from the research table (unchecked: your sliders rule)</label>
     <label class="toggle"><input type="checkbox" id="rm"> Reduce Motion: cross-fade instead of springs</label>
     <div class="k">Rules this prototype enforces</div>
     <ul class="rules">
@@ -150,23 +152,33 @@ ul.rules li { margin-bottom:4px; }
     cheer:  { earL:-8, earR:8, armR:1, tailA:1.1, cheek:0.9, bodyY:-8 },
     oops:   { earL:28, earR:-28, tailB:1, lookX:-4, cheek:0.25, bodyY:4, lean:4 },
     sleep:  { earL:22, earR:-22, tailA:-0.9, bodyY:18, cheek:0.4, glow:0.7 },
+    dook:   { earL:-12, earR:12, tailA:1.3, cheek:1, glow:1.3 },   // the weasel war dance: sideways hops, arched back, puffed tail
     look:   {},
   };
-  const EYES = { rest:'open', hello:'open', stash:'open', picked:'stars', cheer:'happy', oops:'open', sleep:'closed', look:'open' };
-  const HOLD = { hello:1.6, stash:2.2, picked:1.4, cheer:1.8, oops:2.4, sleep:4.6, look:1.0, rest:0 };
+  const EYES = { rest:'open', hello:'open', stash:'open', picked:'stars', cheer:'happy', oops:'open', sleep:'closed', dook:'happy', look:'open' };
+  const HOLD = { hello:1.6, stash:2.2, picked:1.4, cheer:1.8, oops:2.4, sleep:4.6, dook:1.6, look:1.0, rest:0 };
+  // Per-event spring feel from the research table (Apple duration/bounce; bounce never above 0.4):
+  // hello 0.45/0.25 · stash 0.40/0.15 · picked 0.40/0.20 (eyes 0.35/0.35) · cheer 0.50/0.30 · oops 0.30/0 · sleep 0.80/0.10
+  const FEEL = { hello:[0.45,0.25], stash:[0.40,0.15], picked:[0.40,0.20], cheer:[0.50,0.30], oops:[0.30,0.0], sleep:[0.80,0.10], dook:[0.40,0.30], look:[0.35,0.10], rest:[0.45,0.15] };
+  // Anticipation: a 60–100 ms dip before the main move (1–2 frames on twos), never a hold the user waits on.
+  const ANTICIPATE = { hello:0.08, cheer:0.10, picked:0.06, stash:0.06 };
   const springs = {}; for (const k in REST){ springs[k]=new Spring(REST[k]); }
   const tailLag = { a:new Spring(0), b:new Spring(0) }; // follow-through: tail chases the body's value with a lag
   let state='rest', since=performance.now(), budget=0, eyeMode='open', eyeFade={open:1,happy:0,closed:0,stars:0}, wideScale=1, zz=0, sparkle=0;
   let reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   try { $('rm').checked = reduce; } catch(e){}
   $('rm').addEventListener('change', e => { reduce = e.target.checked; });
+  $('feel').addEventListener('change', e => { useEventFeel = e.target.checked; });
   const sl = { resp:$('resp'), bounce:$('bounce'), drag:$('drag'), squash:$('squash') };
   function fmt(){ $('vResp').textContent=(+sl.resp.value).toFixed(2)+' s'; $('vBounce').textContent=(+sl.bounce.value).toFixed(2); $('vDrag').textContent=(+sl.drag.value).toFixed(2); $('vSquash').textContent=sl.squash.value+' %'; }
   Object.values(sl).forEach(s=>s.addEventListener('input',fmt)); fmt();
 
-  let landingKick=0, shiver=0, waveT=0;
+  let landingKick=0, shiver=0, waveT=0, antic=0, blink=0, useEventFeel=true;
   function fire(ev){
     state=ev; since=performance.now(); budget=HOLD[ev]||0;
+    if (useEventFeel && FEEL[ev]){ sl.resp.value=FEEL[ev][0]; sl.bounce.value=FEEL[ev][1]; fmt(); }
+    antic = ANTICIPATE[ev]||0;            // small dip first, then the move
+    blink = 0.14;                          // a blink at every eye-direction change (8 frames: 2 closed, lids offset)
     const p = Object.assign({}, REST, POSES[ev]||{});
     for (const k in p){ springs[k].t = p[k]; }
     eyeMode = EYES[ev]||'open'; wideScale = (ev==='oops')?1.2:1;
@@ -206,10 +218,18 @@ ul.rules li { margin-bottom:4px; }
     let wave=0; if (state==='hello'){ waveT+=dt; wave=Math.sin(waveT*2*Math.PI*1.6)*Math.exp(-waveT*1.1); }
     // landing squash: a kick that the spring settles
     let squashY=1, squashX=1;
-    if (landingKick>0 && !reduce){ const k=landingKick; squashY=1-sq*Math.sin(k*Math.PI); squashX=1/squashY; landingKick=Math.max(0,landingKick-dt*2.2); }
+    if (antic>0 && !reduce){ squashY=1-0.04*Math.sin((1-antic/0.1)*Math.PI); squashX=1/squashY; antic=Math.max(0,antic-dt); }
+    else if (landingKick>0 && !reduce){ const k=landingKick; squashY=1-sq*Math.sin(k*Math.PI); squashX=1/squashY; landingKick=Math.max(0,landingKick-dt*2.2); }
+    // blink: lids close for ~2 frames inside an 8-frame blink; the right lid trails by one frame
+    let lidL=1, lidR=1;
+    if (blink>0 && !reduce && eyeMode==='open'){ const p=1-blink/0.14; const shape=t=>Math.max(0,1-Math.abs(t-0.5)*2.6); lidL=1-shape(p); lidR=1-shape(Math.max(0,p-0.12)); blink=Math.max(0,blink-dt); }
     let shx=0; if (shiver>0 && !reduce){ shx=Math.sin(shiver*60)*4*shiver; shiver=Math.max(0,shiver-dt*1.6); }
+    // war dance: three sideways hops with a squash on each landing and a puffed tail, decaying over the hold
+    let hopY=0, tailW=34;
+    if (state==='dook' && !reduce){ const e=elapsed, env=Math.max(0,1-e/1.4); const ph=e*2*Math.PI*2.2; shx+=Math.sin(ph*0.5)*26*env; hopY=-Math.abs(Math.sin(ph))*22*env; const land=Math.max(0,Math.cos(ph)); squashY*=1-sq*land*env; squashX=1/squashY; tailW=34+12*env; }
+    el.tail.setAttribute('stroke-width',tailW);
     // ---- apply ----
-    el.char.setAttribute('transform',`translate(${256+shx} ${456+v.bodyY}) rotate(${v.lean}) scale(${squashX} ${squashY}) translate(-256 -456)`);
+    el.char.setAttribute('transform',`translate(${256+shx} ${456+v.bodyY+hopY}) rotate(${v.lean}) scale(${squashX} ${squashY}) translate(-256 -456)`);
     el.earL.setAttribute('transform',`rotate(${v.earL} 178 196)`); el.earR.setAttribute('transform',`rotate(${v.earR} 334 196)`);
     // tail: base at the body, two control points lag; tailA lifts the tip, tailB tucks it down
     const tipX=392+ta*0-tb*40, tipY=312-ta*70+tb*120, c1x=440-tb*30, c1y=430-ta*40+tb*20, c2x=430+ta*10, c2y=340-ta*60+tb*90;
@@ -219,8 +239,8 @@ ul.rules li { margin-bottom:4px; }
     el.armRpath.setAttribute('d',`M298 400 Q${298+a*60} ${400-a*40} ${px} ${py}`); el.pawR.setAttribute('cx',px); el.pawR.setAttribute('cy',py);
     el.card.setAttribute('opacity',v.cardS); el.card.setAttribute('transform',`translate(256 392) scale(${0.8*v.cardS}) translate(-28 -38)`);
     // eyes: look + blink scale + wide
-    const bl=(state==='sleep')?1:1; const ws=wideScale;
-    el.eyeL.setAttribute('transform',`translate(${218+v.lookX} ${250+v.lookY}) scale(${ws} ${ws*bl})`); el.eyeR.setAttribute('transform',`translate(${294+v.lookX} ${250+v.lookY}) scale(${ws} ${ws*bl})`);
+    const ws=wideScale;
+    el.eyeL.setAttribute('transform',`translate(${218+v.lookX} ${250+v.lookY}) scale(${ws} ${Math.max(0.06,ws*lidL)})`); el.eyeR.setAttribute('transform',`translate(${294+v.lookX} ${250+v.lookY}) scale(${ws} ${Math.max(0.06,ws*lidR)})`);
     // eye mode cross-fade (120 ms)
     for (const m of ['open','happy','closed','stars']){ const tgt=(m===eyeMode)?1:0; eyeFade[m]+= (tgt-eyeFade[m])*Math.min(1,dt/0.12); }
     el.eo.setAttribute('opacity',eyeFade.open); el.eh.setAttribute('opacity',eyeFade.happy); el.ec.setAttribute('opacity',eyeFade.closed); el.es.setAttribute('opacity',eyeFade.stars);

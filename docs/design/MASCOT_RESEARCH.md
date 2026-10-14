@@ -408,3 +408,23 @@ developer will say).
 free 3 (FerretDB), cute 5 (round head, low eyes, mask, short legs), icon 4
 (head-only mark), range 5 (long body, tail, paws, the donut sleep).
 Sketches: `mascot/ferret/`.
+
+## 11. Ferret behaviour, verified (2026-10-14)
+
+Weasel war dance (erratic leaps, arched back, frizzed tail, bumps into
+furniture, after a catch; with "dooking"); dead sleep (limp "like a doll",
+hard to wake; ferrets sleep 14–18 h, crepuscular); speed bump (drops flat
+mid-play for a beat; owner slang, one source); stashing (carried in paws
+and teeth, scooted with front paws); tunnelling (the enrichment ferrets
+"most enjoyed", RVC owner survey); tail semaphore (relaxed calm, twitch
+alert, puffed + bounding joy, puffed + hunched fear, tucked nervous).
+Anatomy: body ≈ 3–4× shoulder height, short legs, small eyes, short ears;
+sable with the dark mask is the most common and most recognisable colour;
+AFA patterns include mitts, blaze, panda. Culture: Kodo and Podo
+(*Beastmaster*), the *Kindergarten Cop* ferret, Furret (Pokémon, the 2019
+"Furret walk"), Lesfurets.com's Hervé and François; weasel-villain
+tropes do not bleed onto domestic ferrets ("cute and harmless"). Names
+that checked clear or nearly: **Dook, Cutline, Mitts, Fitch**; Kit is a
+baby ferret and Firefox's name, avoid. "FERRET" is a registered US mark for
+inspection cameras (Ferret Tools), low risk for a culling app, noted.
+Motion design built on this: `MOTION_DESIGN.md` and the motion lab.
