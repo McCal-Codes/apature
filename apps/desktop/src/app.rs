@@ -15,11 +15,15 @@ use apature_metadata::items;
 use apature_metadata::ExifSummary;
 use apature_preview::{Rgb, ThumbCache};
 
+use apature_metadata::codes::{self, CodeTable, Vars};
+use apature_metadata::stationery::Assignment;
+
 use crate::commands::{Command, Workspace};
 use crate::filter::{self, Filter};
 use crate::platform::Platform;
 use crate::prefs::Prefs;
 use crate::selection::{Mods, Selection};
+use crate::ui::caption::{Draft, DraftFields};
 use crate::ui::{self, tokens::Theme};
 use crate::undo::{Change, Entry, UndoStack};
 use crate::worker::{Job, JobKind, Pool};
@@ -74,6 +78,9 @@ pub struct App {
     prefs_saved_at: Instant,
     pub volumes: Vec<(String, PathBuf)>,
     pub filter_popup_open: bool,
+    pub caption_draft: Option<Draft>,
+    pub assignment: Option<Assignment>,
+    pub codes: CodeTable,
     platform: Platform,
     reduce_motion: bool,
     launch: Launch,
@@ -126,6 +133,9 @@ impl App {
             prefs_saved_at: Instant::now(),
             volumes: Vec::new(),
             filter_popup_open: false,
+            caption_draft: None,
+            assignment: None,
+            codes: CodeTable::default(),
             platform,
             reduce_motion: Platform::reduce_motion(),
             launch: launch.clone(),
@@ -134,6 +144,15 @@ impl App {
         };
         app.sync_menu();
         app.refresh_volumes();
+        if let Some(p) = app.prefs.assignment_file.clone() {
+            app.load_assignment(&p);
+        }
+        if let Some(p) = app.prefs.codes_file.clone() {
+            app.load_codes(&p);
+        }
+        if let Some(p) = launch.assignment.clone() {
+            app.load_assignment(&p);
+        }
         let first = launch
             .folder
             .clone()
@@ -147,7 +166,172 @@ impl App {
             app.cursor = app.view[0];
             app.filter_popup_open = true;
         }
+        if launch.caption && !app.view.is_empty() {
+            app.workspace = Workspace::Caption;
+        }
         app
+    }
+
+    // ----- captions ----------------------------------------------------------
+
+    fn load_assignment(&mut self, path: &Path) {
+        match std::fs::read_to_string(path)
+            .map_err(|e| e.to_string())
+            .and_then(|t| Assignment::parse(&t).map_err(|e| e.to_string()))
+        {
+            Ok(a) => {
+                self.codes.merge(&a.codes());
+                self.status = format!(
+                    "Assignment loaded: {} ({} codes)",
+                    a.slug,
+                    self.codes.codes.len()
+                );
+                self.assignment = Some(a);
+                self.prefs.assignment_file = Some(path.to_path_buf());
+                self.prefs_dirty = true;
+            }
+            Err(e) => self.status = format!("Could not load assignment {}: {e}", path.display()),
+        }
+    }
+
+    fn load_codes(&mut self, path: &Path) {
+        match std::fs::read_to_string(path) {
+            Ok(t) => {
+                let table = CodeTable::parse(&t);
+                self.codes.merge(&table);
+                self.status = format!(
+                    "{} code replacements loaded from {}",
+                    table.codes.len(),
+                    path.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                );
+                self.prefs.codes_file = Some(path.to_path_buf());
+                self.prefs_dirty = true;
+            }
+            Err(e) => self.status = format!("Could not read {}: {e}", path.display()),
+        }
+    }
+
+    fn caption_vars(&self, draft: &Draft) -> Vars {
+        Vars {
+            date: draft
+                .date_created
+                .as_deref()
+                .and_then(codes::parse_date)
+                .or_else(|| {
+                    self.exif[draft.idx]
+                        .as_ref()
+                        .and_then(|e| e.date_time_original.as_deref())
+                        .and_then(codes::parse_date)
+                }),
+            credit: if draft.fields.credit.is_empty() {
+                self.assignment.as_ref().and_then(|a| a.credit_line())
+            } else {
+                Some(draft.fields.credit.clone())
+            },
+            headline: if draft.fields.headline.is_empty() {
+                None
+            } else {
+                Some(draft.fields.headline.clone())
+            },
+        }
+    }
+
+    /// Keep the draft on the focused photo; save a dirty draft before moving on.
+    fn sync_caption_draft(&mut self) {
+        if self.items.is_empty() {
+            self.caption_draft = None;
+            return;
+        }
+        if self
+            .caption_draft
+            .as_ref()
+            .is_some_and(|d| d.idx == self.cursor)
+        {
+            return;
+        }
+        self.save_caption(false);
+        let it = &self.items[self.cursor];
+        let iptc = items::read_iptc(it);
+        let fields = DraftFields::from_iptc(&iptc);
+        self.caption_draft = Some(Draft {
+            idx: self.cursor,
+            fields: fields.clone(),
+            original: fields,
+            date_created: iptc.date_created.clone(),
+        });
+    }
+
+    /// Write the draft's changed fields. Returns true when something was written.
+    fn save_caption(&mut self, announce: bool) -> bool {
+        let Some(draft) = self.caption_draft.as_ref() else {
+            return false;
+        };
+        if !draft.dirty() || draft.idx >= self.items.len() {
+            return false;
+        }
+        let changes = draft.fields.changes_from(&draft.original);
+        let idx = draft.idx;
+        match items::write_iptc(&self.items[idx], &changes) {
+            Ok(w) => {
+                if let Some(d) = self.caption_draft.as_mut() {
+                    d.original = d.fields.clone();
+                }
+                if announce {
+                    self.status = format!(
+                        "Caption saved: {} → {} file{}",
+                        self.items[idx].display_name(),
+                        w.len(),
+                        if w.len() == 1 { "" } else { "s" }
+                    );
+                }
+                true
+            }
+            Err(e) => {
+                self.status = format!("Could not save caption: {e}");
+                false
+            }
+        }
+    }
+
+    fn apply_stationery(&mut self) {
+        let Some(pad) = self.assignment.as_ref().map(|a| a.iptc()) else {
+            return;
+        };
+        let targets = self.selection.targets(self.cursor);
+        let mut written = 0;
+        let mut failed = None;
+        for &i in &targets {
+            match items::write_iptc(&self.items[i], &pad) {
+                Ok(w) => written += w.len(),
+                Err(e) => failed = Some(e.to_string()),
+            }
+        }
+        self.status = match failed {
+            Some(e) => format!("Pad failed: {e}"),
+            None => format!(
+                "Assignment pad applied to {} photo{} → {written} files",
+                targets.len(),
+                if targets.len() == 1 { "" } else { "s" }
+            ),
+        };
+        self.caption_draft = None;
+        self.sync_caption_draft();
+    }
+
+    fn insert_caption_template(&mut self) {
+        let Some(tpl) = self.assignment.as_ref().map(|a| a.caption_template()) else {
+            return;
+        };
+        let Some(draft) = self.caption_draft.as_ref() else {
+            return;
+        };
+        let vars = self.caption_vars(draft);
+        let text = codes::expand_variables(&tpl, &vars);
+        if let Some(d) = self.caption_draft.as_mut() {
+            d.fields.caption = text;
+        }
     }
 
     fn sync_menu(&self) {
@@ -727,6 +911,39 @@ impl App {
                 self.prefs.advance_after_mark = !self.prefs.advance_after_mark;
                 self.prefs_dirty = true;
             }
+            Command::LoadAssignment => {
+                let mut dlg =
+                    rfd::FileDialog::new().add_filter("Assignment", &["txt", "assignment"]);
+                if let Some(dir) = self.prefs.assignment_file.as_ref().and_then(|p| p.parent()) {
+                    dlg = dlg.set_directory(dir);
+                }
+                if let Some(p) = dlg.pick_file() {
+                    self.load_assignment(&p);
+                }
+            }
+            Command::LoadCodes => {
+                if let Some(p) = rfd::FileDialog::new()
+                    .add_filter("Code replacements", &["txt"])
+                    .pick_file()
+                {
+                    self.load_codes(&p);
+                }
+            }
+            Command::ApplyStationery => self.apply_stationery(),
+            Command::InsertCaptionTemplate => self.insert_caption_template(),
+            Command::SaveCaption => {
+                self.save_caption(true);
+            }
+            Command::SaveCaptionAndNext => {
+                self.save_caption(true);
+                self.move_focus(1, Mods::default());
+                self.sync_caption_draft();
+            }
+            Command::RevertCaption => {
+                if let Some(d) = self.caption_draft.as_mut() {
+                    d.fields = d.original.clone();
+                }
+            }
             Command::SetRating(r) => self.mark(if r < 0 { "reject" } else { "rate" }, |m| {
                 m.rating = Rating::clamp(r)
             }),
@@ -945,10 +1162,17 @@ impl eframe::App for App {
             self.dispatch(ctx, c);
         }
 
+        if self.workspace == Workspace::Caption {
+            self.sync_caption_draft();
+        }
         ui::toolbar::show(self, ctx, &t);
         ui::status::show(self, ctx, &t);
         ui::sidebar::show(self, ctx, &t);
-        ui::inspector::show(self, ctx, &t);
+        if self.workspace == Workspace::Caption {
+            ui::caption::show_fields(self, ctx, &t);
+        } else {
+            ui::inspector::show(self, ctx, &t);
+        }
         ui::filmstrip::show(self, ctx, &t);
 
         egui::CentralPanel::default()
@@ -978,7 +1202,8 @@ impl eframe::App for App {
                 match self.workspace {
                     Workspace::Sheet => ui::sheet::show(self, ui, &t),
                     Workspace::Preview => ui::preview::show(self, ui, &t),
-                    Workspace::Caption | Workspace::Ingest => {}
+                    Workspace::Caption => ui::caption::show_photo(self, ui, &t),
+                    Workspace::Ingest => {}
                 }
             });
         let r = ctx.content_rect();

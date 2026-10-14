@@ -163,6 +163,51 @@ fn fresh_packet(marks: &XmpMarks) -> Result<String, XmpError> {
     Ok(p)
 }
 
+/// Generic packet edit on the JPEG at `path`: `edit` receives the existing
+/// packet (or an empty padded one), `verify` checks the packet read back from
+/// the bytes about to be written. Atomic temp → fsync → rename.
+pub fn write_with(
+    path: &Path,
+    edit: impl FnOnce(&str) -> Result<String, XmpError>,
+    verify: impl FnOnce(&str) -> bool,
+) -> Result<(), JpegXmpError> {
+    let data = fs::read(path)?;
+    let base = match packet(&data)? {
+        Some(existing) => existing.to_string(),
+        None => {
+            let mut p = xmp::apply("", &XmpMarks::default())?;
+            if let Some(idx) = p.rfind("<?xpacket end=") {
+                p.insert_str(idx, &" ".repeat(PADDING));
+            }
+            p
+        }
+    };
+    let new_packet = edit(&base)?;
+    let out = with_packet(&data, &new_packet)?;
+    if out == data {
+        return Ok(());
+    }
+    let back = packet(&out)?.unwrap_or("");
+    if !verify(back) {
+        return Err(JpegXmpError::Verify(path.to_path_buf()));
+    }
+    let name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let tmp = path.with_file_name(format!(".{name}.xmp-tmp{}", std::process::id()));
+    let result = (|| {
+        fs::write(&tmp, &out)?;
+        fs::File::open(&tmp)?.sync_all()?;
+        fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result?;
+    Ok(())
+}
+
 /// Write `marks` into the JPEG at `path`, editing an existing packet in place
 /// or adding one. Atomic: temp file in the same directory, fsync, rename; the
 /// original is untouched unless the new file reads back correctly.

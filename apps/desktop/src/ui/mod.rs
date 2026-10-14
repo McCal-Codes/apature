@@ -1,6 +1,7 @@
 //! The shell. Each module draws one region and talks to the app only
 //! through `App` state and `Command`s; no module owns business logic.
 
+pub mod caption;
 pub mod filmstrip;
 pub mod inspector;
 pub mod preview;
