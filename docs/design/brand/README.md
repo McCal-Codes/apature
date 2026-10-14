@@ -1,18 +1,17 @@
-# Apature brand kit (v0.2, 2026-10-14)
+# Apature brand kit (v0.3, 2026-10-14)
 
-Character: **Dek**, an owl drawn in Firefox Kit's language (soft gradient body,
-dark eyes with a lavender catchlight, no mouth, ear tufts and wings as the
-acting parts). Provisional name; Cutline and Lede also checked clear.
+Character: **Fen**, a fennec fox, drawn storybook-style (ink line, flat
+pastels, dot eyes with a catchlight). Placeholder art; an illustrator is
+being briefed (`docs/design/ARTIST_BRIEF.md`) and the commissioned files
+replace these one for one.
 
 * **portal.html** — the browsable kit (published as a Claude artifact).
-* **mascot/** — ten poses, a three-view turnaround, an expression strip,
-  `dek-character-sheet.png` (the one page to work from).
-* **logo/** — mark (dark, light, mono white, mono ink), app icon tile,
-  wordmark, horizontal and stacked lockups.
-* **pictograms/**, **environment/** — unchanged from v0.1.
-* **archive/snap/** — the v0.1 camera-with-a-face character, kept for the record.
+* **logo/** — head mark (dark, light, warm, mono ink, mono white), app
+  icon tile (dark and warm), brush-stroke alternates, wordmark, lockups.
+* **mascot/** — six poses in the app colourway and six in the warm one.
+* **pictograms/**, **environment/** — unchanged.
+* **archive/** — the earlier Snap (camera) and Dek (owl) placeholders.
 
-Everything is generated from one parts set by the script in the commit
-history, so a new pose is a few lines, not a drawing. Rules (placement,
-motion, licence) are in the portal and in `docs/design/MASCOT_RESEARCH.md`.
-Status: proposal; the app still ships the 2×2 contact-sheet icon until adopted.
+Rules (placement, motion, two colourways, natural-not-creepy) are in the
+portal. The app still ships the 2×2 contact-sheet icon until Fen is adopted
+in code.

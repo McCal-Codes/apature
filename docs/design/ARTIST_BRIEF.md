@@ -23,28 +23,35 @@ and a character that "shows up as a small signal that the app is working
 for you, then steps back". We are not asking for a fox or for Kit's
 palette. We are asking for that level of craft and that restraint.
 
-## 3. The animal
+## 3. The animal: Fen, a fennec fox
 
-We want Kit's silhouette (pointed face, expressive ears, a bushy tail
-that does the acting) without being a fox: the Firefox logo is a fox, Kit
-is a fox, MetaMask's mascot is a fox, and Mozilla's trademark policy
-forbids designs "confusingly similar" to its marks. So the direction is
-**fox-adjacent and unclaimed**:
+Decided 2026-10-14: **a fennec fox named Fen.** The owner sent two
+reference styles (stock illustrations, for direction only, never to copy):
 
-* **Primary: a pine marten.** A mustelid (so "to ferret out", the oldest
-  word for what culling is, still applies), agile, lives in dark woods,
-  pointed face, round ears, bushy tail, cream bib. No software brand owns
-  it.
-* **Alternate: a ringtail.** Strictly nocturnal, enormous eyes, a long
-  ringed tail nobody else has. Arizona's state animal; no software brand.
-* **Also acceptable if you make the case:** the sable ferret we drafted
-  (mask, long body) or an owl (night vision; crowded by Duolingo,
-  Hootsuite, Tripadvisor).
-* **Not a fox, not a fennec, not a tanuki, not a red panda** (Firefox,
-  Firefox, GitLab, Firefox).
+1. a hand-drawn storybook fennec: thin ink outline, flat pastel fills
+   (apricot, cream, a pink inner ear), dot eyes with a catchlight, a tiny
+   nose and small mouth, blush, sitting, a few small hearts around it;
+2. an ultra-minimal brush-stroke fennec: two long tapered ear strokes,
+   two eyes, a tiny nose, one sweeping body stroke, orange on white.
 
-Name: to be decided. Candidates that checked clear: Dook, Cutline, Mitts,
-Fitch, Dek. Not Kit (it is a baby ferret, and it is Firefox's).
+Our reading, which the in-house placeholder follows: the brush-stroke
+version is the **mark** (logo, app icon, the two-ear glyph at 16 px); the
+storybook version is the **character** (poses, onboarding, README). Both
+in two palettes: a warm apricot set for marketing surfaces and the
+Apature lavender set on the darkroom ground inside the app.
+
+Natural, never creepy: eyes are dark with a small highlight, never hollow
+or white-on-dark; ear tips are rounded; proportions follow the baby
+schema (big head, eyes low, short limbs); expressions stay in the range
+a real animal has.
+
+What makes a fennec work here: the ears are the identity and the
+signature detail (the biggest ears relative to body size of any canid, on
+a nocturnal desert animal). Being a fox, it sits near Firefox's Kit; the
+ears, the storybook line and the palette keep it its own. "Fennec" was
+also Mozilla's codename for the old Firefox for Android (now Fenix); the
+character is named Fen, not Fennec. Name availability for "Fen" is still
+to be checked (UNVERIFIED).
 
 ## 4. Personality
 
