@@ -1,8 +1,8 @@
-//! The contact sheet: a virtual grid of accessible cells.
+//! The contact sheet: a virtual grid of accessible cells over the view.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
 
-use super::tokens::{Theme, LABEL_H, S1, S2, S3};
+use super::tokens::{Theme, LABEL_H, S1, S3};
 use crate::app::App;
 use crate::commands::{Command, Workspace};
 
@@ -18,7 +18,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
 
     let mut area = egui::ScrollArea::vertical().auto_shrink([false, false]);
     if app.scroll_to_cursor && app.cols > 0 {
-        let row = app.cursor / app.cols;
+        let row = app.cursor_pos() / app.cols;
         let vis = &app.last_visible_rows;
         if row < vis.start || row + 1 > vis.end.saturating_sub(1) {
             let target = if row < vis.start {
@@ -34,7 +34,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
     let mut cmds: Vec<Command> = Vec::new();
     let mut visible = 0..0;
     let cols = app.cols;
-    let n = app.items.len();
+    let n = app.view.len();
+    let (shift, command) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
 
     area.show_rows(ui, row_h, rows, |ui, range| {
         visible = range.clone();
@@ -44,10 +45,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                 ui.add_space(pad);
                 ui.spacing_mut().item_spacing.x = gap;
                 for col in 0..cols {
-                    let idx = row * cols + col;
-                    if idx >= n {
+                    let p = row * cols + col;
+                    if p >= n {
                         break;
                     }
+                    let idx = app.view[p];
                     let (rect, resp) =
                         ui.allocate_exact_size(Vec2::new(cell, cell + LABEL_H), Sense::click());
                     draw_cell(app, ui, t, rect, idx);
@@ -59,10 +61,18 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                         )
                     });
                     if resp.double_clicked() {
-                        cmds.push(Command::Move(idx as isize - app.cursor as isize));
+                        cmds.push(Command::Click {
+                            idx,
+                            shift: false,
+                            command: false,
+                        });
                         cmds.push(Command::SetWorkspace(Workspace::Preview));
                     } else if resp.clicked() {
-                        cmds.push(Command::Move(idx as isize - app.cursor as isize));
+                        cmds.push(Command::Click {
+                            idx,
+                            shift,
+                            command,
+                        });
                     }
                 }
             });
@@ -81,6 +91,7 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
     let p = ui.painter();
     let cell = app.prefs.cell;
     let focused = idx == app.cursor;
+    let selected = app.selection.contains(idx);
     let img_rect = Rect::from_min_size(rect.min, Vec2::splat(cell));
     p.rect_filled(img_rect, CornerRadius::ZERO, t.photo_cell);
 
@@ -111,6 +122,19 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
             img_rect.right_bottom(),
         );
         p.rect_filled(bar, CornerRadius::ZERO, c);
+    }
+    if selected && app.selection.len() > 1 {
+        p.rect_stroke(
+            img_rect.shrink(0.5),
+            CornerRadius::ZERO,
+            Stroke::new(1.0, t.select_photo),
+            StrokeKind::Inside,
+        );
+        p.rect_filled(
+            img_rect,
+            CornerRadius::ZERO,
+            Color32::from_rgba_premultiplied(0, 0, 0, 0).linear_multiply(0.0),
+        );
     }
     if focused {
         p.rect_stroke(
@@ -144,11 +168,12 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
         );
     }
 
-    // Label rows: filename, then stars left / class chip right.
     let name = app.items[idx].display_name();
     let y1 = img_rect.bottom() + S1 + 2.0;
     let name_color = if m.rating.is_rejected() {
         t.muted
+    } else if selected {
+        t.text
     } else {
         t.text2
     };
@@ -215,7 +240,6 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
             t.text,
         );
     }
-    let _ = S2;
 }
 
 fn ellipsize(s: &str, width: f32, char_w: f32) -> String {

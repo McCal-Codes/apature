@@ -27,14 +27,14 @@ bar. Marks are undoable (⌘Z), one entry per batch.
 | extend selection | ⇧ + arrows, ⇧-click, ⌘-click | |
 | select all / none | ⌘A / ⌘⇧A | |
 | colour class 1–8 / clear | 1–8 / 0 | single-key, as the owner's PM prefs |
-| rating 0–5 | ⌘0–⌘5 | Photo Mechanic's Mac mapping; **to verify** against docs.camerabits.com before release |
+| rating 0–5 | ⌘0–⌘5 | Photo Mechanic's Mac mapping (its Image › Set Rating menu confirmed 2026-10-13) |
 | reject / unreject | X / U | Lightroom convention; PM has no reject |
 | tag toggle | T | |
 | preview / back | ⏎ or Space / Esc | Space = 1:1 inside Preview |
-| workspaces | ⌘1 ⌘2 ⌘3 ⌘4 | Finder/Photos convention |
+| workspaces | ⌘⇧1 ⌘⇧2 (⌘⇧3 ⌘⇧4 later) | ⌘1–5 are Photo Mechanic's ratings, so workspaces take ⇧ (decided in M3) |
 | cell size | ⌘= ⌘- | conflicts with egui's UI zoom, which moves to Settings |
 | sidebar / inspector / filmstrip | ⌃⌘S / ⌥⌘I / ⇧F | HIG: also in View menu |
-| filter field | / | |
+| clear filters | ⌥⌘F | filter popup from the toolbar button |
 | open folder / ingest | ⌘O / ⌘⇧I | |
 | save caption and advance | ⌘⏎ | Caption workspace |
 | undo / redo | ⌘Z / ⌘⇧Z | |
