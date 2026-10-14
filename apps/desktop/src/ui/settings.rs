@@ -182,6 +182,9 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         changed |= ui.add(egui::TextEdit::singleline(&mut o.rename_template).desired_width(f32::INFINITY)).changed();
                         changed |= ui.checkbox(&mut o.only_new, "Only photos not ingested before").changed();
                         changed |= ui.checkbox(&mut o.include_subfolders, "Include subfolders").changed();
+                        if ui.checkbox(&mut app.prefs.open_ingest_on_card, "When a camera card mounts, open Ingest with it as the source").changed() {
+                            app.prefs_dirty = true;
+                        }
                         hint(ui, &t, "tokens: {filename} {ext} {frame} {seqn} {seqn:4} {headline} {date} {yymmdd} {year} {month} {day} {time}");
                         if changed {
                             app.prefs.ingest = Some(o.clone());

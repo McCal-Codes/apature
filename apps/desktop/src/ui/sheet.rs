@@ -99,12 +99,20 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
     let img_rect = Rect::from_min_size(rect.min, Vec2::splat(cell));
     p.rect_filled(img_rect, CornerRadius::ZERO, t.photo_cell);
 
+    // A thumbnail that arrives after the cell was first drawn fades in
+    // (120 ms); one already present on the first draw shows at once.
+    let cell_id = egui::Id::new(("cell", idx)).with(app.folder.as_ref());
+    let arrived = ui.ctx().animate_bool_with_time(
+        cell_id.with("thumb"),
+        app.thumbs[idx].is_some(),
+        app.anim(0.12),
+    );
     if let Some(tex) = &app.thumbs[idx] {
         let size = tex.size_vec2();
         let s = (cell / size.x).min(cell / size.y);
         let fitted = Rect::from_center_size(img_rect.center(), size * s);
         // Tab switch: the new sheet fades in over 160 ms.
-        let a = super::motion::progress(app.sheet_fade_since, app.anim(0.16));
+        let a = super::motion::progress(app.sheet_fade_since, app.anim(0.16)) * arrived;
         p.image(
             tex.id(),
             fitted,
@@ -129,22 +137,33 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
         );
         p.rect_filled(bar, CornerRadius::ZERO, c);
     }
-    if selected && app.selection.len() > 1 {
+    // Selection ring fades in and out (120 ms).
+    let sel = ui.ctx().animate_bool_with_time(
+        cell_id.with("sel"),
+        selected && app.selection.len() > 1,
+        app.anim(0.12),
+    );
+    if sel > 0.01 {
         p.rect_stroke(
             img_rect.shrink(0.5),
             CornerRadius::ZERO,
-            Stroke::new(1.0, t.select_photo),
+            Stroke::new(1.0, t.select_photo.gamma_multiply(sel)),
             StrokeKind::Inside,
-        );
-        p.rect_filled(
-            img_rect,
-            CornerRadius::ZERO,
-            Color32::from_rgba_premultiplied(0, 0, 0, 0).linear_multiply(0.0),
         );
     }
     if focused {
+        // After a keyboard move the ring slides from the old cell (160 ms),
+        // unless the old cell is far away (a scroll jump), then it cuts.
+        let mut ring = img_rect.shrink(1.0);
+        if let (Some(from), Some(since)) = (app.focus_from, app.focus_since) {
+            let near = (from.center() - img_rect.center()).length() < cell * 4.0;
+            if near && from != img_rect {
+                let k = super::motion::progress(Some(since), app.anim(0.16));
+                ring = super::motion::lerp_rect(from.shrink(1.0), ring, k);
+            }
+        }
         p.rect_stroke(
-            img_rect.shrink(1.0),
+            ring,
             CornerRadius::ZERO,
             Stroke::new(2.0, t.accent),
             StrokeKind::Inside,
