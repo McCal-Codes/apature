@@ -61,6 +61,14 @@ Events.
 | Motion: sidebar/inspector/filmstrip collapse and reveal eased; tab highlight slides and the new sheet fades in (160 ms); Preview grows out of the focused cell; filter chips, drop overlay and status text fade in (120 ms); ingest progress eases; all durations 0 under Reduce Motion (`App::anim`) | implemented; motion cannot be judged from stills, so **unreviewed by eye**; builds, runs, 60 tests |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
 
+## Ingest variables (2026-10-14)
+
+Photo Mechanic's spellings (`{year4}` `{iyr2}` `{month0}` `{imn0}`
+`{iptcmonth0}` `{day0}` `{idy0}` `{iptcday0}` `{monthname}` `{mnn3}`
+`{iptcmonthname3}` `{hour}` `{minute}` `{second}` …) are accepted so the
+owner's existing folder and rename templates paste in unchanged; tested
+against the exact strings in his presets.
+
 ## M6a notes (2026-10-14): tabs and settings
 
 * Tabs are in-app (Photo Mechanic style), not NSWindow tabs: the app is one
