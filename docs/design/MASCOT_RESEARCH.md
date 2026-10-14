@@ -458,3 +458,18 @@ Recommendation for the artist brief: ask for a **pine marten** as the
 primary direction (it keeps the ferret's "ferret out" lineage and gets
 Kit's silhouette), with the ringtail as the alternate. A straight fox is
 off the table unless the owner wants to accept the lookalike risk.
+
+## 13. Decision: Fen, a fennec fox (owner, 2026-10-14)
+
+After the fox-adjacent round the owner chose a **fennec** and the name
+**Fen**, with two reference styles: a storybook ink-and-pastel character
+and an ultra-minimal brush-stroke mark. Placeholder drawn in both
+(`mascot/fennec-storybook/`), brand kit and portal rebuilt around it
+(`brand/`). Neighbours to keep in mind: Firefox's Kit and logo (foxes),
+Mozilla's retired "Fennec" codename, Pokémon's Fennekin, Zootopia's
+Finnick (the owner stopped the lookups mid-way, so this list is from
+memory and UNVERIFIED). The ears make the fennec visually distinct from
+Kit at every size, which is the practical defence; the dot-eye storybook
+face also departs from Kit's rendered eyes. Owner's rule for every
+version: natural, not creepy (dark eyes with a catchlight, rounded tips,
+real-animal expressions). Name check for "Fen" still to do.
