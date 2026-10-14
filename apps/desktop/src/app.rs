@@ -7,7 +7,9 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use egui::{ColorImage, Key, TextureHandle, TextureOptions};
+use egui::{Color32, ColorImage, Key, TextureHandle, TextureOptions};
+
+use crate::ui::tokens::S4;
 use rayon::prelude::*;
 
 use apature_core::{ColorClass, ColorClassScheme, Marks, PhotoItem, Rating, ScanOptions};
@@ -20,6 +22,7 @@ use apature_metadata::stationery::Assignment;
 
 use crate::commands::{Command, Workspace};
 use crate::filter::{self, Filter};
+use crate::ingest_job::{FileStatus, IngestJobs, Msg, Running};
 use crate::platform::Platform;
 use crate::prefs::Prefs;
 use crate::selection::{Mods, Selection};
@@ -33,6 +36,17 @@ const THUMB_PX: u32 = 320;
 const PREFETCH_ROWS: usize = 3;
 const KEEP_ROWS: usize = 12;
 const PREVIEW_LRU: usize = 6;
+
+#[derive(Default)]
+pub struct IngestState {
+    pub opts: apature_ingest::Options,
+    pub plan: Option<apature_ingest::Plan>,
+    pub plan_error: Option<String>,
+    pub planning: bool,
+    pub generation: u64,
+    pub running: Option<Running>,
+    pub apply_pad: bool,
+}
 
 #[derive(Default)]
 pub struct Stats {
@@ -81,6 +95,12 @@ pub struct App {
     pub caption_draft: Option<Draft>,
     pub assignment: Option<Assignment>,
     pub codes: CodeTable,
+    pub ingest: IngestState,
+    ingest_jobs: IngestJobs,
+    /// Files currently being dragged over the window, for the drop overlay.
+    pub drag_hover: usize,
+    /// IPTC of the focused photo, read once per focus change for the inspector.
+    pub inspector_iptc: Option<(usize, apature_metadata::Iptc)>,
     platform: Platform,
     reduce_motion: bool,
     launch: Launch,
@@ -97,6 +117,9 @@ impl App {
             .unwrap_or(4);
         let threads = (threads.saturating_sub(1)).clamp(2, 12);
         let pool = Pool::new(cc.egui_ctx.clone(), cache, threads);
+        let ledger_path = directories::ProjectDirs::from("dev", "mccal", "Apature")
+            .map(|d| d.data_dir().join("ingested.json"))
+            .unwrap_or_else(|| PathBuf::from("ingested.json"));
         if let Some(theme) = launch.theme {
             cc.egui_ctx.set_theme(theme);
         }
@@ -136,6 +159,10 @@ impl App {
             caption_draft: None,
             assignment: None,
             codes: CodeTable::default(),
+            ingest: IngestState::default(),
+            ingest_jobs: IngestJobs::new(cc.egui_ctx.clone(), ledger_path),
+            drag_hover: 0,
+            inspector_iptc: None,
             platform,
             reduce_motion: Platform::reduce_motion(),
             launch: launch.clone(),
@@ -169,7 +196,157 @@ impl App {
         if launch.caption && !app.view.is_empty() {
             app.workspace = Workspace::Caption;
         }
+        if let Some(o) = app.prefs.ingest.clone() {
+            app.ingest.opts = o;
+        }
+        if let Some(s) = launch.ingest_source.clone() {
+            app.ingest.opts.source = s;
+        }
+        if let Some(d) = launch.ingest_dest.clone() {
+            app.ingest.opts.primary = d;
+        }
+        if launch.ingest {
+            app.workspace = Workspace::Ingest;
+            app.ingest_options_changed();
+        }
         app
+    }
+
+    // ----- ingest ------------------------------------------------------------
+
+    pub fn ingest_options_changed(&mut self) {
+        if self.ingest.opts.headline.is_none() {
+            self.ingest.opts.headline = self.assignment.as_ref().map(|a| a.slug.clone());
+        }
+        self.prefs.ingest = Some(self.ingest.opts.clone());
+        self.prefs_dirty = true;
+        self.ingest.plan = None;
+        self.ingest.plan_error = None;
+        if self.ingest.opts.source.as_os_str().is_empty()
+            || self.ingest.opts.primary.as_os_str().is_empty()
+        {
+            self.ingest.planning = false;
+            return;
+        }
+        self.ingest.generation += 1;
+        self.ingest.planning = true;
+        self.ingest_jobs
+            .plan(self.ingest.opts.clone(), self.ingest.generation);
+    }
+
+    fn drain_ingest(&mut self) {
+        while let Some(msg) = self.ingest_jobs.try_recv() {
+            match msg {
+                Msg::PlanReady { generation, result } => {
+                    if generation != self.ingest.generation {
+                        continue;
+                    }
+                    self.ingest.planning = false;
+                    match result {
+                        Ok(p) => self.ingest.plan = Some(p),
+                        Err(e) => self.ingest.plan_error = Some(e),
+                    }
+                }
+                Msg::Event(ev) => {
+                    if let Some(r) = self.ingest.running.as_mut() {
+                        match ev {
+                            apature_ingest::Event::Started { index, .. } => {
+                                if let Some(s) = r.statuses.get_mut(index) {
+                                    *s = FileStatus::Copying;
+                                }
+                            }
+                            apature_ingest::Event::Verified { index, .. } => {
+                                r.verified_count += 1;
+                                if let Some(s) = r.statuses.get_mut(index) {
+                                    if *s != FileStatus::Failed {
+                                        *s = FileStatus::Verified;
+                                    }
+                                }
+                            }
+                            apature_ingest::Event::Failed {
+                                index,
+                                destination,
+                                error,
+                            } => {
+                                if let Some(s) = r.statuses.get_mut(index) {
+                                    *s = FileStatus::Failed;
+                                }
+                                if let Some(e) = r.errors.get_mut(index) {
+                                    *e = Some(format!("{}: {error}", destination.display()));
+                                }
+                            }
+                            apature_ingest::Event::Finished => {}
+                        }
+                    }
+                }
+                Msg::Report(rep) => {
+                    if let Some(r) = self.ingest.running.as_mut() {
+                        let ok = self
+                            .ingest
+                            .plan
+                            .as_ref()
+                            .map(|p| rep.all_verified(p))
+                            .unwrap_or(false);
+                        self.status = if ok {
+                            format!("Ingest complete: {} files verified", rep.files_ok())
+                        } else {
+                            format!("Ingest finished with {} failed file(s)", rep.files_failed())
+                        };
+                        r.done = Some(rep);
+                    }
+                }
+                Msg::PadApplied { files, failed } => {
+                    if let Some(r) = self.ingest.running.as_mut() {
+                        r.pad = Some((files, failed));
+                    }
+                }
+            }
+        }
+    }
+
+    fn ingest_start(&mut self) {
+        let Some(plan) = self.ingest.plan.clone() else {
+            return;
+        };
+        if !plan.can_run() {
+            return;
+        }
+        let pad = if self.ingest.apply_pad {
+            self.assignment.as_ref().map(|a| a.iptc())
+        } else {
+            None
+        };
+        self.ingest.running = Some(self.ingest_jobs.start(plan, pad));
+        self.status = "Ingesting…".into();
+    }
+
+    /// Drag-and-drop: a folder opens as a contact sheet; a file opens its
+    /// folder with that photo focused, like dropping onto Photo Mechanic.
+    fn handle_drops(&mut self, ctx: &egui::Context) {
+        let (hover, dropped) =
+            ctx.input(|i| (i.raw.hovered_files.len(), i.raw.dropped_files.clone()));
+        self.drag_hover = hover;
+        let Some(first) = dropped.into_iter().find_map(|f| f.path) else {
+            return;
+        };
+        if first.is_dir() {
+            self.open_folder(&first);
+        } else if let Some(parent) = first.parent() {
+            self.open_folder(parent);
+            let stem = first
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_lowercase());
+            if let Some(idx) = self
+                .items
+                .iter()
+                .position(|it| Some(it.stem.to_lowercase()) == stem)
+            {
+                self.cursor = idx;
+                self.selection.only(idx);
+                self.scroll_to_cursor = true;
+            }
+        }
+        self.workspace = Workspace::Sheet;
     }
 
     // ----- captions ----------------------------------------------------------
@@ -278,6 +455,7 @@ impl App {
                 if let Some(d) = self.caption_draft.as_mut() {
                     d.original = d.fields.clone();
                 }
+                self.inspector_iptc = None;
                 if announce {
                     self.status = format!(
                         "Caption saved: {} → {} file{}",
@@ -317,6 +495,7 @@ impl App {
             ),
         };
         self.caption_draft = None;
+        self.inspector_iptc = None;
         self.sync_caption_draft();
     }
 
@@ -944,6 +1123,46 @@ impl App {
                     d.fields = d.original.clone();
                 }
             }
+            Command::IngestChooseSource => {
+                if let Some(p) = rfd::FileDialog::new()
+                    .set_directory("/Volumes")
+                    .pick_folder()
+                {
+                    self.ingest.opts.source = p;
+                    self.ingest_options_changed();
+                }
+            }
+            Command::IngestChoosePrimary => {
+                if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                    self.ingest.opts.primary = p;
+                    self.ingest_options_changed();
+                }
+            }
+            Command::IngestChooseSecondary => {
+                if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                    self.ingest.opts.secondary = Some(p);
+                    self.ingest_options_changed();
+                }
+            }
+            Command::IngestStart => self.ingest_start(),
+            Command::IngestCancel => {
+                if let Some(r) = &self.ingest.running {
+                    r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            Command::IngestOpenResult => {
+                let dest = self
+                    .ingest
+                    .plan
+                    .as_ref()
+                    .and_then(|p| p.entries.first())
+                    .and_then(|e| e.primary.parent().map(|d| d.to_path_buf()));
+                if let Some(d) = dest {
+                    self.ingest.running = None;
+                    self.ingest.plan = None;
+                    self.open_folder(&d);
+                }
+            }
             Command::SetRating(r) => self.mark(if r < 0 { "reject" } else { "rate" }, |m| {
                 m.rating = Rating::clamp(r)
             }),
@@ -1109,6 +1328,31 @@ impl App {
         out
     }
 
+    fn draw_drop_overlay(&self, ctx: &egui::Context, t: &Theme) {
+        if self.drag_hover == 0 {
+            return;
+        }
+        let r = ctx.content_rect();
+        let p = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("drop_overlay"),
+        ));
+        p.rect_filled(r, egui::CornerRadius::ZERO, Color32::from_black_alpha(90));
+        p.rect_stroke(
+            r.shrink(S4),
+            egui::CornerRadius::same(10),
+            egui::Stroke::new(2.0, t.accent),
+            egui::StrokeKind::Inside,
+        );
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            "Drop a folder to open it as a contact sheet",
+            egui::FontId::proportional(18.0),
+            t.text,
+        );
+    }
+
     fn maybe_screenshot(&mut self, ctx: &egui::Context) {
         let Some(path) = self.launch.screenshot.clone() else {
             return;
@@ -1155,6 +1399,8 @@ impl eframe::App for App {
         self.platform.on_first_frame();
 
         self.drain_results(ctx);
+        self.drain_ingest();
+        self.handle_drops(ctx);
         for c in self.platform.drain_menu() {
             self.dispatch(ctx, c);
         }
@@ -1168,10 +1414,10 @@ impl eframe::App for App {
         ui::toolbar::show(self, ctx, &t);
         ui::status::show(self, ctx, &t);
         ui::sidebar::show(self, ctx, &t);
-        if self.workspace == Workspace::Caption {
-            ui::caption::show_fields(self, ctx, &t);
-        } else {
-            ui::inspector::show(self, ctx, &t);
+        match self.workspace {
+            Workspace::Caption => ui::caption::show_fields(self, ctx, &t),
+            Workspace::Ingest => {}
+            _ => ui::inspector::show(self, ctx, &t),
         }
         ui::filmstrip::show(self, ctx, &t);
 
@@ -1203,7 +1449,7 @@ impl eframe::App for App {
                     Workspace::Sheet => ui::sheet::show(self, ui, &t),
                     Workspace::Preview => ui::preview::show(self, ui, &t),
                     Workspace::Caption => ui::caption::show_photo(self, ui, &t),
-                    Workspace::Ingest => {}
+                    Workspace::Ingest => ui::ingest::show(self, ui, &t),
                 }
             });
         let r = ctx.content_rect();
@@ -1222,6 +1468,7 @@ impl eframe::App for App {
             egui::Stroke::new(1.0, t.line),
         );
 
+        self.draw_drop_overlay(ctx, &t);
         if self.prefs_dirty && self.prefs_saved_at.elapsed().as_secs_f32() > 1.0 {
             self.prefs.save();
             self.prefs_dirty = false;

@@ -52,7 +52,7 @@ existing Butler Eagle generator files, code replacements with the existing
 the golf assignment's captions written in Apature show correctly in
 Photo Mechanic and exiftool, and `\cf\ tees off\tail\` expands.
 
-## M5: ingest (~1–2 sessions)
+## M5: ingest (done 2026-10-14; card detect/unmount and erase deferred)
 
 Port Apature's planner (`ingest/plan.rs`: templates with Photo Mechanic
 variable names, collision refusal, incremental by fingerprint) and run

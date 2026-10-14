@@ -150,3 +150,15 @@ keywords, team, photographer, code lines) is parsed directly, with extra
 optional keys (state, country, source, copyright, creator, caption_writer,
 credit). One file drives the IPTC pad, the caption template and the code
 table in both Apature and the existing Photo Mechanic kit generator.
+
+## ADR-013 (2026-10-14, accepted): ingest is plan-then-run, sequential, never destructive
+
+The planner computes every destination before anything is copied and
+refuses collisions (existing files, two sources to one name) and nested
+source/destination paths. The runner copies one file at a time (card
+readers are the bottleneck), hashes source and copy in full, makes the
+secondary copy from the fresh primary, and records a fingerprint in the
+"already ingested" ledger only when every destination verified. Erasing a
+card is out of scope until an .app bundle and a triple-gated design exist.
+Independently written; the shape follows the original Apature's planner,
+which the owner authored.

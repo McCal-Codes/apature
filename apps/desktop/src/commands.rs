@@ -24,8 +24,9 @@ impl Workspace {
     /// milestone that brings them, never as controls that do nothing.
     pub fn available(self) -> Result<(), &'static str> {
         match self {
-            Workspace::Sheet | Workspace::Preview | Workspace::Caption => Ok(()),
-            Workspace::Ingest => Err("Ingest arrives in M5"),
+            Workspace::Sheet | Workspace::Preview | Workspace::Caption | Workspace::Ingest => {
+                Ok(())
+            }
         }
     }
 }
@@ -61,6 +62,12 @@ pub enum Command {
     SaveCaption,
     SaveCaptionAndNext,
     RevertCaption,
+    IngestChooseSource,
+    IngestChoosePrimary,
+    IngestChooseSecondary,
+    IngestStart,
+    IngestCancel,
+    IngestOpenResult,
     PickFolder,
     AddFavorite,
     RemoveFavorite(PathBuf),
@@ -105,6 +112,7 @@ impl Command {
             Command::LoadCodes => "file.codes".into(),
             Command::ApplyStationery => "image.stationery".into(),
             Command::SaveCaption => "image.savecaption".into(),
+            Command::IngestStart => "file.ingest".into(),
             Command::ZoomIn => "view.zoomin".into(),
             Command::ZoomOut => "view.zoomout".into(),
             Command::SetRating(r) => format!("image.rating.{r}"),
@@ -137,6 +145,7 @@ impl Command {
             "file.codes" => Command::LoadCodes,
             "image.stationery" => Command::ApplyStationery,
             "image.savecaption" => Command::SaveCaption,
+            "file.ingest" => Command::SetWorkspace(Workspace::Ingest),
             "view.zoomin" => Command::ZoomIn,
             "view.zoomout" => Command::ZoomOut,
             "image.tag" => Command::ToggleTag,

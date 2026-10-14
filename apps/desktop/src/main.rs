@@ -6,6 +6,7 @@
 mod app;
 mod commands;
 mod filter;
+mod ingest_job;
 mod platform;
 mod prefs;
 mod selection;
@@ -27,6 +28,10 @@ pub struct Launch {
     pub caption: bool,
     /// Load this assignment file at start.
     pub assignment: Option<PathBuf>,
+    /// Start in the Ingest workspace (screenshots).
+    pub ingest: bool,
+    pub ingest_source: Option<PathBuf>,
+    pub ingest_dest: Option<PathBuf>,
 }
 
 fn parse_args() -> Launch {
@@ -47,6 +52,9 @@ fn parse_args() -> Launch {
             "--screenshot" => l.screenshot = args.next().map(PathBuf::from),
             "--demo" => l.demo = true,
             "--caption" => l.caption = true,
+            "--ingest" => l.ingest = true,
+            "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
+            "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),
             "--assignment" => l.assignment = args.next().map(PathBuf::from),
             "--frames" => {
                 l.screenshot_frame = args.next().and_then(|v| v.parse().ok()).unwrap_or(120)

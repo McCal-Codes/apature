@@ -13,6 +13,7 @@ path = "src/main.rs"
 apature-core.workspace = true
 apature-preview.workspace = true
 apature-metadata.workspace = true
+apature-ingest.workspace = true
 eframe.workspace = true
 egui.workspace = true
 rfd.workspace = true

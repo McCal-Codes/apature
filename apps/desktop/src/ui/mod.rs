@@ -3,6 +3,8 @@
 
 pub mod caption;
 pub mod filmstrip;
+pub mod icons;
+pub mod ingest;
 pub mod inspector;
 pub mod preview;
 pub mod sheet;
