@@ -20,6 +20,10 @@
 - [ ] ingest UI on top of `apature-ingest`: card detection, two destinations, rename template, report
 - [ ] write IPTC into JPEG exports (sidecar stays the source for RAW)
 
+## Requested 2026-10-14 (owner)
+- [ ] **Tabs**: several folders open at once as tabs, like Finder/Safari on macOS and tabbed apps on Windows; each tab keeps its own view, selection and scroll. Native NSWindow tabbing vs in-app tab strip to be decided in the design doc (Photo Mechanic uses in-app contact-sheet tabs).
+- [ ] **Settings page**: colour-class names and colours, shortcut profile, advance-after-mark, thumbnail size defaults, cache location/size, stationery and code-replacement files, appearance override. Replaces the "Settings… (M3)" placeholder in the app menu.
+
 ## 0.3 — professional workflow
 - [ ] export presets (long side, quality, sRGB, keep metadata, naming)
 - [ ] saved assignment presets (the `generator/` text files become first-class)
