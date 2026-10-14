@@ -1,0 +1,241 @@
+<title>Ferret Motion Lab</title>
+<meta name="description" content="Interactive prototype of spring-driven, interruptible, one-shot mascot animation for Apature: press an app event and watch the ferret respond.">
+<style>
+/* Layout: a dark stage on the left (the mascot's real ground), controls on the right; stacks on phones. */
+:root {
+  --bg:#F6F5FA; --surface:#FFFFFF; --raised:#ECEBF3; --line:#DEDEE4; --ink:#15151A; --ink2:#4E4E58; --muted:#8A8A95; --accent:#0A66D6; --lav:#BDB4EE;
+  --body:-apple-system,"SF Pro Text","Helvetica Neue",system-ui,sans-serif; --mono:"SF Mono",Menlo,Consolas,monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#1B1B1F; --surface:#232327; --raised:#2A2A30; --line:#2F2F36; --ink:#ECEBF3; --ink2:#B8B8C2; --muted:#7F7F8A; --accent:#BDB4EE; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg:#1B1B1F; --surface:#232327; --raised:#2A2A30; --line:#2F2F36; --ink:#ECEBF3; --ink2:#B8B8C2; --muted:#7F7F8A; --accent:#BDB4EE; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); font-size:14px; line-height:1.45; }
+.wrap { max-width:1180px; margin:0 auto; padding-block:20px; padding-inline:16px; display:grid; grid-template-columns: minmax(0,1.3fr) minmax(280px,0.8fr); gap:20px; }
+h1 { font-size:20px; margin:0 0 4px; letter-spacing:-0.01em; }
+.sub { color:var(--ink2); margin:0 0 14px; max-width:60ch; }
+.stage { background:#1B1B1F; border-radius:16px; border:1px solid var(--line); position:relative; overflow:hidden; aspect-ratio: 1 / 1; max-width:100%; }
+.stage svg { width:100%; height:100%; display:block; }
+.stage .hud { position:absolute; left:12px; top:10px; font-family:var(--mono); font-size:11px; color:#B8B8C2; display:grid; gap:2px; pointer-events:none; }
+.stage .bar { position:absolute; left:12px; right:12px; bottom:10px; height:4px; background:rgba(255,255,255,.08); border-radius:2px; overflow:hidden; }
+.stage .bar i { display:block; height:100%; width:0; background:#BDB4EE; }
+.panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px; display:grid; gap:12px; align-content:start; min-width:0; }
+.k { font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.events { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; }
+button { font: inherit; padding:9px 10px; border-radius:8px; border:1px solid var(--line); background:var(--raised); color:var(--ink); cursor:pointer; text-align:left; }
+button:hover { border-color:var(--accent); }
+button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+button b { display:block; font-size:13px; }
+button span { display:block; font-size:11.5px; color:var(--ink2); }
+label.row { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; font-size:13px; }
+label.row input[type=range] { width:100%; grid-column: 1 / -1; }
+.val { font-family:var(--mono); font-size:11.5px; color:var(--muted); }
+.toggle { display:flex; align-items:center; gap:8px; font-size:13px; }
+.note { font-size:12.5px; color:var(--ink2); }
+.note b { color:var(--ink); }
+ul.rules { margin:0; padding-left:18px; font-size:12.5px; color:var(--ink2); }
+ul.rules li { margin-bottom:4px; }
+@media (max-width: 760px) { .wrap { grid-template-columns:1fr; } }
+</style>
+<div class="wrap">
+  <div>
+    <h1>Ferret Motion Lab</h1>
+    <p class="sub">Every parameter is a damped spring. Press an event mid-motion and the ferret redirects instead of snapping. Each event is one-shot: it settles back to rest on its own within five seconds, and nothing loops.</p>
+    <div class="stage" id="stage">
+      <svg viewBox="0 0 512 512" aria-label="Ferret mascot" role="img">
+        <defs>
+          <linearGradient id="fur" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#FBF8F2"/><stop offset="1" stop-color="#DED8E8"/></linearGradient>
+          <linearGradient id="mask" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#4A4560"/><stop offset="1" stop-color="#15151A"/></linearGradient>
+          <linearGradient id="tailg" gradientUnits="userSpaceOnUse" x1="320" y1="420" x2="440" y2="300"><stop offset="0" stop-color="#DED8E8"/><stop offset="0.55" stop-color="#4A4560"/><stop offset="1" stop-color="#15151A"/></linearGradient>
+          <radialGradient id="glow" cx="0.5" cy="0.6" r="0.6"><stop offset="0" stop-color="#BDB4EE" stop-opacity="0.35"/><stop offset="1" stop-color="#BDB4EE" stop-opacity="0"/></radialGradient>
+        </defs>
+        <circle cx="256" cy="300" r="230" fill="url(#glow)" id="glow"/>
+        <g id="sparkles" opacity="0">
+          <path d="M110 129 L113 137 L121 140 L113 143 L110 151 L107 143 L99 140 L107 137 Z" fill="#E2DDFB"/>
+          <path d="M430 351 L433 358 L439 360 L433 362 L430 369 L427 362 L421 360 L427 358 Z" fill="#E2DDFB"/>
+          <path d="M120 423 L122 428 L127 430 L122 432 L120 437 L118 432 L113 430 L118 428 Z" fill="#E2DDFB"/>
+        </g>
+        <text id="zzz" x="384" y="150" font-family="SF Mono, Menlo, monospace" font-size="40" font-weight="700" fill="#BDB4EE" opacity="0">z</text>
+        <!-- tail: a cubic bezier whose points lag the body (follow-through) -->
+        <path id="tail" d="M322 420 Q440 430 430 340 Q424 300 392 312" fill="none" stroke="url(#tailg)" stroke-width="34" stroke-linecap="round"/>
+        <!-- whole character squashes about its base -->
+        <g id="char">
+          <g id="body">
+            <path d="M190 330 Q150 420 200 456 Q256 470 312 456 Q362 420 322 330 Z" fill="url(#fur)"/>
+            <path d="M206 456 Q196 480 214 484 M298 456 Q308 480 290 484" stroke="#15151A" stroke-width="16" stroke-linecap="round" fill="none"/>
+            <g id="card" opacity="0" transform="translate(256 392) scale(0.8) translate(-28 -38)">
+              <rect x="0" y="0" width="56" height="76" rx="8" fill="#ECEBF3"/><path d="M0 8 L12 0 L56 0 L56 76 L0 76 Z" fill="#E2DDFB"/>
+              <rect x="10" y="44" width="36" height="22" rx="3" fill="#BDB4EE"/><rect x="8" y="10" width="8" height="16" fill="#26262B"/><rect x="20" y="10" width="8" height="16" fill="#26262B"/><rect x="32" y="10" width="8" height="16" fill="#26262B"/>
+            </g>
+            <circle id="pawL" cx="214" cy="400" r="16" fill="#15151A"/>
+            <g id="armR"><path id="armRpath" d="M298 400 Q298 400 298 400" fill="none" stroke="url(#fur)" stroke-width="26" stroke-linecap="round"/><circle id="pawR" cx="298" cy="400" r="16" fill="#15151A"/></g>
+          </g>
+          <g id="head">
+            <g id="earL" transform="rotate(0 178 196)"><circle cx="178" cy="178" r="30" fill="url(#fur)"/><circle cx="178" cy="180" r="16" fill="#E2DDFB"/></g>
+            <g id="earR" transform="rotate(0 334 196)"><circle cx="334" cy="178" r="30" fill="url(#fur)"/><circle cx="334" cy="180" r="16" fill="#E2DDFB"/></g>
+            <rect x="146" y="150" width="220" height="196" rx="98" fill="url(#fur)"/>
+            <path d="M166 232 Q256 206 346 232 Q352 268 318 282 Q290 262 256 266 Q222 262 194 282 Q160 268 166 232 Z" fill="url(#mask)"/>
+            <ellipse cx="256" cy="300" rx="42" ry="30" fill="#FFFFFF"/>
+            <g id="eyes">
+              <g id="eyeOpen">
+                <g id="eyeL" transform="translate(218 250)"><ellipse cx="0" cy="0" rx="22" ry="25" fill="#15151A"/><ellipse id="glL" cx="7" cy="-8" rx="8" ry="9" fill="#E2DDFB"/><circle cx="-5" cy="9" r="3" fill="#BDB4EE" opacity=".8"/></g>
+                <g id="eyeR" transform="translate(294 250)"><ellipse cx="0" cy="0" rx="22" ry="25" fill="#15151A"/><ellipse id="glR" cx="7" cy="-8" rx="8" ry="9" fill="#E2DDFB"/><circle cx="-5" cy="9" r="3" fill="#BDB4EE" opacity=".8"/></g>
+              </g>
+              <g id="eyeHappy" opacity="0"><path d="M202 256 Q218 238 234 256" fill="none" stroke="#ECEBF3" stroke-width="6" stroke-linecap="round"/><path d="M278 256 Q294 238 310 256" fill="none" stroke="#ECEBF3" stroke-width="6" stroke-linecap="round"/></g>
+              <g id="eyeClosed" opacity="0"><path d="M202 250 Q218 262 234 250" fill="none" stroke="#ECEBF3" stroke-width="6" stroke-linecap="round"/><path d="M278 250 Q294 262 310 250" fill="none" stroke="#ECEBF3" stroke-width="6" stroke-linecap="round"/></g>
+              <g id="eyeStars" opacity="0">
+                <polygon points="218,228 223.5,243 239,243 226.5,252 231,268 218,258.5 205,268 209.5,252 197,243 212.5,243" fill="#F2C14E"/>
+                <polygon points="294,228 299.5,243 315,243 302.5,252 307,268 294,258.5 281,268 285.5,252 273,243 288.5,243" fill="#F2C14E"/>
+              </g>
+            </g>
+            <ellipse cx="256" cy="292" rx="10" ry="7" fill="#F2A6C9"/>
+            <circle id="chL" cx="176" cy="282" r="9" fill="#F2A6C9" opacity="0.6"/><circle id="chR" cx="336" cy="282" r="9" fill="#F2A6C9" opacity="0.6"/>
+          </g>
+        </g>
+      </svg>
+      <div class="hud"><span id="hudState">rest</span><span id="hudTime">0.00 s</span><span id="hudFps"></span></div>
+      <div class="bar"><i id="bar"></i></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="k">Events (what the app would send)</div>
+    <div class="events">
+      <button data-ev="hello"><b>Hello</b><span>first launch</span></button>
+      <button data-ev="stash"><b>Card mounted</b><span>stash the card</span></button>
+      <button data-ev="picked"><b>Picked</b><span>five stars</span></button>
+      <button data-ev="cheer"><b>Job finished</b><span>every file verified</span></button>
+      <button data-ev="oops"><b>Failure</b><span>a copy failed</span></button>
+      <button data-ev="sleep"><b>Empty folder</b><span>nothing open</span></button>
+      <button data-ev="look"><b>Glance</b><span>eyes follow the pointer, 1 s</span></button>
+      <button data-ev="rest"><b>Rest</b><span>return now</span></button>
+    </div>
+    <div class="k">Spring feel</div>
+    <label class="row"><span>Response (perceptual duration)</span><span class="val" id="vResp">0.42 s</span><input id="resp" type="range" min="0.2" max="0.8" step="0.02" value="0.42"></label>
+    <label class="row"><span>Bounce</span><span class="val" id="vBounce">0.18</span><input id="bounce" type="range" min="0" max="0.45" step="0.01" value="0.18"></label>
+    <label class="row"><span>Tail drag (follow-through)</span><span class="val" id="vDrag">0.35</span><input id="drag" type="range" min="0" max="0.7" step="0.05" value="0.35"></label>
+    <label class="row"><span>Squash on landing</span><span class="val" id="vSquash">6 %</span><input id="squash" type="range" min="0" max="12" step="1" value="6"></label>
+    <label class="toggle"><input type="checkbox" id="rm"> Reduce Motion: cross-fade instead of springs</label>
+    <div class="k">Rules this prototype enforces</div>
+    <ul class="rules">
+      <li>Motion starts only from an event; there is no idle loop, not even a blink.</li>
+      <li>Every event returns to rest by itself; the bar shows the five-second budget.</li>
+      <li>A new event redirects the springs mid-flight; nothing waits for a clip to end.</li>
+      <li>Squash and stretch preserve volume and stay under 12 %.</li>
+      <li>With Reduce Motion the same states appear by cross-fade in 120 ms.</li>
+    </ul>
+    <p class="note"><b>Defaults</b> follow Apple's spring guidance: response 0.4–0.5 s, bounce 0.15–0.2 for playful UI; the tail runs on a second spring with the same parameters but a lag, which is what reads as "fluid".</p>
+  </div>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  // ---- spring: Apple-style parameters (response, bounce) -> stiffness/damping; semi-implicit Euler ----
+  function Spring(v){ this.v=v; this.vel=0; this.t=v; }
+  Spring.prototype.step=function(dt, resp, bounce){
+    const omega = 2*Math.PI/Math.max(0.05,resp);     // response = period of the undamped spring
+    const zeta  = 1 - Math.max(0,Math.min(0.99,bounce)); // bounce 0 => critically damped
+    const k = omega*omega, c = 2*zeta*omega;
+    const a = -k*(this.v-this.t) - c*this.vel;
+    this.vel += a*dt; this.v += this.vel*dt;
+    if (Math.abs(this.v-this.t)<0.0005 && Math.abs(this.vel)<0.002){ this.v=this.t; this.vel=0; }
+    return this.v;
+  };
+  // ---- the parameter set that defines a pose ----
+  const REST = { earL:0, earR:0, tailA:0, tailB:0, armR:0, cardS:0, blinkL:1, blinkR:1, lookX:0, lookY:0, bodyY:0, lean:0, cheek:0.6, glow:1 };
+  const POSES = {
+    rest:   {},
+    hello:  { earL:-10, earR:10, armR:1, tailA:1, cheek:0.8 },
+    stash:  { cardS:1, lookX:6, lookY:4, tailA:0.3, bodyY:6, lean:-3 },
+    picked: { earL:-14, earR:14, tailA:1.2, cheek:1, glow:1.6 },
+    cheer:  { earL:-8, earR:8, armR:1, tailA:1.1, cheek:0.9, bodyY:-8 },
+    oops:   { earL:28, earR:-28, tailB:1, lookX:-4, cheek:0.25, bodyY:4, lean:4 },
+    sleep:  { earL:22, earR:-22, tailA:-0.9, bodyY:18, cheek:0.4, glow:0.7 },
+    look:   {},
+  };
+  const EYES = { rest:'open', hello:'open', stash:'open', picked:'stars', cheer:'happy', oops:'open', sleep:'closed', look:'open' };
+  const HOLD = { hello:1.6, stash:2.2, picked:1.4, cheer:1.8, oops:2.4, sleep:4.6, look:1.0, rest:0 };
+  const springs = {}; for (const k in REST){ springs[k]=new Spring(REST[k]); }
+  const tailLag = { a:new Spring(0), b:new Spring(0) }; // follow-through: tail chases the body's value with a lag
+  let state='rest', since=performance.now(), budget=0, eyeMode='open', eyeFade={open:1,happy:0,closed:0,stars:0}, wideScale=1, zz=0, sparkle=0;
+  let reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  try { $('rm').checked = reduce; } catch(e){}
+  $('rm').addEventListener('change', e => { reduce = e.target.checked; });
+  const sl = { resp:$('resp'), bounce:$('bounce'), drag:$('drag'), squash:$('squash') };
+  function fmt(){ $('vResp').textContent=(+sl.resp.value).toFixed(2)+' s'; $('vBounce').textContent=(+sl.bounce.value).toFixed(2); $('vDrag').textContent=(+sl.drag.value).toFixed(2); $('vSquash').textContent=sl.squash.value+' %'; }
+  Object.values(sl).forEach(s=>s.addEventListener('input',fmt)); fmt();
+
+  let landingKick=0, shiver=0, waveT=0;
+  function fire(ev){
+    state=ev; since=performance.now(); budget=HOLD[ev]||0;
+    const p = Object.assign({}, REST, POSES[ev]||{});
+    for (const k in p){ springs[k].t = p[k]; }
+    eyeMode = EYES[ev]||'open'; wideScale = (ev==='oops')?1.2:1;
+    if (ev==='picked' || ev==='cheer') landingKick = 1;      // one squash on arrival
+    if (ev==='oops') shiver = 1;                              // one short shake, decays
+    if (ev==='hello') waveT = 0;                              // two wave beats
+    sparkle = (ev==='picked')?1:0; zz = (ev==='sleep')?1:0;
+    if (ev==='look'){ /* eyes follow pointer for 1 s, handled in loop */ }
+    $('hudState').textContent = ev;
+    if (reduce){ // cross-fade: jump every spring to its target
+      for (const k in springs){ springs[k].v=springs[k].t; springs[k].vel=0; }
+      tailLag.a.v=tailLag.a.t=springs.tailA.t; tailLag.b.v=tailLag.b.t=springs.tailB.t;
+    }
+  }
+  document.querySelectorAll('button[data-ev]').forEach(b=>b.addEventListener('click',()=>fire(b.dataset.ev)));
+  let mouse={x:256,y:250};
+  $('stage').addEventListener('pointermove', e=>{ const r=e.currentTarget.getBoundingClientRect(); mouse={x:(e.clientX-r.left)/r.width*512, y:(e.clientY-r.top)/r.height*512}; });
+
+  // ---- render ----
+  const el = { tail:$('tail'), char:$('char'), earL:$('earL'), earR:$('earR'), armRpath:$('armRpath'), pawR:$('pawR'), card:$('card'), eyeL:$('eyeL'), eyeR:$('eyeR'),
+               eo:$('eyeOpen'), eh:$('eyeHappy'), ec:$('eyeClosed'), es:$('eyeStars'), chL:$('chL'), chR:$('chR'), glow:$('glow'), zzz:$('zzz'), sparkles:$('sparkles'), bar:$('bar'), hudTime:$('hudTime'), hudFps:$('hudFps') };
+  let last=performance.now(), frames=0, fpsT=0;
+  function loop(now){
+    let dt=Math.min(0.05,(now-last)/1000); last=now;
+    const resp=+sl.resp.value, bounce=+sl.bounce.value, drag=+sl.drag.value, sq=+sl.squash.value/100;
+    const elapsed=(now-since)/1000;
+    // one-shot: return to rest after the hold; the five-second budget is a hard cap
+    if (state!=='rest' && (elapsed>budget || elapsed>5)) fire('rest');
+    if (state==='look'){ springs.lookX.t = Math.max(-8,Math.min(8,(mouse.x-256)/14)); springs.lookY.t=Math.max(-6,Math.min(6,(mouse.y-250)/16)); }
+    if (!reduce){ for (const k in springs) springs[k].step(dt,resp,bounce); }
+    const v={}; for (const k in springs) v[k]=springs[k].v;
+    // follow-through: the tail chases the body's tail value through a slower spring
+    tailLag.a.t=v.tailA; tailLag.b.t=v.tailB; const lagResp=resp*(1+drag*2);
+    if (!reduce){ tailLag.a.step(dt,lagResp,Math.min(0.4,bounce+drag*0.3)); tailLag.b.step(dt,lagResp,bounce); }
+    const ta=tailLag.a.v, tb=tailLag.b.v;
+    // wave: two beats of the raised paw, decaying
+    let wave=0; if (state==='hello'){ waveT+=dt; wave=Math.sin(waveT*2*Math.PI*1.6)*Math.exp(-waveT*1.1); }
+    // landing squash: a kick that the spring settles
+    let squashY=1, squashX=1;
+    if (landingKick>0 && !reduce){ const k=landingKick; squashY=1-sq*Math.sin(k*Math.PI); squashX=1/squashY; landingKick=Math.max(0,landingKick-dt*2.2); }
+    let shx=0; if (shiver>0 && !reduce){ shx=Math.sin(shiver*60)*4*shiver; shiver=Math.max(0,shiver-dt*1.6); }
+    // ---- apply ----
+    el.char.setAttribute('transform',`translate(${256+shx} ${456+v.bodyY}) rotate(${v.lean}) scale(${squashX} ${squashY}) translate(-256 -456)`);
+    el.earL.setAttribute('transform',`rotate(${v.earL} 178 196)`); el.earR.setAttribute('transform',`rotate(${v.earR} 334 196)`);
+    // tail: base at the body, two control points lag; tailA lifts the tip, tailB tucks it down
+    const tipX=392+ta*0-tb*40, tipY=312-ta*70+tb*120, c1x=440-tb*30, c1y=430-ta*40+tb*20, c2x=430+ta*10, c2y=340-ta*60+tb*90;
+    el.tail.setAttribute('d',`M322 ${420+v.bodyY} Q${c1x} ${c1y} ${c2x} ${c2y} Q${c2x-6} ${c2y-40*ta} ${tipX} ${tipY}`);
+    // arm: raised paw with wave
+    const a=v.armR; const px=298+a*54+wave*14*a, py=400-a*100+wave*6*a;
+    el.armRpath.setAttribute('d',`M298 400 Q${298+a*60} ${400-a*40} ${px} ${py}`); el.pawR.setAttribute('cx',px); el.pawR.setAttribute('cy',py);
+    el.card.setAttribute('opacity',v.cardS); el.card.setAttribute('transform',`translate(256 392) scale(${0.8*v.cardS}) translate(-28 -38)`);
+    // eyes: look + blink scale + wide
+    const bl=(state==='sleep')?1:1; const ws=wideScale;
+    el.eyeL.setAttribute('transform',`translate(${218+v.lookX} ${250+v.lookY}) scale(${ws} ${ws*bl})`); el.eyeR.setAttribute('transform',`translate(${294+v.lookX} ${250+v.lookY}) scale(${ws} ${ws*bl})`);
+    // eye mode cross-fade (120 ms)
+    for (const m of ['open','happy','closed','stars']){ const tgt=(m===eyeMode)?1:0; eyeFade[m]+= (tgt-eyeFade[m])*Math.min(1,dt/0.12); }
+    el.eo.setAttribute('opacity',eyeFade.open); el.eh.setAttribute('opacity',eyeFade.happy); el.ec.setAttribute('opacity',eyeFade.closed); el.es.setAttribute('opacity',eyeFade.stars);
+    el.chL.setAttribute('opacity',v.cheek); el.chR.setAttribute('opacity',v.cheek);
+    el.glow.setAttribute('transform',`translate(256 300) scale(${v.glow}) translate(-256 -300)`);
+    // one-shot extras fade out with the hold
+    const hold=budget||1; const k=Math.max(0,1-elapsed/hold);
+    el.sparkles.setAttribute('opacity', sparkle*Math.min(1,elapsed*4)*k);
+    el.zzz.setAttribute('opacity', zz*Math.min(1,elapsed*2)*k); el.zzz.setAttribute('y', 150-elapsed*8*zz);
+    // hud
+    el.bar.style.width = (state==='rest')?'0%':(Math.min(1,elapsed/5)*100)+'%';
+    el.hudTime.textContent = (state==='rest'?0:elapsed).toFixed(2)+' s';
+    frames++; fpsT+=dt; if (fpsT>0.5){ el.hudFps.textContent=Math.round(frames/fpsT)+' fps'; frames=0; fpsT=0; }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
