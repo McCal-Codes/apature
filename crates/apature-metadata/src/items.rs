@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use apature_core::{ColorClassScheme, Kind, Marks, PhotoItem};
 
+use crate::iptc::{self, Iptc};
 use crate::jpeg_xmp;
 use crate::xmp::{self, Conflict, XmpMarks};
 
@@ -119,6 +120,62 @@ pub fn write(
     Ok(written)
 }
 
+/// Read IPTC for an item: the sidecar when a RAW exists, else the first JPEG
+/// packet. Returns an empty `Iptc` when nothing is there.
+pub fn read_iptc(item: &PhotoItem) -> Iptc {
+    let has_raw = item.variants().any(|v| v.kind == Kind::Raw);
+    let from_sidecar = || {
+        std::fs::read_to_string(item.sidecar_path())
+            .ok()
+            .map(|t| iptc::parse(&t))
+    };
+    let from_jpeg = || {
+        item.variants()
+            .filter(|v| v.kind == Kind::Jpeg)
+            .find_map(|v| {
+                let data = std::fs::read(&v.path).ok()?;
+                jpeg_xmp::packet(&data).ok().flatten().map(iptc::parse)
+            })
+    };
+    if has_raw {
+        from_sidecar().or_else(from_jpeg)
+    } else {
+        from_jpeg().or_else(from_sidecar)
+    }
+    .unwrap_or_default()
+}
+
+/// Write IPTC everywhere marks go (sidecar for a RAW, packet for each JPEG).
+pub fn write_iptc(item: &PhotoItem, fields: &Iptc) -> Result<Vec<PathBuf>, ItemError> {
+    let mut written = Vec::new();
+    if item.variants().any(|v| v.kind == Kind::Raw) {
+        let p = item.sidecar_path();
+        xmp::write_sidecar_with(
+            &p,
+            |t| iptc::apply(t, fields),
+            |t| iptc::satisfies(fields, &iptc::parse(t)),
+        )
+        .map_err(|source| ItemError::Sidecar {
+            path: p.clone(),
+            source,
+        })?;
+        written.push(p);
+    }
+    for v in item.variants().filter(|v| v.kind == Kind::Jpeg) {
+        jpeg_xmp::write_with(
+            &v.path,
+            |t| iptc::apply(t, fields),
+            |t| iptc::satisfies(fields, &iptc::parse(t)),
+        )
+        .map_err(|source| ItemError::Jpeg {
+            path: v.path.clone(),
+            source,
+        })?;
+        written.push(v.path.clone());
+    }
+    Ok(written)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,6 +220,25 @@ mod tests {
         assert_eq!(written, vec![dir.path().join("DSC_0002.JPG")]);
         assert!(!dir.path().join("DSC_0002.xmp").exists());
         assert_eq!(read_marks(&items[1], &scheme), marks);
+
+        // IPTC goes to both files of the pair and reads back from the sidecar.
+        let fields = Iptc {
+            description: Some("A caption".into()),
+            keywords: Some(vec!["k1".into(), "k2".into()]),
+            ..Default::default()
+        };
+        let w = write_iptc(&items[0], &fields).unwrap();
+        assert_eq!(w.len(), 2);
+        let back = read_iptc(&items[0]);
+        assert_eq!(back.description.as_deref(), Some("A caption"));
+        assert_eq!(back.keywords, Some(vec!["k1".into(), "k2".into()]));
+        assert_eq!(
+            read_marks(&items[0], &scheme),
+            marks,
+            "marks survive an IPTC write"
+        );
+        let jpg_only = read_iptc(&items[1]);
+        assert!(jpg_only.is_empty());
 
         // A later sidecar edit by another app wins for the pair, and is reported.
         xmp::write_marks(

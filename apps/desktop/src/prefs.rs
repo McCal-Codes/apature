@@ -21,6 +21,8 @@ pub struct Prefs {
     pub sort: crate::filter::Sort,
     pub sort_reversed: bool,
     pub advance_after_mark: bool,
+    pub assignment_file: Option<PathBuf>,
+    pub codes_file: Option<PathBuf>,
 }
 
 impl Default for Prefs {
@@ -37,6 +39,8 @@ impl Default for Prefs {
             sort: crate::filter::Sort::Name,
             sort_reversed: false,
             advance_after_mark: true,
+            assignment_file: None,
+            codes_file: None,
         }
     }
 }

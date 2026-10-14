@@ -260,6 +260,7 @@ dependencies = [
  "clap",
  "directories",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]
@@ -289,6 +290,7 @@ dependencies = [
  "log",
  "memmap2",
  "regex",
+ "serde",
  "tempfile",
  "thiserror 2.0.21",
 ]
