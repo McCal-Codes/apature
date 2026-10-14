@@ -15,6 +15,38 @@ pub enum Appearance {
     Light,
 }
 
+/// Export workspace defaults (the desk's delivery spec).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExportPrefs {
+    /// Long side in pixels, 0 = full size.
+    pub long_side: u32,
+    pub quality: u8,
+    pub dest: Option<PathBuf>,
+    /// Naming template; empty keeps the source names.
+    pub rename: String,
+    pub keep_exif: bool,
+    pub write_iim: bool,
+    pub open_after: bool,
+    /// Render RAW-only photos with the system RAW engine (macOS) instead of the preview.
+    pub decode_raw: bool,
+}
+
+impl Default for ExportPrefs {
+    fn default() -> Self {
+        ExportPrefs {
+            long_side: 2048,
+            quality: 90,
+            dest: None,
+            rename: String::new(),
+            keep_exif: true,
+            write_iim: true,
+            open_after: true,
+            decode_raw: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
@@ -40,6 +72,7 @@ pub struct Prefs {
     pub open_after_ingest: bool,
     /// When a volume with a DCIM folder mounts, switch to Ingest with it as the source.
     pub open_ingest_on_card: bool,
+    pub export: ExportPrefs,
 }
 
 impl Default for Prefs {
@@ -66,6 +99,7 @@ impl Default for Prefs {
             code_delimiter: '\\',
             open_after_ingest: true,
             open_ingest_on_card: true,
+            export: ExportPrefs::default(),
         }
     }
 }

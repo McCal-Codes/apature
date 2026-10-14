@@ -102,7 +102,8 @@ pub enum PlanError {
     BadName(PathBuf),
 }
 
-fn facts_for(item: &PhotoItem, variant_path: &Path, headline: Option<&str>) -> Facts {
+/// Naming facts for one file of `item` (capture date/time from EXIF).
+pub fn facts_for(item: &PhotoItem, variant_path: &Path, headline: Option<&str>) -> Facts {
     let exif = apature_metadata::exif::read(item.path()).ok();
     let (date, time) = exif
         .and_then(|e| e.date_time_original)

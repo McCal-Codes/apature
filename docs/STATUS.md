@@ -61,6 +61,50 @@ Events.
 | Motion: sidebar/inspector/filmstrip collapse and reveal eased; tab highlight slides and the new sheet fades in (160 ms); Preview grows out of the focused cell; filter chips, drop overlay and status text fade in (120 ms); ingest progress eases; all durations 0 under Reduce Motion (`App::anim`) | implemented; motion cannot be judged from stills, so **unreviewed by eye**; builds, runs, 60 tests |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
 
+## M7 Export (2026-10-14, tested)
+
+New crate `apature-export` and Export workspace (⌘⇧5, File › Export… ⌘E):
+pixels from the JPEG of a pair or a RAW's largest embedded preview (no RAW
+decode), rotated upright, resized to a long side (default 2048) with
+Lanczos3 after DCT-domain downscaling, re-encoded at quality 90. Metadata:
+EXIF copied from a JPEG source with Orientation reset to 1 and
+PixelX/YDimension patched; a RAW-only source gets a minimal EXIF block
+(make, model, lens, capture time, exposure, ISO, focal length) built by
+`exif_write.rs`; XMP packet with the IPTC Core fields; **IPTC-IIM** APP13
+block (`iim.rs`, UTF-8 declared, TimeCreated only when a zone is known);
+ICC profile segments copied unchanged. Atomic write, never overwrites.
+Naming uses the ingest template engine (`100726-SPO-BGLF-{seqn:3}`);
+with an assignment loaded its fields fill what the file lacks, the file's
+own caption wins. CLI: `apature-cli export <files|folder> --out <dir>
+[--long 2048] [--quality 90] [--rename tpl] [--assignment file]`.
+
+Measured (M1 Max class laptop, release): 114 captioned 2048 px JPEGs →
+2048 px in 1.5 s via the CLI (4 threads) and 2.6 s in the app;
+three D850 NEF+JPG pairs (45 MP) ~0.5 s each; NEF-only via embedded
+preview 0.3 s. `exiftool -validate` on every output: OK, except two
+*minor* length warnings when the owner's credit line (36 bytes) and slug
+(35 bytes) exceed the IIM 32-byte limits; values are written in full, as
+Photo Mechanic does. Verified: IIM and XMP read back identical to the
+source captions; a source tagged Orientation 6 exports upright at 666×1000
+with matching EXIF dimensions; sRGB profile carried.
+
+**RAW → JPEG (opt-in, macOS):** "Decode RAW-only photos with the macOS RAW
+engine" in the Export workspace, `--decode-raw` in the CLI. The RAW is
+rendered by ImageIO through `/usr/bin/sips` at full resolution (8256×5504
+from a D850 NEF), matched to sRGB, then goes through the same resize and
+metadata path with a clean EXIF block built from the camera fields.
+Measured: about 8 s per NEF on this machine (sips' own time; the
+embedded-preview path takes 0.3 s), so it is off by default. A NEF tagged
+Orientation 6 came out upright at 1365×2048; `exiftool -validate` OK on
+both outputs. Other platforms fall back to the preview with a log line.
+A built-in demosaic needs a permissively licensed crate (ADR-017).
+
+Not done: colour conversion to sRGB for Adobe RGB JPEG sources (profile
+is kept so the file stays correct), HEIC sources, watermark, export of
+marks (rating/class are deliberately not written to delivery files),
+per-outlet presets. `--export-run --export-dest <dir>` runs the app path
+headlessly.
+
 ## Motion slice 1 and card-mount detection (2026-10-14)
 
 Implemented: thumbnail arrival fade (120 ms), selection ring fade, focus
