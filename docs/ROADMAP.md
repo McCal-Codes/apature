@@ -25,6 +25,23 @@
 - [x] **Tabs** (2026-10-14): in-app tab strip, per-tab view/selection/filter/undo, ⌘T/⌘W/⌘⇧]/⌘⇧[, restored at launch.
 - [x] **Settings window** (2026-10-14): appearance, colour classes, metadata files + delimiter, ingest defaults, cache, shortcut table (profiles still to come).
 
+## Requested 2026-10-14 (owner): clean animations
+Restrained motion that makes state changes legible, never slows culling,
+and switches off under Reduce Motion. Candidates, in priority order:
+- Sidebar / inspector / filmstrip collapse and reveal: a 160 ms width ease
+  (egui already animates panel width; tune the curve and duration).
+- Tab switch: a short cross-fade of the sheet (no slide) so the eye keeps its
+  place; the tab highlight moves, nothing else does.
+- Marks: the class bar and stars snap instantly, then a 120 ms fade of the
+  "saved" status; no bounce.
+- Preview open/close: cross-fade from the cell's thumbnail to the preview,
+  anchored at the cell so the image appears to grow in place.
+- Filter chips: fade in; the grid re-flows without animation (reflow
+  animation hides what changed).
+- Drop overlay: 120 ms fade; ingest progress bar eases between values.
+Not: parallax, springs on photos, animated selection rings, anything on
+every keystroke. Record `prefers reduced motion` in the design tokens doc.
+
 ## Idea to research (owner, 2026-10-14): auto-ingester from the camera
 Frames should land on a drive already in the right folder, named and
 padded, before anyone sits down to caption. Routes to evaluate:
