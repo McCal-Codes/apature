@@ -89,6 +89,29 @@ enum Cmd {
     },
     /// Print the IPTC fields of a photo.
     Iptc { file: PathBuf },
+    /// Plan and run a verified ingest (sequential; never deletes the source).
+    Ingest {
+        #[arg(long)]
+        source: PathBuf,
+        #[arg(long)]
+        primary: PathBuf,
+        #[arg(long)]
+        secondary: Option<PathBuf>,
+        /// Folder template under each destination, e.g. "{date}-{headline}".
+        #[arg(long, default_value = "{date}-{headline}")]
+        folder: String,
+        /// File name template, e.g. "{headline}-{seqn}" (empty keeps names).
+        #[arg(long, default_value = "")]
+        rename: String,
+        #[arg(long)]
+        headline: Option<String>,
+        /// Copy everything, ignoring the "already ingested" ledger.
+        #[arg(long)]
+        all: bool,
+        /// Only print the plan.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Print where the thumbnail cache lives.
     CacheDir,
 }
@@ -130,6 +153,18 @@ fn main() -> Result<()> {
             keywords,
             files,
         } => caption(assignment.as_deref(), &text, headline, keywords, &files),
+        Cmd::Ingest {
+            source,
+            primary,
+            secondary,
+            folder,
+            rename,
+            headline,
+            all,
+            dry_run,
+        } => ingest(
+            source, primary, secondary, folder, rename, headline, all, dry_run,
+        ),
         Cmd::Iptc { file } => {
             let item = item_for(&file)?;
             let i = items::read_iptc(&item);
@@ -355,6 +390,77 @@ fn item_for(file: &Path) -> Result<apature_core::PhotoItem> {
         .into_iter()
         .find(|it| it.stem.to_lowercase() == stem)
         .with_context(|| format!("{} is not a photo in {}", file.display(), dir.display()))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ingest(
+    source: PathBuf,
+    primary: PathBuf,
+    secondary: Option<PathBuf>,
+    folder: String,
+    rename: String,
+    headline: Option<String>,
+    all: bool,
+    dry_run: bool,
+) -> Result<()> {
+    use apature_ingest::{build_plan, run, Event, Ledger, Options};
+    let ledger_path = directories::ProjectDirs::from("dev", "mccal", "Apature")
+        .context("no home directory")?
+        .data_dir()
+        .join("ingested.json");
+    let mut ledger = Ledger::load(&ledger_path);
+    let opts = Options {
+        source,
+        primary,
+        secondary,
+        folder_template: folder,
+        rename_template: rename,
+        headline,
+        only_new: !all,
+        ..Default::default()
+    };
+    let plan = build_plan(&opts, &ledger)?;
+    println!(
+        "plan: {} files in {} photos, {:.1} MB, {} skipped, {} collisions",
+        plan.entries.len(),
+        plan.items,
+        plan.total_bytes as f64 / 1e6,
+        plan.skipped.len(),
+        plan.collisions.len()
+    );
+    for c in &plan.collisions {
+        println!("  COLLISION {} — {}", c.destination.display(), c.reason);
+    }
+    for e in plan.entries.iter().take(5) {
+        println!("  {} → {}", e.source.display(), e.primary.display());
+    }
+    if dry_run {
+        return Ok(());
+    }
+    if !plan.can_run() {
+        bail!("plan cannot run");
+    }
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let report = run(&plan, &mut ledger, &cancel, |ev| match ev {
+        Event::Verified { destination, .. } => println!("  ✓ {}", destination.display()),
+        Event::Failed {
+            destination, error, ..
+        } => println!("  ✕ {} — {error}", destination.display()),
+        _ => {}
+    });
+    println!(
+        "{}: {} ok, {} failed, {:.1} MB in {:.1} s",
+        if report.all_verified(&plan) {
+            "every file verified at every destination"
+        } else {
+            "INCOMPLETE"
+        },
+        report.files_ok(),
+        report.files_failed(),
+        report.bytes_copied as f64 / 1e6,
+        report.elapsed_secs
+    );
+    Ok(())
 }
 
 fn pad(assignment: &Path, files: &[PathBuf]) -> Result<()> {

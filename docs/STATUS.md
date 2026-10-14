@@ -24,7 +24,7 @@ app, a measurement); **production-ready** is not claimed for anything.
 | IPTC Core fields (title, headline, caption, keywords, creator, credit, source, copyright, caption writer, city, state, country, country code, sublocation, date created, instructions, transmission ref, usage terms) read/written in place incl. rdf:Alt/Seq/Bag | **verified** | unit tests on Lightroom/PM-style sidecars and self-closing Descriptions; exiftool validates sidecar and JPEG after a write; marks survive |
 | Code replacements (PM file format, `\code\`, `{iptcdow} {iptcmonthnameap} {iptcday} {iptcyear4} {credit} {headline}`) | **verified** | unit tests; `\cf\ tees off on No. 1\tail\` expands to the full AP caption |
 | Assignment stationery from the owner's `key: value` generator file → IPTC pad, caption template, code table | **verified** | unit tests; `apature-cli pad` and `caption` on the scratch pair, exiftool read-back |
-| Ingest planning, renaming, dual destinations, recovery | **not implemented** | Phase 4; only `copy_verified` exists |
+| Ingest: naming templates (PM variable names), plan with collision refusal (on disk and within the plan), nested-path refusal, file filter, "only new" fingerprint ledger, sequential verified copies to primary + secondary (secondary from the fresh primary), per-file events, cancellation, report, ledger updated only when every destination verified | **verified** | 8 unit tests incl. a failing destination and cancellation; `apature-cli ingest` from a fake card to two destinations: every file verified, second run skipped via ledger, card untouched |
 | Catalog | not started | Phase 4+ |
 
 ## Desktop shell (`apps/desktop`, M2, 2026-10-13)
@@ -52,7 +52,18 @@ Events.
 | Sort: name, capture time, rating, class, reverse; EXIF read for all items at open | implemented, unit-tested |
 | Undo/redo, one entry per action (⌘Z/⌘⇧Z, Edit menu) | implemented, unit-tested (`undo.rs`); writes files on undo |
 | Advance after mark (Image menu toggle, shown in the status bar) | implemented |
+| Ingest workspace (⌘⇧4): volumes + folder as source, subfolders, only-new, file filter, primary/secondary pickers, folder and rename templates, headline (prefilled from the assignment), sequence start, optional pad-after-ingest, plan rebuilt on a worker thread on every change with collisions in red, Start disabled until clean, per-file ✓/✕ list with error text, cancel after current file, report, "Open the ingested folder" | implemented, verified in a screenshot (plan state); the run path verified through the CLI, not clicked in the GUI |
+| Drag and drop: a folder dropped on the window opens as a contact sheet; a file opens its folder with that photo focused; overlay while hovering | implemented, **not yet exercised** (needs a real drag; eframe's dropped_files API) |
+| Toolbar icons drawn with the painter (sidebar, inspector, funnel) instead of Unicode glyphs; app icon redrawn (variant B), bracket variant kept in assets | implemented, verified in screenshots |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
+
+## M5 notes (2026-10-14)
+
+* Card auto-detect/unmount and erase-source are deliberately absent; see
+  `docs/research/ingest-ui.md` for the gates they need.
+* Secondary copies come from the primary copy, not the card, so the card is
+  read once; both copies are independently hashed.
+* The ledger lives in `~/Library/Application Support/dev.mccal.Apature/ingested.json`.
 
 ## M4 notes (2026-10-14)
 

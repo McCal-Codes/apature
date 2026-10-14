@@ -3,11 +3,16 @@ name = "apature-ingest"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Verified copying for card ingest: copy to a temp name, hash both sides, then rename"
+description = "Card ingest: plan first, verified copies to one or two destinations, never delete sources"
 
 [dependencies]
+apature-core.workspace = true
+apature-metadata.workspace = true
 thiserror.workspace = true
 sha2.workspace = true
+serde.workspace = true
+serde_json = "1"
+walkdir.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -68,6 +68,8 @@ impl MenuBar {
             &item(Command::LoadAssignment, "Load Assignment…", None),
             &item(Command::LoadCodes, "Load Code Replacements…", None),
             &PredefinedMenuItem::separator(),
+            &item(Command::IngestStart, "Ingest…", acc(cmd_shift, Code::KeyI)),
+            &PredefinedMenuItem::separator(),
             &item(
                 Command::RevealInFinder,
                 "Reveal in Finder",
@@ -140,7 +142,11 @@ impl MenuBar {
                 "Caption",
                 acc(cmd_shift, Code::Digit3),
             ),
-            &disabled("Ingest (M5)"),
+            &item(
+                Command::SetWorkspace(Workspace::Ingest),
+                "Ingest",
+                acc(cmd_shift, Code::Digit4),
+            ),
             &PredefinedMenuItem::separator(),
             &sidebar,
             &inspector,
