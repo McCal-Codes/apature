@@ -5,6 +5,7 @@ members = [
     "crates/apature-preview",
     "crates/apature-metadata",
     "crates/apature-ingest",
+    "crates/apature-export",
     "apps/cli",
     "apps/desktop",
 ]
@@ -21,6 +22,7 @@ apature-core = { path = "crates/apature-core" }
 apature-preview = { path = "crates/apature-preview" }
 apature-metadata = { path = "crates/apature-metadata" }
 apature-ingest = { path = "crates/apature-ingest" }
+apature-export = { path = "crates/apature-export" }
 
 anyhow = "1"
 thiserror = "2"

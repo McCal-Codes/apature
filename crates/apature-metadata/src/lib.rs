@@ -18,6 +18,8 @@
 
 pub mod codes;
 pub mod exif;
+pub mod exif_write;
+pub mod iim;
 pub mod iptc;
 pub mod items;
 pub mod jpeg_xmp;

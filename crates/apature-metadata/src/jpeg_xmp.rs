@@ -40,16 +40,23 @@ pub enum JpegXmpError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Segment {
-    marker: u8,
+pub struct Segment {
+    pub marker: u8,
     /// Offset of the 0xFF byte.
-    start: usize,
+    pub start: usize,
     /// Offset one past the segment's last byte.
-    end: usize,
+    pub end: usize,
+}
+
+impl Segment {
+    /// Bytes after the 2-byte length field.
+    pub fn payload<'a>(&self, data: &'a [u8]) -> &'a [u8] {
+        data.get(self.start + 4..self.end).unwrap_or(&[])
+    }
 }
 
 /// Walk the marker segments that precede the first scan.
-fn header_segments(data: &[u8]) -> Result<Vec<Segment>, JpegXmpError> {
+pub fn header_segments(data: &[u8]) -> Result<Vec<Segment>, JpegXmpError> {
     if data.len() < 4 || data[0] != 0xFF || data[1] != 0xD8 {
         return Err(JpegXmpError::NotJpeg);
     }
@@ -97,7 +104,7 @@ fn is_xmp_segment(data: &[u8], s: &Segment) -> bool {
             .is_some_and(|p| p.starts_with(XMP_SIG))
 }
 
-fn is_exif_segment(data: &[u8], s: &Segment) -> bool {
+pub fn is_exif_segment(data: &[u8], s: &Segment) -> bool {
     s.marker == 0xE1
         && data
             .get(s.start + 4..s.end)

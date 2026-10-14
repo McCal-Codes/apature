@@ -58,7 +58,7 @@ for the owner's deadline workflow (Butler Eagle / TribLive).
 | Rotation | lossless rotate (orientation tag) | none | rotate via `tiff:Orientation`/`Orientation` write (4) |
 | Crop | crop stored in XMP, applied on export | none | later |
 | Metadata | Metadata (IPTC) template / stationery pad, variables, code replacements, hot codes, structured keywords panel, GPS, batch apply, "Set Sequence Variable", copy/paste metadata | have pad, codes, variables, caption workspace; no keywords panel, no GPS, no copy/paste metadata | **copy/paste metadata between frames**, persistent sequence (3) |
-| Save As / Export | resize, JPEG quality, sRGB, keep/strip metadata, watermark, rename on export, "Send photos to" | **nothing**: no export at all | **1 — the owner's desk delivery is "JPEG 2048 px, q90, sRGB, keep IPTC"** |
+| Save As / Export | resize, JPEG quality, sRGB, keep/strip metadata, watermark, rename on export, "Send photos to" | **have (M7)**: resize, quality, EXIF/XMP/IIM/ICC, rename; no sRGB conversion, no watermark | done except colour conversion and watermark |
 | Delivery | FTP/SFTP upload, email, Send to, Dropbox folder | nothing | FTP/SFTP after export (5) |
 | File ops | copy/move/rename/delete to trash, "Rename Photos" tool with variables | ingest copy only | **rename in place (batch) and move-to-trash** (3) |
 | Live Ingest | watched folders | nothing | after export; pairs with the camera idea (6) |

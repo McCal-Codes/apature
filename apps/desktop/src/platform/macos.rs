@@ -76,6 +76,7 @@ impl MenuBar {
             &item(Command::LoadCodes, "Load Code Replacements…", None),
             &PredefinedMenuItem::separator(),
             &item(Command::IngestStart, "Ingest…", acc(cmd_shift, Code::KeyI)),
+            &item(Command::ExportStart, "Export…", acc(cmd, Code::KeyE)),
             &PredefinedMenuItem::separator(),
             &item(
                 Command::RevealInFinder,
@@ -153,6 +154,11 @@ impl MenuBar {
                 Command::SetWorkspace(Workspace::Ingest),
                 "Ingest",
                 acc(cmd_shift, Code::Digit4),
+            ),
+            &item(
+                Command::SetWorkspace(Workspace::Export),
+                "Export",
+                acc(cmd_shift, Code::Digit5),
             ),
             &PredefinedMenuItem::separator(),
             &sidebar,

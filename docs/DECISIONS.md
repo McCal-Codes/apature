@@ -189,3 +189,20 @@ DiskArbitration (precise mount events, needs objc bindings). **Why:** one
 2 s is below the time it takes to reach for the mouse. Revisit with
 `notify` when Live Ingest needs a watcher anyway. **Status:** implemented,
 tested with a mounted disk image, not yet with a physical card.
+
+## ADR-017 — Export pixels and metadata (2026-10-14)
+
+**Decisions.** (1) Export never decodes RAW: a pair exports its JPEG, a
+RAW alone exports its largest embedded preview (the camera's rendering,
+8256 px on a D850). A real RAW pipeline waits for a permissively licensed
+demosaic. (2) The source ICC profile is copied, not converted: an Adobe RGB
+JPEG stays Adobe RGB and correctly tagged. Conversion to sRGB needs a CMS
+(`moxcms`, BSD-3, is the candidate). (3) IPTC-IIM is written next to XMP
+with identical values; over-length values are written whole rather than
+truncated, matching Photo Mechanic and exiftool's own behaviour, and
+TimeCreated is only written when a zone is known because IIM requires one.
+(4) A RAW-only export gets a minimal EXIF block built from the summary so
+capture time and camera survive; a JPEG source keeps its whole EXIF with
+Orientation reset and pixel dimensions patched. (5) Marks (rating, class,
+tag) are not written into delivery files. (6) Export never overwrites.
+**Status:** implemented and tested (see STATUS.md M7).
