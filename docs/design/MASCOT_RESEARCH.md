@@ -376,3 +376,35 @@ with the wings as the second; for the pigeon, the film canister and the
 tail fan. Appearances follow §4. Note that this is the opposite rendering
 language from the flat/voxel/pixel treatments in `lumen-styles/`; the
 pixel sprite stays for 16 px, everything else goes Kit's way.
+
+## 10. The ferret (owner's suggestion, 2026-10-14)
+
+**Facts (reported, dictionary sources):** "ferret" comes from Vulgar Latin
+*furittus*, "little thief", from *fūr*, thief (1350–1400); the verb first
+meant to hunt with ferrets (early 1400s) and the figurative **"ferret
+out"**, to find something by persistent searching, dates from the 1570s.
+Pet ferrets keep the wild instinct to **stash** small objects (keys,
+phones, jewellery) in dark, quiet places, well fed or not.
+
+**Why it fits better than it first sounds (inferred):** culling *is*
+ferreting out: digging through two thousand frames for the three that
+matter. Stashing is ingest in one gesture. A sable ferret's colouring is
+already the Apature palette: cream body, charcoal mask and points. The
+mask reads as a viewfinder band without being one, and at 16 px a head
+with a mask is a one-colour silhouette. The long body and tail give it
+Kit's "signature detail" for free.
+
+**Conflicts (reported):** FerretDB's logo is a stylised ferret and its
+team cites "ferret out" for the same reason; it is a database, a
+different category, but it is open source and well known. Stoat.chat has
+a stoat mascot named Toast (trademarked), and the 2026 Winter Olympics
+mascots are stoats, so the stoat is crowded this year; no pine marten or
+ermine mascot was found. "Scoop" as a name collides with the Scoop
+package manager for Windows; "Stash" with git stash; "Pip" with Python's
+pip (UNVERIFIED as a mascot-name problem, but it is the first thing a
+developer will say).
+
+**Scores (same scale as §6):** story 5 (verified idiom + behaviour),
+free 3 (FerretDB), cute 5 (round head, low eyes, mask, short legs), icon 4
+(head-only mark), range 5 (long body, tail, paws, the donut sleep).
+Sketches: `mascot/ferret/`.
