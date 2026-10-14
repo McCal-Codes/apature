@@ -132,3 +132,21 @@ Capture One (verified) and Lightroom (by its documentation) only update
 the label. When both exist and disagree, and the label maps to a class in
 the scheme, the label wins and the next write repairs the number. An
 unrecognised label leaves the number in charge.
+
+## ADR-011 (2026-10-14, accepted): structured XMP properties edited in place with the regex engine, not a quick-xml port
+
+The migration plan said IPTC would come from porting Apature's quick-xml
+writer. Building the structured cases (`rdf:Alt`, `rdf:Seq`, `rdf:Bag`,
+self-closing `rdf:Description`, namespace declaration) onto the existing
+in-place engine took less code, kept one writer, and passes the same
+read-back and exiftool checks. Known limits remain those of ADR-004
+(comments, multi-Description documents). Revisit if a real sidecar shape
+breaks it.
+
+## ADR-012 (2026-10-14, accepted): the assignment file is the stationery format
+
+The owner's `key: value` generator config (date, slug, venue, city, event,
+keywords, team, photographer, code lines) is parsed directly, with extra
+optional keys (state, country, source, copyright, creator, caption_writer,
+credit). One file drives the IPTC pad, the caption template and the code
+table in both Apature and the existing Photo Mechanic kit generator.

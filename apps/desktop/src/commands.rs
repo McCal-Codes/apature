@@ -24,8 +24,7 @@ impl Workspace {
     /// milestone that brings them, never as controls that do nothing.
     pub fn available(self) -> Result<(), &'static str> {
         match self {
-            Workspace::Sheet | Workspace::Preview => Ok(()),
-            Workspace::Caption => Err("Captions arrive in M4"),
+            Workspace::Sheet | Workspace::Preview | Workspace::Caption => Ok(()),
             Workspace::Ingest => Err("Ingest arrives in M5"),
         }
     }
@@ -55,6 +54,13 @@ pub enum Command {
     SetSort(crate::filter::Sort),
     ToggleSortReversed,
     ToggleAdvanceAfterMark,
+    LoadAssignment,
+    LoadCodes,
+    ApplyStationery,
+    InsertCaptionTemplate,
+    SaveCaption,
+    SaveCaptionAndNext,
+    RevertCaption,
     PickFolder,
     AddFavorite,
     RemoveFavorite(PathBuf),
@@ -95,6 +101,10 @@ impl Command {
             Command::SetSort(s) => format!("view.sort.{}", s.label().replace(' ', "")),
             Command::ToggleSortReversed => "view.sortreversed".into(),
             Command::ToggleAdvanceAfterMark => "image.advance".into(),
+            Command::LoadAssignment => "file.assignment".into(),
+            Command::LoadCodes => "file.codes".into(),
+            Command::ApplyStationery => "image.stationery".into(),
+            Command::SaveCaption => "image.savecaption".into(),
             Command::ZoomIn => "view.zoomin".into(),
             Command::ZoomOut => "view.zoomout".into(),
             Command::SetRating(r) => format!("image.rating.{r}"),
@@ -123,6 +133,10 @@ impl Command {
             "view.clearfilter" => Command::ClearFilter(None),
             "view.sortreversed" => Command::ToggleSortReversed,
             "image.advance" => Command::ToggleAdvanceAfterMark,
+            "file.assignment" => Command::LoadAssignment,
+            "file.codes" => Command::LoadCodes,
+            "image.stationery" => Command::ApplyStationery,
+            "image.savecaption" => Command::SaveCaption,
             "view.zoomin" => Command::ZoomIn,
             "view.zoomout" => Command::ZoomOut,
             "image.tag" => Command::ToggleTag,

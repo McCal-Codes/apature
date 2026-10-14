@@ -13,7 +13,7 @@ line in `VERIFICATION_REPORT.md`.
 | `~/Documents/Apature` (Tauri, GPL-3) | `caae611` 2026-09-24 | **uncommitted**: `export/` module, `filesystem/names.rs`, `tests/export_raw.rs`, ADR 0006, edits to five files. Preserved as is; never deleted or renamed. 8 120 lines of core Rust. |
 | `~/dev/photo-workflow` (this repo, MIT/Apache) | `efe5c65`, 7 commits, pushed to private `McCal-Codes/photo-workflow` | 4 836 lines of Rust, 36 tests, verified against exiftool, Photo Mechanic 2026.6 and Capture One 16.8. |
 
-## M1: consolidate and rebrand (this session)
+## M1: consolidate and rebrand (done 2026-10-13)
 
 1. `git clone ~/dev/photo-workflow ~/dev/apature` (history kept; original untouched).
 2. Rename crates `photo-*` → `apature-*`, desktop binary `apature`, CLI
@@ -25,7 +25,7 @@ line in `VERIFICATION_REPORT.md`.
 4. Done when: `cargo test` passes, `apature <folder>` opens a sheet, the
    thumbnail cache repopulates under the new identifier.
 
-## M2: shell (next, the big one, ~3 sessions)
+## M2: shell (done 2026-10-13)
 
 Replaces the probe UI with the designed one, both appearances. Scope is
 `docs/design/DESIGN_IMPLEMENTATION_PLAN.md` S0 + S1: tokens, menu bar via a
@@ -34,7 +34,7 @@ filmstrip, status bar, light/dark following the system, cell accessibility
 names. Done when the HIG checklist rows R-1, R-3, R-4, R-5, R-7, R-13 flip
 to met and VoiceOver reads a cell.
 
-## M3: cull for real (~1 session)
+## M3: cull for real (done 2026-10-14)
 
 Selection model, shift-range, filters by rating/class/tag, marks applied to
 the selection, undo (one entry per batch; port the rule set from Apature's
@@ -42,7 +42,7 @@ the selection, undo (one entry per batch; port the rule set from Apature's
 be culled start to finish with the keyboard and Photo Mechanic agrees with
 every mark.
 
-## M4: captions (~2 sessions)
+## M4: captions (done 2026-10-14; IIM, IPTC undo and PM visual check outstanding)
 
 IPTC fields in `apature-metadata` on a streaming XML parser (quick-xml,
 porting the property table and the merge rules from Apature's
