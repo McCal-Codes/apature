@@ -178,3 +178,14 @@ macOS users expect ⌘, to open a window, not a panel. egui's immediate
 viewport gives a real window sharing the context and tokens. Pages:
 General, Color classes, Metadata, Ingest, Cache, Shortcuts (read-only until
 profiles exist).
+
+## ADR-016 — Card detection by polling `/Volumes` (2026-10-14)
+
+**Decision:** re-read `/Volumes` every 2 s from the UI loop; a new volume
+with a `DCIM/` folder counts as a camera card. **Alternatives:** FSEvents
+via the `notify` crate (instant, one more dependency and a thread);
+DiskArbitration (precise mount events, needs objc bindings). **Why:** one
+`read_dir` of three entries every 2 s is free, needs no dependency, and
+2 s is below the time it takes to reach for the mouse. Revisit with
+`notify` when Live Ingest needs a watcher anyway. **Status:** implemented,
+tested with a mounted disk image, not yet with a physical card.

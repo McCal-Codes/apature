@@ -38,6 +38,8 @@ pub struct Prefs {
     pub active_tab: usize,
     pub code_delimiter: char,
     pub open_after_ingest: bool,
+    /// When a volume with a DCIM folder mounts, switch to Ingest with it as the source.
+    pub open_ingest_on_card: bool,
 }
 
 impl Default for Prefs {
@@ -63,6 +65,7 @@ impl Default for Prefs {
             active_tab: 0,
             code_delimiter: '\\',
             open_after_ingest: true,
+            open_ingest_on_card: true,
         }
     }
 }

@@ -167,6 +167,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     ui.label(RichText::new("Choose a source and a primary destination.").size(12.0).color(t.muted));
                 }
                 Some(plan) => {
+                    // The plan card fades in when the plan lands (160 ms).
+                    let k = super::motion::progress(app.ingest.plan_since, app.anim(0.16));
+                    ui.set_opacity(k);
                     let dests = 1 + app.ingest.opts.secondary.is_some() as usize;
                     let mut summary = format!("{} files in {} photos · {} · {} destination{}", plan.entries.len(), plan.items, human_bytes(plan.total_bytes), dests, if dests == 1 { "" } else { "s" });
                     if !plan.skipped.is_empty() {
@@ -201,12 +204,21 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
         // ---- Progress ----
         if let (Some(r), Some(plan)) = (&app.ingest.running, &app.ingest.plan) {
             ui.add_space(S3);
-            egui::Frame::NONE.fill(t.panel).stroke(egui::Stroke::new(1.0, t.line)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::same(S4 as i8)).show(ui, |ui| {
+            // Finished: the card's border flashes accent and settles (600 ms).
+            let flash = 1.0 - super::motion::progress(r.done_since, app.anim(0.6));
+            let border = super::motion::lerp_color(t.line, t.accent, flash);
+            egui::Frame::NONE.fill(t.panel).stroke(egui::Stroke::new(1.0, border)).corner_radius(CornerRadius::same(8)).inner_margin(egui::Margin::same(S4 as i8)).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 super::eyebrow(ui, t, "Progress");
                 let total = plan.entries.len().max(1);
                 let done = r.statuses.iter().filter(|s| matches!(s, FileStatus::Verified | FileStatus::Failed)).count();
-                let frac = done as f32 / total as f32;
+                // The bar follows bytes, not files, so one big NEF does not stall it.
+                let dests = 1 + plan.entries.first().is_some_and(|e| e.secondary.is_some()) as u64;
+                let frac = if r.done.is_some() {
+                    1.0
+                } else {
+                    (r.bytes_done as f64 / (plan.total_bytes * dests).max(1) as f64) as f32
+                };
                 let frac = ui.ctx().animate_value_with_time(egui::Id::new("ingest_progress"), frac, app.anim(0.16));
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 6.0), egui::Sense::hover());
                 ui.painter().rect_filled(rect, CornerRadius::same(3), t.raised);
@@ -232,13 +244,23 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                 }
                 ui.add_space(S2);
                 egui::ScrollArea::vertical().max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {
+                    let green = Color32::from_rgb(0x5F, 0xBF, 0x8A);
                     for (i, e) in plan.entries.iter().enumerate() {
+                        // Rows arrive staggered when the run starts; the ✓ fades
+                        // from the copying colour to green when a file verifies.
+                        let row_k = super::motion::stagger(Some(r.started), i, 0.015, app.anim(0.16), 20);
+                        let ok = ui.ctx().animate_bool_with_time(
+                            egui::Id::new(("ingest-ok", i)),
+                            r.statuses[i] == FileStatus::Verified,
+                            app.anim(0.16),
+                        );
                         let (glyph, color) = match r.statuses[i] {
                             FileStatus::Pending => ("·", t.muted),
                             FileStatus::Copying => ("→", t.accent),
-                            FileStatus::Verified => ("✓", Color32::from_rgb(0x5F, 0xBF, 0x8A)),
+                            FileStatus::Verified => ("✓", super::motion::lerp_color(t.accent, green, ok)),
                             FileStatus::Failed => ("✕", t.reject),
                         };
+                        let color = color.gamma_multiply(row_k);
                         let name = e.source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                         let line = match &r.errors[i] {
                             Some(err) => format!("{glyph} {name}   {err}"),
