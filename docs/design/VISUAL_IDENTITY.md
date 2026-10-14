@@ -94,6 +94,10 @@ panel collapse, popover appearance, preview cross-fade. Zero when Reduce
 Motion is on. Nothing animates during culling keystrokes: a rating change
 is instantaneous.
 
+Owner request (2026-10-14): "clean animations". The list of candidates and
+the exclusions live in `docs/ROADMAP.md`; the rule stays: motion explains a
+state change in one beat and never delays the next keystroke.
+
 ## Rendering notes
 
 High DPI: thumbnails are decoded at `ceil(cell_pt × pixels_per_point)`
