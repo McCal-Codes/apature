@@ -92,7 +92,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     let tex = app
                         .previews
                         .get(&idx)
-                        .map(|(h, _)| h)
+                        .map(|(h, ..)| h)
                         .or(app.thumbs[idx].as_ref());
                     let mut label = String::from("loading…");
                     if let Some(tex) = tex {
@@ -106,7 +106,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                             Color32::WHITE,
                         );
                         label = match app.previews.get(&idx) {
-                            Some((_, ls)) => format!("{ls} px preview"),
+                            Some((_, ls, _)) => format!("{ls} px preview"),
                             None => "thumbnail".into(),
                         };
                     }

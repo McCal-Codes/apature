@@ -61,6 +61,28 @@ Events.
 | Motion: sidebar/inspector/filmstrip collapse and reveal eased; tab highlight slides and the new sheet fades in (160 ms); Preview grows out of the focused cell; filter chips, drop overlay and status text fade in (120 ms); ingest progress eases; all durations 0 under Reduce Motion (`App::anim`) | implemented; motion cannot be judged from stills, so **unreviewed by eye**; builds, runs, 60 tests |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
 
+## M8 Preview 1:1 and compare (2026-10-14)
+
+Preview workspace: **Z** (View › Zoom 1:1 / Fit, or double-click at the
+point of interest) toggles between fit and 1:1, where one pixel of the
+decoded preview is one physical screen pixel; drag or scroll to pan,
+clamped to the image edges; Esc steps back to fit, then to the sheet.
+1:1 asks the worker for the full file (capped at the GPU's largest
+texture; the worker now reports whether a decode is the file's full
+resolution and never uploads more than requested). Zoom eases between the
+two rects over 160 ms. **C** (View › Compare Selected) shows the
+selection side by side: two panes split the viewport, three or four make
+a 2×2 grid; zoom and pan are shared so the same crop is compared; clicking
+a pane focuses that photo; marks apply to the focused one. A lone photo is
+compared with its next neighbour. Previews are now evicted by a byte
+budget (768 MB of texture) as well as count, keeping the focused photo,
+its neighbours and the compare set.
+
+Seen in screenshots (`--preview`, `--zoom11`, `--compare` flags): fit,
+1:1 of the 8256 px D850 preview, and a three-up compare. Not watched by
+eye: drag panning, the zoom ease, scroll panning. The status bar now
+truncates the status text instead of running into the frame stats.
+
 ## M7 Export (2026-10-14, tested)
 
 New crate `apature-export` and Export workspace (⌘⇧5, File › Export… ⌘E):

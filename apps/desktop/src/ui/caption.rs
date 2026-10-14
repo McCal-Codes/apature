@@ -144,7 +144,7 @@ pub fn show_photo(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
     let tex = app
         .previews
         .get(&idx)
-        .map(|(h, _)| h)
+        .map(|(h, ..)| h)
         .or(app.thumbs[idx].as_ref());
     if let Some(tex) = tex {
         let size = tex.size_vec2();
