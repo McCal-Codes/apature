@@ -156,6 +156,8 @@ pub struct App {
     pub status_since: Option<Instant>,
     last_status: String,
     launch: Launch,
+    quit_after_frame: bool,
+    ingest_run_done: bool,
     frames: u64,
     screenshot_requested: bool,
 }
@@ -232,6 +234,8 @@ impl App {
             status_since: None,
             last_status: String::new(),
             launch: launch.clone(),
+            quit_after_frame: false,
+            ingest_run_done: false,
             frames: 0,
             screenshot_requested: false,
         };
@@ -335,6 +339,34 @@ impl App {
                         Ok(p) => self.ingest.plan = Some(p),
                         Err(e) => self.ingest.plan_error = Some(e),
                     }
+                    if self.launch.ingest_run && self.ingest.running.is_none() {
+                        match &self.ingest.plan {
+                            Some(p) if p.can_run() => {
+                                eprintln!(
+                                    "ingest-run: {} files planned, {} collisions, {} skipped",
+                                    p.entries.len(),
+                                    p.collisions.len(),
+                                    p.skipped.len()
+                                );
+                                self.dispatch_later = Some(Command::IngestStart);
+                            }
+                            Some(p) => {
+                                eprintln!(
+                                    "ingest-run: cannot run ({} entries, {} collisions)",
+                                    p.entries.len(),
+                                    p.collisions.len()
+                                );
+                                self.finish_ingest_run();
+                            }
+                            None => {
+                                eprintln!(
+                                    "ingest-run: plan failed: {}",
+                                    self.ingest.plan_error.as_deref().unwrap_or("?")
+                                );
+                                self.finish_ingest_run();
+                            }
+                        }
+                    }
                 }
                 Msg::Event(ev) => {
                     if let Some(r) = self.ingest.running.as_mut() {
@@ -387,16 +419,54 @@ impl App {
                     if open_after {
                         self.dispatch_later = Some(Command::IngestOpenResult);
                     }
+                    if self.launch.ingest_run {
+                        if let Some(r) = self.ingest.running.as_ref() {
+                            if let Some(rep) = &r.done {
+                                eprintln!(
+                                    "ingest-run: {} ok, {} failed, {} bytes, {:.2} s, cancelled={}",
+                                    rep.files_ok(),
+                                    rep.files_failed(),
+                                    rep.bytes_copied,
+                                    rep.elapsed_secs,
+                                    rep.cancelled
+                                );
+                                for (i, e) in r.errors.iter().enumerate() {
+                                    if let Some(e) = e {
+                                        eprintln!("ingest-run: file {i} failed: {e}");
+                                    }
+                                }
+                            }
+                        }
+                        if !self.ingest.apply_pad {
+                            self.finish_ingest_run();
+                        }
+                    }
                 }
                 Msg::PadApplied { files, failed } => {
                     if let Some(r) = self.ingest.running.as_mut() {
                         r.pad = Some((files, failed));
+                    }
+                    if self.launch.ingest_run {
+                        eprintln!("ingest-run: pad applied to {files} files, {failed} failed");
+                        self.finish_ingest_run();
                     }
                     if self.prefs.open_after_ingest {
                         self.dispatch_later = Some(Command::IngestOpenResult);
                     }
                 }
             }
+        }
+    }
+
+    /// `--ingest-run` is over: screenshot the finished workspace a moment
+    /// later when asked for, otherwise quit now.
+    fn finish_ingest_run(&mut self) {
+        self.ingest_run_done = true;
+        if self.launch.screenshot.is_some() {
+            self.frames = self.launch.screenshot_frame.saturating_sub(30);
+            self.screenshot_requested = false;
+        } else {
+            self.quit_after_frame = true;
         }
     }
 
@@ -1680,9 +1750,17 @@ impl App {
     }
 
     fn maybe_screenshot(&mut self, ctx: &egui::Context) {
+        if self.quit_after_frame {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
         let Some(path) = self.launch.screenshot.clone() else {
             return;
         };
+        if self.launch.ingest_run && !self.ingest_run_done {
+            // Hold the screenshot until the run has reported.
+            ctx.request_repaint();
+            return;
+        }
         self.frames += 1;
         if self.frames == self.launch.screenshot_frame && !self.screenshot_requested {
             self.screenshot_requested = true;
