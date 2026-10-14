@@ -21,8 +21,24 @@
 - [ ] write IPTC into JPEG exports (sidecar stays the source for RAW)
 
 ## Requested 2026-10-14 (owner)
+- [x] Drag and drop a folder or file onto the window to open it (2026-10-14)
 - [ ] **Tabs**: several folders open at once as tabs, like Finder/Safari on macOS and tabbed apps on Windows; each tab keeps its own view, selection and scroll. Native NSWindow tabbing vs in-app tab strip to be decided in the design doc (Photo Mechanic uses in-app contact-sheet tabs).
 - [ ] **Settings page**: colour-class names and colours, shortcut profile, advance-after-mark, thumbnail size defaults, cache location/size, stationery and code-replacement files, appearance override. Replaces the "Settings… (M3)" placeholder in the app menu.
+
+## Idea to research (owner, 2026-10-14): auto-ingester from the camera
+Frames should land on a drive already in the right folder, named and
+padded, before anyone sits down to caption. Routes to evaluate:
+- The Z6 II's built-in Wi-Fi/FTP upload (Nikon's "Connect to FTP server")
+  into a drop folder that an always-on Apature ingester watches and runs the
+  plan/run/pad pipeline on (same engine as the Ingest workspace, headless).
+- A tethered/card-reader "ingest box" (Mac mini or a small Linux board)
+  running `apature-cli ingest` on card insert, with the assignment file
+  selecting the folder template and pad.
+- Cloud: after the local verified copy, a second destination that is a
+  synced folder (Drive/Dropbox) so the desk gets frames without captions.
+Keep captioning separate; this is about getting bytes somewhere safe and
+named. Needs: folder watching (`notify`), a daemon mode for the CLI, and
+the erase/unmount gates designed first.
 
 ## 0.3 — professional workflow
 - [ ] export presets (long side, quality, sRGB, keep metadata, naming)

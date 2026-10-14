@@ -23,6 +23,7 @@ pub struct Prefs {
     pub advance_after_mark: bool,
     pub assignment_file: Option<PathBuf>,
     pub codes_file: Option<PathBuf>,
+    pub ingest: Option<apature_ingest::Options>,
 }
 
 impl Default for Prefs {
@@ -41,6 +42,7 @@ impl Default for Prefs {
             advance_after_mark: true,
             assignment_file: None,
             codes_file: None,
+            ingest: None,
         }
     }
 }

@@ -232,6 +232,7 @@ version = "0.1.0"
 dependencies = [
  "ab_glyph",
  "apature-core",
+ "apature-ingest",
  "apature-metadata",
  "apature-preview",
  "crossbeam-channel",
@@ -277,9 +278,14 @@ dependencies = [
 name = "apature-ingest"
 version = "0.1.0"
 dependencies = [
+ "apature-core",
+ "apature-metadata",
+ "serde",
+ "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.21",
+ "walkdir",
 ]
 
 [[package]]
