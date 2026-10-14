@@ -146,6 +146,15 @@ pub struct App {
     dispatch_later: Option<Command>,
     platform: Platform,
     reduce_motion: bool,
+    /// Motion state: when the sheet last changed tab, when the preview opened
+    /// and from which cell, where the focused cell was drawn, when the status
+    /// text last changed.
+    pub sheet_fade_since: Option<Instant>,
+    pub preview_since: Option<Instant>,
+    pub preview_from: Option<egui::Rect>,
+    pub cursor_cell_rect: Option<egui::Rect>,
+    pub status_since: Option<Instant>,
+    last_status: String,
     launch: Launch,
     frames: u64,
     screenshot_requested: bool,
@@ -216,6 +225,12 @@ impl App {
             dispatch_later: None,
             platform,
             reduce_motion: Platform::reduce_motion(),
+            sheet_fade_since: None,
+            preview_since: None,
+            preview_from: None,
+            cursor_cell_rect: None,
+            status_since: None,
+            last_status: String::new(),
             launch: launch.clone(),
             frames: 0,
             screenshot_requested: false,
@@ -716,6 +731,7 @@ impl App {
         }
         self.active = i;
         self.pool.clear_pending();
+        self.sheet_fade_since = Some(Instant::now());
         if matches!(self.workspace, Workspace::Preview | Workspace::Caption)
             && self.items.is_empty()
         {
@@ -829,6 +845,22 @@ impl App {
     /// The launch-time screenshot target, when one was requested.
     pub fn screenshot_path(&self) -> Option<PathBuf> {
         self.launch.screenshot.clone()
+    }
+
+    /// Animation duration honouring Reduce Motion (0 = instant).
+    pub fn anim(&self, secs: f32) -> f32 {
+        if self.reduce_motion {
+            0.0
+        } else {
+            secs
+        }
+    }
+
+    /// Enter the Preview workspace with a grow-in from the focused cell.
+    fn enter_preview(&mut self) {
+        self.workspace = Workspace::Preview;
+        self.preview_from = self.cursor_cell_rect;
+        self.preview_since = Some(Instant::now());
     }
 
     pub fn cache_dir(&self) -> PathBuf {
@@ -1263,7 +1295,11 @@ impl App {
             }
             Command::SetWorkspace(w) => {
                 if w.available().is_ok() && !self.items.is_empty() {
-                    self.workspace = w;
+                    if w == Workspace::Preview && self.workspace != Workspace::Preview {
+                        self.enter_preview();
+                    } else {
+                        self.workspace = w;
+                    }
                     self.scroll_to_cursor = true;
                 }
             }
@@ -1458,7 +1494,7 @@ impl App {
             }
             Command::Activate => {
                 if self.workspace == Workspace::Sheet && !self.items.is_empty() {
-                    self.workspace = Workspace::Preview;
+                    self.enter_preview();
                 } else if self.workspace == Workspace::Preview {
                     self.workspace = Workspace::Sheet;
                     self.scroll_to_cursor = true;
@@ -1605,15 +1641,29 @@ impl App {
     }
 
     fn draw_drop_overlay(&self, ctx: &egui::Context, t: &Theme) {
-        if self.drag_hover == 0 {
+        let a = ctx.animate_bool_with_time(
+            egui::Id::new("drop_overlay_alpha"),
+            self.drag_hover > 0,
+            self.anim(0.12),
+        );
+        if a <= 0.0 {
             return;
         }
+        let t = &Theme {
+            accent: t.accent.gamma_multiply(a),
+            text: t.text.gamma_multiply(a),
+            ..*t
+        };
         let r = ctx.content_rect();
         let p = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
             egui::Id::new("drop_overlay"),
         ));
-        p.rect_filled(r, egui::CornerRadius::ZERO, Color32::from_black_alpha(90));
+        p.rect_filled(
+            r,
+            egui::CornerRadius::ZERO,
+            Color32::from_black_alpha((90.0 * a) as u8),
+        );
         p.rect_stroke(
             r.shrink(S4),
             egui::CornerRadius::same(10),
@@ -1690,6 +1740,21 @@ impl eframe::App for App {
         let t = Theme::for_ctx(ctx);
         t.apply(ctx, self.reduce_motion);
         self.platform.on_first_frame();
+        if self.status != self.last_status {
+            self.last_status = self.status.clone();
+            self.status_since = Some(Instant::now());
+        }
+        // Keep repainting while any timed animation is live.
+        let live = |s: Option<Instant>, secs: f32| {
+            s.is_some_and(|i| i.elapsed().as_secs_f32() < secs + 0.05)
+        };
+        if !self.reduce_motion
+            && (live(self.sheet_fade_since, 0.16)
+                || live(self.preview_since, 0.16)
+                || live(self.status_since, 0.12))
+        {
+            ctx.request_repaint();
+        }
         if let Some(c) = self.dispatch_later.take() {
             self.dispatch(ctx, c);
         }

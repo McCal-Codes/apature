@@ -43,9 +43,16 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         ui.allocate_exact_size(Vec2::new(tab_w, TABS_H - 8.0), Sense::click());
                     let p = ui.painter();
                     if active {
-                        p.rect_filled(rect, CornerRadius::same(6), t.panel);
+                        // The highlight slides to the active tab; nothing else moves.
+                        let x = ctx.animate_value_with_time(
+                            egui::Id::new("tab_highlight_x"),
+                            rect.left(),
+                            app.anim(0.16),
+                        );
+                        let hl = Rect::from_min_size(Pos2::new(x, rect.top()), rect.size());
+                        p.rect_filled(hl, CornerRadius::same(6), t.panel);
                         p.rect_stroke(
-                            rect,
+                            hl,
                             CornerRadius::same(6),
                             Stroke::new(1.0, t.line_strong),
                             egui::StrokeKind::Inside,

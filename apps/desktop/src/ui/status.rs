@@ -14,7 +14,8 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     ui.label(super::mono(part, 10.5, t.muted));
                 }
                 if !app.status.is_empty() {
-                    ui.add(egui::Label::new(super::mono(&app.status, 10.5, t.accent)).truncate());
+                    let a = super::motion::progress(app.status_since, app.anim(0.12));
+                    ui.add(egui::Label::new(super::mono(&app.status, 10.5, t.accent.gamma_multiply(a))).truncate());
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let avg = if app.stats.thumbs_done > 0 { app.stats.decode_ms_total / app.stats.thumbs_done as f32 } else { 0.0 };

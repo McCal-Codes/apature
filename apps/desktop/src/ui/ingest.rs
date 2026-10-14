@@ -207,6 +207,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                 let total = plan.entries.len().max(1);
                 let done = r.statuses.iter().filter(|s| matches!(s, FileStatus::Verified | FileStatus::Failed)).count();
                 let frac = done as f32 / total as f32;
+                let frac = ui.ctx().animate_value_with_time(egui::Id::new("ingest_progress"), frac, app.anim(0.16));
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 6.0), egui::Sense::hover());
                 ui.painter().rect_filled(rect, CornerRadius::same(3), t.raised);
                 ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(rect.width() * frac, 6.0)), CornerRadius::same(3), t.accent);

@@ -92,9 +92,6 @@ fn name_of(p: &std::path::Path) -> String {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
-    if !app.prefs.sidebar_visible {
-        return;
-    }
     let mut cmds: Vec<Command> = Vec::new();
     let current = app.folder.clone();
     let resp = egui::SidePanel::left("sidebar")
@@ -107,7 +104,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 .inner_margin(egui::Margin::symmetric(S2 as i8, S3 as i8))
                 .stroke(egui::Stroke::NONE),
         )
-        .show(ctx, |ui| {
+        .show_animated(ctx, app.prefs.sidebar_visible, |ui| {
             ui.spacing_mut().item_spacing.y = S1;
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
@@ -171,8 +168,17 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     );
                 });
         });
+    let Some(resp) = resp else {
+        for c in cmds {
+            app.dispatch(ctx, c);
+        }
+        return;
+    };
     let w = resp.response.rect.width();
-    if (w - app.prefs.sidebar_width).abs() > 0.5 {
+    if app.prefs.sidebar_visible
+        && (w - app.prefs.sidebar_width).abs() > 0.5
+        && SIDEBAR_RANGE.contains(&w)
+    {
         app.prefs.sidebar_width = w;
         app.prefs_dirty = true;
     }
