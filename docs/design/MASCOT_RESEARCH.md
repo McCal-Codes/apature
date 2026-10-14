@@ -428,3 +428,33 @@ that checked clear or nearly: **Dook, Cutline, Mitts, Fitch**; Kit is a
 baby ferret and Firefox's name, avoid. "FERRET" is a registered US mark for
 inspection cameras (Ferret Tools), low risk for a culling app, noted.
 Motion design built on this: `MOTION_DESIGN.md` and the motion lab.
+
+## 12. "A fox, or something close to Kit" (owner, 2026-10-14)
+
+**The fox problem (reported, primary policy text):** the Firefox logo is
+an orange fox curled around a globe (since 0.8, 2004) and Kit is now a
+second fox; Mozilla's trademark guidelines list the Firefox logo among its
+marks and say third parties must not use "marks, logos, or designs that
+are confusingly similar to Mozilla trademarks." MetaMask's mascot is also
+a fox (low-poly, 2016, chosen for "self-custody and trust"). GitLab's
+logo is a tanuki that "many Japanese people" mistake for a fox. Mozilla's
+mobile browser was code-named Fennec. A warm-gradient fox with big dark
+eyes and no mouth for a creative app is, in plain terms, a Kit lookalike.
+
+**Fox-adjacent and unclaimed (reported):** no software or app mascot was
+found for the **pine marten**, the **ringtail** (Arizona's state animal;
+Rocky the Ringtail is a state-parks mascot) or the **dhole**. What each
+brings:
+
+| animal | Kit-likeness | story | notes |
+|---|---|---|---|
+| **Pine marten** | high: pointed face, round ears, bushy tail, cream bib | a mustelid like the ferret ("ferret out" family), lives in the dark woods, agile | the closest honest neighbour to Kit's silhouette without being a canid |
+| **Ringtail** | medium: pointed ears, long ringed tail, enormous eyes | strictly nocturnal, eyes built for low light; the ringed tail is a signature detail nobody has | reads "raccoon" if the rings dominate; keep the face |
+| **Dhole** | high: it is a wild dog that looks like a fox | obscure, so no story the public knows | the most fox-like body that is not a fox; the obscurity cuts both ways |
+| Fox, fennec | identical | | reference only, see above |
+
+Sketches in the placeholder's Kit-like rendering: `mascot/fox-adjacent/`.
+Recommendation for the artist brief: ask for a **pine marten** as the
+primary direction (it keeps the ferret's "ferret out" lineage and gets
+Kit's silhouette), with the ringtail as the alternate. A straight fox is
+off the table unless the owner wants to accept the lookalike risk.
