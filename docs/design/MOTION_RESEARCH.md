@@ -43,7 +43,7 @@ the ingest bar eases, and every duration goes to 0 under Reduce Motion.
 | 3 ✓ | sheet | **Focus move** after a mark with "advance after mark": the focus ring slides to the next cell (160 ms) rather than jumping, so the eye follows | the one place a slide carries meaning; uses `lerp_rect` already in motion.rs |
 | 4 | sheet | **Reflow on resize / zoom slider**: cells move to their new positions over 160 ms | PM and Finder both cut; Bridge animates. Assumption: nicer at 5-across, distracting at 100 cells. Cap: only animate when ≤ 40 visible cells |
 | 5 | inspector | **Section collapse** (height ease) and value change flash (muted → text over 300 ms) when a mark changes the shown rating/class | confirms the keystroke did something |
-| 6 | preview | **Zoom to 1:1** scales from the pointer (needed anyway for the 1:1 feature); **pan** has inertia under drag release (assumption: 200 ms decay, off under Reduce Motion) | part of the preview work in the roadmap |
+| 6 ½ | preview | **Zoom to 1:1** scales from the pointer (have, M8) (needed anyway for the 1:1 feature); **pan** has inertia under drag release (assumption: 200 ms decay, off under Reduce Motion) | part of the preview work in the roadmap |
 | 7 | filmstrip | current-frame indicator slides; strip auto-scrolls with easing when focus leaves the viewport | |
 | 8 ✓ | ingest | **Rows appear as the plan builds** (stagger 15 ms, cap 20 rows), the ✓ glyph fades in per file, the bar is driven by bytes not files so big NEFs don't stall it; a short **done flash** on the progress card border | directly visible in the owner's daily use |
 | 9 | drag-and-drop | drop target overlay fades in (have) **plus** the sheet dims and a folder glyph scales 0.9→1 on hover-over | |

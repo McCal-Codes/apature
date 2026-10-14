@@ -44,6 +44,10 @@ pub struct Launch {
     pub export_dest: Option<PathBuf>,
     /// Export at once, print the report, then quit (or screenshot first).
     pub export_run: bool,
+    /// Start in Preview (screenshots); `--zoom11` at 1:1, `--compare` the first three.
+    pub preview: bool,
+    pub zoom11: bool,
+    pub compare: bool,
     /// Open the Settings window at start (screenshots).
     pub settings: bool,
     /// Extra folders to open as tabs.
@@ -82,6 +86,15 @@ fn parse_args() -> Launch {
                 l.ingest_run = true;
             }
             "--settings" => l.settings = true,
+            "--preview" => l.preview = true,
+            "--zoom11" => {
+                l.preview = true;
+                l.zoom11 = true;
+            }
+            "--compare" => {
+                l.preview = true;
+                l.compare = true;
+            }
             "--assignment" => l.assignment = args.next().map(PathBuf::from),
             "--frames" => {
                 l.screenshot_frame = args.next().and_then(|v| v.parse().ok()).unwrap_or(120)
