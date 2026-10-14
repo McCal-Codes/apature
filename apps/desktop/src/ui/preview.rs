@@ -10,9 +10,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
     let ppp = ui.ctx().pixels_per_point();
     let long_side = ((rect.width().max(rect.height())) * ppp).ceil() as u32;
     app.request_preview(app.cursor, long_side, 0);
-    app.request_preview(app.cursor + 1, long_side, 1);
-    if app.cursor > 0 {
-        app.request_preview(app.cursor - 1, long_side, 2);
+    if let Some(n) = app.view_neighbor(1) {
+        app.request_preview(n, long_side, 1);
+    }
+    if let Some(p) = app.view_neighbor(-1) {
+        app.request_preview(p, long_side, 2);
     }
     let idx = app.cursor;
     let p = ui.painter();
@@ -88,7 +90,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
         );
     }
     if app.cols > 0 {
-        let row = idx / app.cols;
+        let row = app.cursor_pos() / app.cols;
         let rows = app.row_count();
         app.schedule_thumbs(row.saturating_sub(1)..(row + 2).min(rows));
     }

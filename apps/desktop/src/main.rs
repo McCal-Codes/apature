@@ -5,9 +5,12 @@
 
 mod app;
 mod commands;
+mod filter;
 mod platform;
 mod prefs;
+mod selection;
 mod ui;
+mod undo;
 mod worker;
 
 use std::path::PathBuf;
@@ -18,6 +21,8 @@ pub struct Launch {
     pub theme: Option<egui::Theme>,
     pub screenshot: Option<PathBuf>,
     pub screenshot_frame: u64,
+    /// Hidden: select everything and open the filter popup, for screenshots.
+    pub demo: bool,
 }
 
 fn parse_args() -> Launch {
@@ -36,6 +41,7 @@ fn parse_args() -> Launch {
                 }
             }
             "--screenshot" => l.screenshot = args.next().map(PathBuf::from),
+            "--demo" => l.demo = true,
             "--frames" => {
                 l.screenshot_frame = args.next().and_then(|v| v.parse().ok()).unwrap_or(120)
             }

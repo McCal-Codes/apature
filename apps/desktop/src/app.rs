@@ -1,5 +1,6 @@
 //! Application state and the single command dispatcher. Drawing lives in
-//! `ui/`; native integration in `platform/`; decoding in `worker.rs`.
+//! `ui/`; native integration in `platform/`; decoding in `worker.rs`;
+//! selection, filters and undo are pure modules with their own tests.
 
 use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
@@ -15,9 +16,12 @@ use apature_metadata::ExifSummary;
 use apature_preview::{Rgb, ThumbCache};
 
 use crate::commands::{Command, Workspace};
+use crate::filter::{self, Filter};
 use crate::platform::Platform;
 use crate::prefs::Prefs;
+use crate::selection::{Mods, Selection};
 use crate::ui::{self, tokens::Theme};
+use crate::undo::{Change, Entry, UndoStack};
 use crate::worker::{Job, JobKind, Pool};
 use crate::Launch;
 
@@ -45,12 +49,19 @@ pub struct App {
     pub exif: Vec<Option<ExifSummary>>,
     pub thumbs: Vec<Option<TextureHandle>>,
     pub thumb_err: Vec<Option<String>>,
-    /// Decoded previews with the long side they were decoded at.
     pub previews: HashMap<usize, (TextureHandle, u32)>,
     preview_lru: VecDeque<usize>,
     pub pool: Pool,
     generation: u64,
+    /// Focused item (an index into `items`).
     pub cursor: usize,
+    pub selection: Selection,
+    /// Visible, ordered item indices after filter and sort.
+    pub view: Vec<usize>,
+    /// Position of each item in `view`, `None` when filtered out.
+    pub pos: Vec<Option<usize>>,
+    pub filter: Filter,
+    pub undo: UndoStack,
     pub workspace: Workspace,
     pub cols: usize,
     pub last_visible_rows: Range<usize>,
@@ -62,6 +73,7 @@ pub struct App {
     pub prefs_dirty: bool,
     prefs_saved_at: Instant,
     pub volumes: Vec<(String, PathBuf)>,
+    pub filter_popup_open: bool,
     platform: Platform,
     reduce_motion: bool,
     launch: Launch,
@@ -84,11 +96,6 @@ impl App {
         ui::tokens::install_fonts(&cc.egui_ctx);
         let prefs = Prefs::load();
         let platform = Platform::new();
-        platform.sync_toggles(
-            prefs.sidebar_visible,
-            prefs.inspector_visible,
-            prefs.filmstrip_visible,
-        );
         let mut app = App {
             folder: None,
             items: Vec::new(),
@@ -102,6 +109,11 @@ impl App {
             pool,
             generation: 0,
             cursor: 0,
+            selection: Selection::default(),
+            view: Vec::new(),
+            pos: Vec::new(),
+            filter: Filter::default(),
+            undo: UndoStack::default(),
             workspace: Workspace::Sheet,
             cols: 1,
             last_visible_rows: 0..0,
@@ -113,12 +125,14 @@ impl App {
             prefs_dirty: false,
             prefs_saved_at: Instant::now(),
             volumes: Vec::new(),
+            filter_popup_open: false,
             platform,
             reduce_motion: Platform::reduce_motion(),
             launch: launch.clone(),
             frames: 0,
             screenshot_requested: false,
         };
+        app.sync_menu();
         app.refresh_volumes();
         let first = launch
             .folder
@@ -128,7 +142,21 @@ impl App {
         if let Some(f) = first {
             app.open_folder(&f);
         }
+        if launch.demo && !app.view.is_empty() {
+            app.selection.all(&app.view);
+            app.cursor = app.view[0];
+            app.filter_popup_open = true;
+        }
         app
+    }
+
+    fn sync_menu(&self) {
+        self.platform.sync_toggles(
+            self.prefs.sidebar_visible,
+            self.prefs.inspector_visible,
+            self.prefs.filmstrip_visible,
+            self.prefs.advance_after_mark,
+        );
     }
 
     // ----- folders -----------------------------------------------------------
@@ -155,7 +183,10 @@ impl App {
                 self.pool.clear_pending();
                 self.generation += 1;
                 let scheme = self.scheme.clone();
-                let read: Vec<(Marks, Vec<String>)> = items
+                // Marks, conflicts and EXIF for every item up front: all three are
+                // cheap (sidecars are tiny, EXIF is a few page faults via mmap) and
+                // sorting by capture time needs them before the first frame.
+                let read: Vec<(Marks, Vec<String>, Option<ExifSummary>)> = items
                     .par_iter()
                     .map(|it| {
                         let src = items::read(it);
@@ -175,19 +206,24 @@ impl App {
                                 )
                             })
                             .collect();
-                        (m, c)
+                        let e = apature_metadata::exif::read(it.path()).ok();
+                        (m, c, e)
                     })
                     .collect();
                 let n = items.len();
                 self.items = items;
-                self.marks = read.iter().map(|(m, _)| *m).collect();
-                self.conflicts = read.into_iter().map(|(_, c)| c).collect();
-                self.exif = vec![None; n];
+                self.marks = read.iter().map(|(m, _, _)| *m).collect();
+                self.conflicts = read.iter().map(|(_, c, _)| c.clone()).collect();
+                self.exif = read.into_iter().map(|(_, _, e)| e).collect();
                 self.thumbs = vec![None; n];
                 self.thumb_err = vec![None; n];
                 self.previews.clear();
                 self.preview_lru.clear();
-                self.cursor = 0;
+                self.selection.clear();
+                self.undo.clear();
+                self.filter = Filter::default();
+                self.rebuild_view();
+                self.cursor = self.view.first().copied().unwrap_or(0);
                 self.workspace = Workspace::Sheet;
                 self.folder = Some(dir.to_path_buf());
                 self.stats = Stats {
@@ -213,6 +249,36 @@ impl App {
         }
     }
 
+    // ----- view (filter + sort) ----------------------------------------------
+
+    pub fn rebuild_view(&mut self) {
+        self.view = filter::build_view(
+            &self.items,
+            &self.marks,
+            &self.exif,
+            &self.filter,
+            self.prefs.sort,
+            self.prefs.sort_reversed,
+        );
+        self.pos = vec![None; self.items.len()];
+        for (p, &i) in self.view.iter().enumerate() {
+            self.pos[i] = Some(p);
+        }
+        let visible: Vec<bool> = self.pos.iter().map(|p| p.is_some()).collect();
+        self.selection.retain_visible(&visible);
+        if self.pos.get(self.cursor).copied().flatten().is_none() {
+            // Focused item got filtered out: move focus to the nearest visible one.
+            if let Some(&first) = self.view.first() {
+                self.cursor = first;
+            }
+        }
+        self.scroll_to_cursor = true;
+    }
+
+    pub fn cursor_pos(&self) -> usize {
+        self.pos.get(self.cursor).copied().flatten().unwrap_or(0)
+    }
+
     // ----- background results ------------------------------------------------
 
     fn drain_results(&mut self, ctx: &egui::Context) {
@@ -221,7 +287,7 @@ impl App {
             if done.generation != self.generation || done.idx >= self.items.len() {
                 continue;
             }
-            if let Some(e) = done.exif {
+            if let (Some(e), None) = (done.exif, &self.exif[done.idx]) {
                 self.exif[done.idx] = Some(e);
             }
             match done.result {
@@ -239,12 +305,6 @@ impl App {
                             self.stats.decode_ms_total += done.millis;
                         }
                         JobKind::Preview => {
-                            log::debug!(
-                                "preview {} ready at {} px in {:.0} ms",
-                                done.idx,
-                                rgb.long_side(),
-                                done.millis
-                            );
                             self.previews.insert(done.idx, (tex, rgb.long_side()));
                             self.preview_lru.retain(|&i| i != done.idx);
                             self.preview_lru.push_back(done.idx);
@@ -271,10 +331,10 @@ impl App {
     fn evict_previews(&mut self) {
         while self.preview_lru.len() > PREVIEW_LRU {
             let keep = |i: usize| i + 1 >= self.cursor && i <= self.cursor + 1;
-            let Some(pos) = self.preview_lru.iter().position(|&i| !keep(i)) else {
+            let Some(p) = self.preview_lru.iter().position(|&i| !keep(i)) else {
                 break;
             };
-            let idx = self.preview_lru.remove(pos).unwrap();
+            let idx = self.preview_lru.remove(p).unwrap();
             self.previews.remove(&idx);
         }
     }
@@ -304,7 +364,6 @@ impl App {
         }
         if let Some((_, have)) = self.previews.get(&idx) {
             if *have >= long_side.min(6000) || *have >= 1600 && long_side > *have {
-                // Either big enough, or already the largest embedded preview we will get.
                 return;
             }
         }
@@ -323,29 +382,39 @@ impl App {
         );
     }
 
-    pub fn schedule_thumbs(&mut self, visible: Range<usize>) {
-        if self.items.is_empty() || self.cols == 0 {
+    /// Neighbour in view order, for preview prefetch.
+    pub fn view_neighbor(&self, delta: isize) -> Option<usize> {
+        let p = self.cursor_pos() as isize + delta;
+        if p < 0 {
+            return None;
+        }
+        self.view.get(p as usize).copied()
+    }
+
+    pub fn schedule_thumbs(&mut self, visible_rows: Range<usize>) {
+        if self.view.is_empty() || self.cols == 0 {
             return;
         }
         let rows = self.row_count();
-        let first = visible.start.saturating_sub(PREFETCH_ROWS);
-        let last = (visible.end + PREFETCH_ROWS).min(rows);
+        let first = visible_rows.start.saturating_sub(PREFETCH_ROWS);
+        let last = (visible_rows.end + PREFETCH_ROWS).min(rows);
         for row in first..last {
-            let prio = if row < visible.start {
-                10 + (visible.start - row) as u32
-            } else if row >= visible.end {
-                10 + (row + 1 - visible.end) as u32
+            let prio = if row < visible_rows.start {
+                10 + (visible_rows.start - row) as u32
+            } else if row >= visible_rows.end {
+                10 + (row + 1 - visible_rows.end) as u32
             } else {
-                (row - visible.start) as u32
+                (row - visible_rows.start) as u32
             };
-            for idx in row * self.cols..((row + 1) * self.cols).min(self.items.len()) {
-                self.request_thumb(idx, prio);
+            for p in row * self.cols..((row + 1) * self.cols).min(self.view.len()) {
+                self.request_thumb(self.view[p], prio);
             }
         }
-        let keep_first = visible.start.saturating_sub(KEEP_ROWS);
-        let keep_last = (visible.end + KEEP_ROWS).min(rows);
+        let keep_first = visible_rows.start.saturating_sub(KEEP_ROWS);
+        let keep_last = (visible_rows.end + KEEP_ROWS).min(rows);
         for row in (0..keep_first).chain(keep_last..rows) {
-            for idx in row * self.cols..((row + 1) * self.cols).min(self.items.len()) {
+            for p in row * self.cols..((row + 1) * self.cols).min(self.view.len()) {
+                let idx = self.view[p];
                 if self.thumbs[idx].is_some() && idx != self.cursor {
                     self.thumbs[idx] = None;
                     self.stats.thumbs_done = self.stats.thumbs_done.saturating_sub(1);
@@ -356,23 +425,83 @@ impl App {
 
     // ----- marks -------------------------------------------------------------
 
-    fn persist(&mut self, idx: usize) {
-        let it = &self.items[idx];
-        match items::write(it, &self.marks[idx], &self.scheme) {
-            Ok(written) => {
-                self.conflicts[idx].clear();
-                let m = self.marks[idx];
-                self.status = format!(
+    /// Apply `edit` to every target, record one undo entry, write files.
+    fn mark(&mut self, label: &str, edit: impl Fn(&mut Marks)) {
+        if self.items.is_empty() {
+            return;
+        }
+        let targets = self.selection.targets(self.cursor);
+        let mut changes = Vec::with_capacity(targets.len());
+        for &i in &targets {
+            let before = self.marks[i];
+            let mut after = before;
+            edit(&mut after);
+            if after != before {
+                changes.push(Change {
+                    idx: i,
+                    before,
+                    after,
+                });
+            }
+        }
+        if changes.is_empty() {
+            return;
+        }
+        let apply: Vec<(usize, Marks)> = changes.iter().map(|c| (c.idx, c.after)).collect();
+        self.undo.push(Entry {
+            label: format!(
+                "{label} ({} photo{})",
+                changes.len(),
+                if changes.len() == 1 { "" } else { "s" }
+            ),
+            changes,
+        });
+        self.apply_marks(&apply);
+        if self.prefs.advance_after_mark
+            && targets.len() == 1
+            && self.workspace != Workspace::Caption
+        {
+            self.move_focus(1, Mods::default());
+        }
+    }
+
+    fn apply_marks(&mut self, apply: &[(usize, Marks)]) {
+        let mut written = 0;
+        let mut failed = None;
+        for &(i, m) in apply {
+            self.marks[i] = m;
+            match items::write(&self.items[i], &m, &self.scheme) {
+                Ok(w) => {
+                    written += w.len();
+                    self.conflicts[i].clear();
+                }
+                Err(e) => failed = Some(e.to_string()),
+            }
+        }
+        self.status = match failed {
+            Some(e) => format!("Could not write marks: {e}"),
+            None if apply.len() == 1 => {
+                let (i, m) = apply[0];
+                format!(
                     "{}: {} · {} · {} → {} file{}",
-                    it.display_name(),
+                    self.items[i].display_name(),
                     ui::rating_text(m.rating),
                     self.scheme.name(m.color_class).unwrap_or("no class"),
                     if m.tagged { "tagged" } else { "untagged" },
-                    written.len(),
-                    if written.len() == 1 { "" } else { "s" }
-                );
+                    written,
+                    if written == 1 { "" } else { "s" }
+                )
             }
-            Err(e) => self.status = format!("Could not write marks: {e}"),
+            None => format!("{} photos marked → {written} files written", apply.len()),
+        };
+        // Marks may change what the filter shows and the sort order.
+        if self.filter.is_active()
+            || matches!(
+                self.prefs.sort,
+                filter::Sort::Rating | filter::Sort::ColorClass
+            )
+        {
+            self.rebuild_view();
         }
     }
 
@@ -382,17 +511,27 @@ impl App {
         if self.cols == 0 {
             0
         } else {
-            self.items.len().div_ceil(self.cols)
+            self.view.len().div_ceil(self.cols)
         }
     }
 
-    fn move_cursor(&mut self, delta: isize) {
-        if self.items.is_empty() {
+    fn move_focus(&mut self, delta: isize, mods: Mods) {
+        if self.view.is_empty() {
             return;
         }
-        let n = self.items.len() as isize;
-        self.cursor = (self.cursor as isize + delta).clamp(0, n - 1) as usize;
+        let n = self.view.len() as isize;
+        let p = (self.cursor_pos() as isize + delta).clamp(0, n - 1) as usize;
+        self.cursor = self.view[p];
+        self.selection.focus_moved(self.cursor, mods, &self.view);
         self.scroll_to_cursor = true;
+    }
+
+    fn focus_to_pos(&mut self, p: usize, mods: Mods) {
+        if let Some(&idx) = self.view.get(p) {
+            self.cursor = idx;
+            self.selection.focus_moved(idx, mods, &self.view);
+            self.scroll_to_cursor = true;
+        }
     }
 
     pub fn set_cell(&mut self, cell: f32) {
@@ -415,7 +554,19 @@ impl App {
         if m.tagged {
             parts.push("tagged".into());
         }
-        parts.push(format!("{} of {}", idx + 1, self.items.len()));
+        if self.selection.contains(idx) {
+            parts.push("selected".into());
+        }
+        parts.push(format!(
+            "{} of {}",
+            self.pos
+                .get(idx)
+                .copied()
+                .flatten()
+                .map(|p| p + 1)
+                .unwrap_or(0),
+            self.view.len()
+        ));
         parts.join(", ")
     }
 
@@ -424,20 +575,29 @@ impl App {
         match &self.folder {
             None => parts.push("No folder open · ⌘O".into()),
             Some(f) => {
-                parts.push(format!(
-                    "{} · {} photos",
-                    f.file_name()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_default(),
-                    self.items.len()
-                ));
+                let name = f
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                if self.filter.is_active() {
+                    parts.push(format!(
+                        "{name} · showing {} of {}",
+                        self.view.len(),
+                        self.items.len()
+                    ));
+                } else {
+                    parts.push(format!("{name} · {} photos", self.items.len()));
+                }
             }
+        }
+        if self.selection.len() > 1 {
+            parts.push(format!("{} selected", self.selection.len()));
         }
         if let Some(it) = self.items.get(self.cursor) {
             parts.push(format!(
                 "{}/{} {}",
-                self.cursor + 1,
-                self.items.len(),
+                self.cursor_pos() + 1,
+                self.view.len(),
                 it.display_name()
             ));
             if let Some(e) = &self.exif[self.cursor] {
@@ -504,46 +664,90 @@ impl App {
             }
             Command::ZoomIn => self.set_cell(self.prefs.cell * 1.2),
             Command::ZoomOut => self.set_cell(self.prefs.cell / 1.2),
-            Command::Move(d) => self.move_cursor(d),
+            Command::Click {
+                idx,
+                shift,
+                command,
+            } => {
+                if self.pos.get(idx).copied().flatten().is_some() {
+                    self.cursor = idx;
+                    self.selection
+                        .click(idx, Mods { shift, command }, &self.view);
+                }
+            }
+            Command::MoveFocus {
+                delta,
+                shift,
+                command,
+            } => self.move_focus(delta, Mods { shift, command }),
+            Command::Move(d) => self.move_focus(d, Mods::default()),
             Command::MovePage(d) => {
                 let page = (self.last_visible_rows.len().max(1) * self.cols.max(1)) as isize;
-                self.move_cursor(d * page);
+                self.move_focus(d * page, Mods::default());
             }
-            Command::Home => {
-                self.cursor = 0;
-                self.scroll_to_cursor = true;
-            }
-            Command::End => {
-                if !self.items.is_empty() {
-                    self.cursor = self.items.len() - 1;
-                    self.scroll_to_cursor = true;
+            Command::Home => self.focus_to_pos(0, Mods::default()),
+            Command::End => self.focus_to_pos(self.view.len().saturating_sub(1), Mods::default()),
+            Command::SelectAll => self.selection.all(&self.view),
+            Command::SelectNone => self.selection.clear(),
+            Command::Undo => {
+                if let Some((label, apply)) = self.undo.undo() {
+                    self.apply_marks(&apply);
+                    self.status = format!("Undid {label}");
                 }
             }
-            Command::SetRating(r) => {
-                if !self.items.is_empty() {
-                    let i = self.cursor;
-                    self.marks[i].rating = Rating::clamp(r);
-                    self.persist(i);
+            Command::Redo => {
+                if let Some((label, apply)) = self.undo.redo() {
+                    self.apply_marks(&apply);
+                    self.status = format!("Redid {label}");
                 }
             }
-            Command::SetClass(c) => {
-                if !self.items.is_empty() {
-                    let i = self.cursor;
-                    self.marks[i].color_class = ColorClass::clamp(c);
-                    self.persist(i);
-                }
+            Command::SetFilter(f) => {
+                self.filter = f;
+                self.rebuild_view();
             }
+            Command::ClearFilter(None) => {
+                self.filter = Filter::default();
+                self.rebuild_view();
+            }
+            Command::ClearFilter(Some(c)) => {
+                self.filter.clear(c);
+                self.rebuild_view();
+            }
+            Command::SetSort(s) => {
+                self.prefs.sort = s;
+                self.prefs_dirty = true;
+                self.rebuild_view();
+            }
+            Command::ToggleSortReversed => {
+                self.prefs.sort_reversed = !self.prefs.sort_reversed;
+                self.prefs_dirty = true;
+                self.rebuild_view();
+            }
+            Command::ToggleAdvanceAfterMark => {
+                self.prefs.advance_after_mark = !self.prefs.advance_after_mark;
+                self.prefs_dirty = true;
+            }
+            Command::SetRating(r) => self.mark(if r < 0 { "reject" } else { "rate" }, |m| {
+                m.rating = Rating::clamp(r)
+            }),
+            Command::SetClass(c) => self.mark("class", |m| m.color_class = ColorClass::clamp(c)),
             Command::ToggleTag => {
-                if !self.items.is_empty() {
-                    let i = self.cursor;
-                    self.marks[i].tagged = !self.marks[i].tagged;
-                    self.persist(i);
-                }
+                // A batch toggle sets every target to the opposite of the focused item.
+                let to = !self
+                    .marks
+                    .get(self.cursor)
+                    .map(|m| m.tagged)
+                    .unwrap_or(false);
+                self.mark(if to { "tag" } else { "untag" }, |m| m.tagged = to)
             }
             Command::Escape => {
-                if self.workspace == Workspace::Preview {
+                if self.filter_popup_open {
+                    self.filter_popup_open = false;
+                } else if self.workspace == Workspace::Preview {
                     self.workspace = Workspace::Sheet;
                     self.scroll_to_cursor = true;
+                } else if self.selection.len() > 1 {
+                    self.selection.only(self.cursor);
                 }
             }
             Command::Activate => {
@@ -555,20 +759,15 @@ impl App {
                 }
             }
         }
-        self.platform.sync_toggles(
-            self.prefs.sidebar_visible,
-            self.prefs.inspector_visible,
-            self.prefs.filmstrip_visible,
-        );
+        self.sync_menu();
         ctx.request_repaint();
     }
 
     /// Keyboard → commands. Command-modified keys are the native menu's job
-    /// when a menu exists; without one (other platforms) they are handled here.
+    /// when a menu exists, except ⌘-arrows (move focus, keep selection).
     fn keyboard_commands(&self, ctx: &egui::Context) -> Vec<Command> {
         let mut out = Vec::new();
-        let typing = ctx.memory(|m| m.focused().is_some()) && ctx.wants_keyboard_input();
-        if typing {
+        if ctx.wants_keyboard_input() {
             return out;
         }
         ctx.input(|i| {
@@ -578,12 +777,39 @@ impl App {
             let cols = self.cols.max(1) as isize;
             let in_preview = self.workspace == Workspace::Preview;
             let pressed = |k: Key| i.key_pressed(k);
+            let mv = |delta: isize| Command::MoveFocus {
+                delta,
+                shift,
+                command: cmd,
+            };
+            if pressed(Key::ArrowLeft) {
+                out.push(mv(-1));
+            }
+            if pressed(Key::ArrowRight) {
+                out.push(mv(1));
+            }
+            if pressed(Key::ArrowUp) {
+                out.push(mv(if in_preview { -1 } else { -cols }));
+            }
+            if pressed(Key::ArrowDown) {
+                out.push(mv(if in_preview { 1 } else { cols }));
+            }
             if cmd {
                 if has_menu {
                     return;
                 }
                 if pressed(Key::O) {
                     out.push(Command::PickFolder);
+                }
+                if pressed(Key::A) {
+                    out.push(if shift {
+                        Command::SelectNone
+                    } else {
+                        Command::SelectAll
+                    });
+                }
+                if pressed(Key::Z) {
+                    out.push(if shift { Command::Redo } else { Command::Undo });
                 }
                 if pressed(Key::Equals) || pressed(Key::Plus) {
                     out.push(Command::ZoomIn);
@@ -607,18 +833,6 @@ impl App {
                     }
                 }
                 return;
-            }
-            if pressed(Key::ArrowLeft) {
-                out.push(Command::Move(-1));
-            }
-            if pressed(Key::ArrowRight) {
-                out.push(Command::Move(1));
-            }
-            if pressed(Key::ArrowUp) {
-                out.push(Command::Move(if in_preview { -1 } else { -cols }));
-            }
-            if pressed(Key::ArrowDown) {
-                out.push(Command::Move(if in_preview { 1 } else { cols }));
             }
             if pressed(Key::PageUp) {
                 out.push(Command::MovePage(-1));
@@ -751,13 +965,22 @@ impl eframe::App for App {
                     });
                     return;
                 }
+                if self.view.is_empty() {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(
+                            egui::RichText::new("No photos match the filter · ⌥⌘F clears it")
+                                .size(15.0)
+                                .color(t.muted),
+                        );
+                    });
+                    return;
+                }
                 match self.workspace {
                     Workspace::Sheet => ui::sheet::show(self, ui, &t),
                     Workspace::Preview => ui::preview::show(self, ui, &t),
                     Workspace::Caption | Workspace::Ingest => {}
                 }
             });
-        // Toolbar underline, drawn last so it sits above panel fills.
         let r = ctx.content_rect();
         ctx.layer_painter(egui::LayerId::background()).line_segment(
             [
