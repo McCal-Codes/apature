@@ -8,6 +8,21 @@
 //! tokens with no value (no headline loaded, no capture date) expand to
 //! nothing, and `sanitize_component` trims the separators they leave.
 
+const MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Facts {
     /// Original file name without extension.
@@ -63,12 +78,27 @@ pub fn expand(template: &str, facts: &Facts, seq: u32) -> String {
             "yymmdd" => Ok(facts
                 .date
                 .map(|(y, m, d)| format!("{:02}{m:02}{d:02}", y.rem_euclid(100)))),
-            "year" => Ok(facts.date.map(|(y, _, _)| format!("{y:04}"))),
-            "yr2" => Ok(facts
+            "year" | "year4" | "iptcyear4" | "iyr4" => {
+                Ok(facts.date.map(|(y, _, _)| format!("{y:04}")))
+            }
+            "yr2" | "iyr2" | "iptcyear2" | "year2" => Ok(facts
                 .date
                 .map(|(y, _, _)| format!("{:02}", y.rem_euclid(100)))),
-            "month" => Ok(facts.date.map(|(_, m, _)| format!("{m:02}"))),
-            "day" => Ok(facts.date.map(|(_, _, d)| format!("{d:02}"))),
+            "month" | "month0" | "imn0" | "iptcmonth0" => {
+                Ok(facts.date.map(|(_, m, _)| format!("{m:02}")))
+            }
+            "day" | "day0" | "idy0" | "iptcday0" => {
+                Ok(facts.date.map(|(_, _, d)| format!("{d:02}")))
+            }
+            "monthname" | "iptcmonthname" => Ok(facts
+                .date
+                .map(|(_, m, _)| MONTHS[(m - 1) as usize].to_string())),
+            "mnn3" | "iptcmonthname3" | "monthname3" => Ok(facts
+                .date
+                .map(|(_, m, _)| MONTHS[(m - 1) as usize][..3].to_string())),
+            "hour" => Ok(facts.time.map(|(h, _, _)| format!("{h:02}"))),
+            "minute" => Ok(facts.time.map(|(_, m, _)| format!("{m:02}"))),
+            "second" => Ok(facts.time.map(|(_, _, s)| format!("{s:02}"))),
             "time" => Ok(facts.time.map(|(h, m, s)| format!("{h:02}{m:02}{s:02}"))),
             _ => Err(()),
         };
@@ -138,6 +168,27 @@ mod tests {
             "261006_0412_140311"
         );
         assert_eq!(expand("{year}/{month}/{day}", &f, 1), "2026/10/06");
+        // The owner's Photo Mechanic conventions, verbatim.
+        assert_eq!(
+            expand("{year4}/{month0} {monthname}/{mnn3} {day0} {head}", &f, 1),
+            "2026/10 October/Oct 06 100726 SPO BGLF"
+        );
+        assert_eq!(
+            expand("{iyr2}{imn0}{idy0}{headline}", &f, 1),
+            "261006100726 SPO BGLF"
+        );
+        assert_eq!(
+            expand(
+                "BUTLR-{headline}{seqn}-{iptcmonth0}{iptcday0}{iptcyear4}",
+                &f,
+                12
+            ),
+            "BUTLR-100726 SPO BGLF012-10062026"
+        );
+        assert_eq!(
+            expand("{iptcmonthname3} {hour}:{minute}", &f, 1),
+            "Oct 14:03"
+        );
         assert_eq!(
             expand("{nope}-{seq}", &f, 2),
             "{nope}-002",
