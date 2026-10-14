@@ -9,6 +9,7 @@ pub enum Workspace {
     Preview,
     Caption,
     Ingest,
+    Export,
 }
 
 impl Workspace {
@@ -18,15 +19,18 @@ impl Workspace {
             Workspace::Preview => "Preview",
             Workspace::Caption => "Caption",
             Workspace::Ingest => "Ingest",
+            Workspace::Export => "Export",
         }
     }
     /// Workspaces that exist today. The others are shown disabled with the
     /// milestone that brings them, never as controls that do nothing.
     pub fn available(self) -> Result<(), &'static str> {
         match self {
-            Workspace::Sheet | Workspace::Preview | Workspace::Caption | Workspace::Ingest => {
-                Ok(())
-            }
+            Workspace::Sheet
+            | Workspace::Preview
+            | Workspace::Caption
+            | Workspace::Ingest
+            | Workspace::Export => Ok(()),
         }
     }
 }
@@ -68,6 +72,10 @@ pub enum Command {
     IngestStart,
     IngestCancel,
     IngestOpenResult,
+    ExportChooseDest,
+    ExportStart,
+    ExportCancel,
+    ExportOpenResult,
     CloseTab,
     NextTab,
     PrevTab,
@@ -119,6 +127,7 @@ impl Command {
             Command::ApplyStationery => "image.stationery".into(),
             Command::SaveCaption => "image.savecaption".into(),
             Command::IngestStart => "file.ingest".into(),
+            Command::ExportStart => "file.export".into(),
             Command::CloseTab => "file.closetab".into(),
             Command::NextTab => "window.nexttab".into(),
             Command::PrevTab => "window.prevtab".into(),
@@ -156,6 +165,8 @@ impl Command {
             "image.stationery" => Command::ApplyStationery,
             "image.savecaption" => Command::SaveCaption,
             "file.ingest" => Command::SetWorkspace(Workspace::Ingest),
+            "file.export" => Command::SetWorkspace(Workspace::Export),
+            "view.workspace.export" => Command::SetWorkspace(Workspace::Export),
             "file.closetab" => Command::CloseTab,
             "window.nexttab" => Command::NextTab,
             "window.prevtab" => Command::PrevTab,

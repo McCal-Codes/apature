@@ -90,6 +90,33 @@ enum Cmd {
     /// Print the IPTC fields of a photo.
     Iptc { file: PathBuf },
     /// Plan and run a verified ingest (sequential; never deletes the source).
+    /// Export delivery JPEGs (resize, re-encode, EXIF + XMP + IPTC-IIM + ICC).
+    Export {
+        /// Files or folders.
+        paths: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+        /// Long side in pixels (0 = keep size).
+        #[arg(long, default_value_t = 2048)]
+        long: u32,
+        #[arg(long, default_value_t = 90)]
+        quality: u8,
+        /// Naming template, e.g. "100726-SPO-BGLF-{seqn:3}" (default keeps names).
+        #[arg(long)]
+        rename: Option<String>,
+        /// Assignment file whose fields fill in anything the photo lacks.
+        #[arg(long)]
+        assignment: Option<PathBuf>,
+        #[arg(long)]
+        no_iim: bool,
+        #[arg(long)]
+        no_exif: bool,
+        /// Render RAW files with the macOS RAW engine instead of the embedded preview.
+        #[arg(long)]
+        decode_raw: bool,
+        #[arg(long)]
+        overwrite: bool,
+    },
     Ingest {
         #[arg(long)]
         source: PathBuf,
@@ -153,6 +180,20 @@ fn main() -> Result<()> {
             keywords,
             files,
         } => caption(assignment.as_deref(), &text, headline, keywords, &files),
+        Cmd::Export {
+            paths,
+            out,
+            long,
+            quality,
+            rename,
+            assignment,
+            no_iim,
+            no_exif,
+            decode_raw,
+            overwrite,
+        } => cmd_export(
+            paths, out, long, quality, rename, assignment, no_iim, no_exif, decode_raw, overwrite,
+        ),
         Cmd::Ingest {
             source,
             primary,
@@ -551,5 +592,129 @@ fn mark(file: &Path, rating: Option<i8>, class: Option<u8>, tag: Option<bool>) -
         scheme.name(next.color_class).unwrap_or("none"),
         next.tagged
     );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_export(
+    paths: Vec<PathBuf>,
+    out: PathBuf,
+    long: u32,
+    quality: u8,
+    rename: Option<String>,
+    assignment: Option<PathBuf>,
+    no_iim: bool,
+    no_exif: bool,
+    decode_raw: bool,
+    overwrite: bool,
+) -> Result<()> {
+    use apature_ingest::plan::facts_for;
+    use apature_ingest::template::expand;
+    let pad = match assignment {
+        Some(p) => Some(apature_metadata::stationery::Assignment::parse(
+            &std::fs::read_to_string(p)?,
+        )?),
+        None => None,
+    };
+    // Group the requested files by folder; a folder means all of it.
+    let mut items: Vec<apature_core::PhotoItem> = Vec::new();
+    let mut dirs: Vec<(PathBuf, Option<Vec<PathBuf>>)> = Vec::new();
+    for p in paths {
+        if p.is_dir() {
+            dirs.push((p, None));
+        } else if let Some(parent) = p.parent() {
+            let parent = parent.to_path_buf();
+            match dirs.iter_mut().find(|(d, f)| *d == parent && f.is_some()) {
+                Some((_, Some(f))) => f.push(p.clone()),
+                _ => dirs.push((parent, Some(vec![p.clone()]))),
+            }
+        }
+    }
+    for (dir, only) in dirs {
+        let scanned = apature_core::scan(&dir, &apature_core::ScanOptions::default())?;
+        for it in scanned {
+            let wanted = match &only {
+                None => true,
+                Some(files) => it.variants().any(|v| files.iter().any(|f| f == &v.path)),
+            };
+            if wanted {
+                items.push(it);
+            }
+        }
+    }
+    if items.is_empty() {
+        anyhow::bail!("nothing to export");
+    }
+    let settings = apature_export::Settings {
+        long_side: long,
+        quality,
+        keep_exif: !no_exif,
+        write_iim: !no_iim,
+        overwrite,
+        raw: if decode_raw {
+            apature_export::RawPixels::SystemDecode
+        } else {
+            apature_export::RawPixels::EmbeddedPreview
+        },
+        ..Default::default()
+    };
+    let headline = pad.as_ref().map(|a| a.slug.clone());
+    // Names first (sequence numbers follow the listed order), then export in parallel.
+    let jobs: Vec<(apature_core::PhotoItem, PathBuf, apature_metadata::Iptc)> = items
+        .into_iter()
+        .enumerate()
+        .map(|(i, it)| {
+            let mut facts = facts_for(&it, it.path(), headline.as_deref());
+            facts.ext = "jpg".into();
+            let name = match &rename {
+                Some(t) => expand(t, &facts, (i + 1) as u32),
+                None => format!("{}.jpg", facts.stem),
+            };
+            let name = if name.to_lowercase().ends_with(".jpg") {
+                name
+            } else {
+                format!("{name}.jpg")
+            };
+            let file_iptc = apature_metadata::items::read_iptc(&it);
+            let iptc = match &pad {
+                Some(a) => a.iptc().overlay(&file_iptc),
+                None => file_iptc,
+            };
+            let dest = out.join(name);
+            (it, dest, iptc)
+        })
+        .collect();
+    let t0 = std::time::Instant::now();
+    let results: Vec<std::result::Result<apature_export::Outcome, apature_export::ExportError>> =
+        jobs.par_iter()
+            .map(|(it, dest, iptc)| apature_export::export(it, iptc, &settings, dest))
+            .collect();
+    let mut ok = 0;
+    for r in &results {
+        match r {
+            Ok(o) => {
+                ok += 1;
+                println!(
+                    "  ✓ {}  {}×{}  {:.1} MB  pixels:{:?} exif:{:?}  {} ms",
+                    o.out.display(),
+                    o.width,
+                    o.height,
+                    o.bytes as f64 / 1e6,
+                    o.pixels,
+                    o.exif,
+                    o.millis
+                );
+            }
+            Err(e) => println!("  ✕ {e}"),
+        }
+    }
+    println!(
+        "{ok} of {} exported in {:.1} s",
+        results.len(),
+        t0.elapsed().as_secs_f32()
+    );
+    if ok != results.len() {
+        std::process::exit(1);
+    }
     Ok(())
 }
