@@ -112,7 +112,7 @@ Kit is literally a baby ferret and is Firefox's name; avoid.
 
 ## 4b. What Firefox actually ships for Kit
 
-Read from the source (`docs/design/research/kit-animation.md`): animation
+Read from the source (`docs/research/kit-animation.md`): animation
 is baked into the SVG assets as CSS keyframes and played once via `<img>`
 (a 5 s head-tilt loop gated to "earned moments", a 4.04 s one-shot easter
 egg shown once per conversation with a 4 200 ms timer, a 1.6 s mask intro
