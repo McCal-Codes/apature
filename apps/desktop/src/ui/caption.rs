@@ -11,7 +11,6 @@ use crate::app::App;
 use crate::commands::Command;
 
 pub const FIELDS_W: f32 = 380.0;
-pub const DELIM: char = '\\';
 
 /// Editable strings for the fields we show. Converted to an `Iptc` of only
 /// the changed fields on save, so untouched metadata is never rewritten.
@@ -244,13 +243,14 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 let before = draft.fields.caption.clone();
                 let cap = field(ui, t, "Caption", &mut draft.fields.caption, true);
                 // Expand \code\ pairs as soon as the closing delimiter is typed.
-                if draft.fields.caption != before && draft.fields.caption.matches(DELIM).count() % 2 == 0 && draft.fields.caption.contains(DELIM) {
+                let delim = app.prefs.code_delimiter;
+                if draft.fields.caption != before && draft.fields.caption.matches(delim).count() % 2 == 0 && draft.fields.caption.contains(delim) {
                     let vars = Vars {
                         date: draft.date_created.as_deref().and_then(codes::parse_date).or_else(|| app.exif[draft.idx].as_ref().and_then(|e| e.date_time_original.as_deref()).and_then(codes::parse_date)),
                         credit: if draft.fields.credit.is_empty() { app.assignment.as_ref().and_then(|a| a.credit_line()) } else { Some(draft.fields.credit.clone()) },
                         headline: if draft.fields.headline.is_empty() { None } else { Some(draft.fields.headline.clone()) },
                     };
-                    let expanded = codes::expand(&draft.fields.caption, &app.codes, &vars, DELIM);
+                    let expanded = codes::expand(&draft.fields.caption, &app.codes, &vars, delim);
                     if expanded != draft.fields.caption {
                         draft.fields.caption = expanded;
                         // Keep the caret at the end after an expansion.
@@ -262,8 +262,9 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     }
                 }
                 // Autocomplete hint: codes that start with what follows the last open delimiter.
-                if let Some(open) = draft.fields.caption.rfind(DELIM) {
-                    if draft.fields.caption.matches(DELIM).count() % 2 == 1 {
+                let delim = app.prefs.code_delimiter;
+                if let Some(open) = draft.fields.caption.rfind(delim) {
+                    if draft.fields.caption.matches(delim).count() % 2 == 1 {
                         let prefix = &draft.fields.caption[open + 1..];
                         let hits: Vec<String> = app.codes.starting_with(prefix).take(6).map(|(c, r)| format!("{c} → {}", r.chars().take(28).collect::<String>())).collect();
                         if !hits.is_empty() {
@@ -287,8 +288,9 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     field(&mut cols[0], t, "Copyright", &mut draft.fields.copyright, false);
                     field(&mut cols[1], t, "Source", &mut draft.fields.source, false);
                 });
+                let delim = app.prefs.code_delimiter;
                 if !app.codes.codes.is_empty() {
-                    let list: Vec<String> = app.codes.codes.iter().take(12).map(|(c, _)| format!("{DELIM}{c}{DELIM}")).collect();
+                    let list: Vec<String> = app.codes.codes.iter().take(12).map(|(c, _)| format!("{delim}{c}{delim}")).collect();
                     ui.label(RichText::new(format!("codes: {}", list.join(" "))).monospace().size(10.0).color(t.muted));
                 }
                 ui.add_space(S2);

@@ -162,3 +162,19 @@ secondary copy from the fresh primary, and records a fingerprint in the
 card is out of scope until an .app bundle and a triple-gated design exist.
 Independently written; the shape follows the original Apature's planner,
 which the owner authored.
+
+## ADR-014 (2026-10-14, accepted): in-app tabs, state swapped not duplicated
+
+Native NSWindow tabbing would need one window per folder and winit does not
+expose it; Photo Mechanic's in-app contact-sheet tabs are the model the
+owner asked for. Per-folder state (`TabState`) is moved out of `App` when a
+tab is parked and back when it is activated, so every UI module keeps
+reading `app.items` and friends. Cost: one `take`/`put` pair of ~20 fields
+to keep in sync when fields are added. Open tabs are remembered in prefs.
+
+## ADR-015 (2026-10-14, accepted): Settings is a second window
+
+macOS users expect ⌘, to open a window, not a panel. egui's immediate
+viewport gives a real window sharing the context and tokens. Pages:
+General, Color classes, Metadata, Ingest, Cache, Shortcuts (read-only until
+profiles exist).
