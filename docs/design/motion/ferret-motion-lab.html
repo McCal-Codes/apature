@@ -100,7 +100,8 @@ ul.rules li { margin-bottom:4px; }
   <div class="panel">
     <div class="k">Events (what the app would send)</div>
     <div class="events">
-      <button data-ev="hello"><b>Hello</b><span>first launch</span></button>
+      <button data-ev="peek"><b>Peek</b><span>first launch, Firefox-style rise with eye darts</span></button>
+      <button data-ev="hello"><b>Hello</b><span>wave</span></button>
       <button data-ev="stash"><b>Card mounted</b><span>stash the card</span></button>
       <button data-ev="picked"><b>Picked</b><span>five stars</span></button>
       <button data-ev="dook"><b>Job finished</b><span>the war dance: every file verified</span></button>
@@ -153,13 +154,14 @@ ul.rules li { margin-bottom:4px; }
     oops:   { earL:28, earR:-28, tailB:1, lookX:-4, cheek:0.25, bodyY:4, lean:4 },
     sleep:  { earL:22, earR:-22, tailA:-0.9, bodyY:18, cheek:0.4, glow:0.7 },
     dook:   { earL:-12, earR:12, tailA:1.3, cheek:1, glow:1.3 },   // the weasel war dance: sideways hops, arched back, puffed tail
+    peek:   { earL:-6, earR:6, tailA:0.6, cheek:0.8 },               // Firefox's kit.gif: rise from the edge, eye darts, tail sway, 3.4 s, once
     look:   {},
   };
-  const EYES = { rest:'open', hello:'open', stash:'open', picked:'stars', cheer:'happy', oops:'open', sleep:'closed', dook:'happy', look:'open' };
-  const HOLD = { hello:1.6, stash:2.2, picked:1.4, cheer:1.8, oops:2.4, sleep:4.6, dook:1.6, look:1.0, rest:0 };
+  const EYES = { rest:'open', hello:'open', stash:'open', picked:'stars', cheer:'happy', oops:'open', sleep:'closed', dook:'happy', peek:'open', look:'open' };
+  const HOLD = { hello:1.6, stash:2.2, picked:1.4, cheer:1.8, oops:2.4, sleep:4.6, dook:1.6, peek:3.4, look:1.0, rest:0 };
   // Per-event spring feel from the research table (Apple duration/bounce; bounce never above 0.4):
   // hello 0.45/0.25 · stash 0.40/0.15 · picked 0.40/0.20 (eyes 0.35/0.35) · cheer 0.50/0.30 · oops 0.30/0 · sleep 0.80/0.10
-  const FEEL = { hello:[0.45,0.25], stash:[0.40,0.15], picked:[0.40,0.20], cheer:[0.50,0.30], oops:[0.30,0.0], sleep:[0.80,0.10], dook:[0.40,0.30], look:[0.35,0.10], rest:[0.45,0.15] };
+  const FEEL = { hello:[0.45,0.25], stash:[0.40,0.15], picked:[0.40,0.20], cheer:[0.50,0.30], oops:[0.30,0.0], sleep:[0.80,0.10], dook:[0.40,0.30], peek:[0.60,0.12], look:[0.35,0.10], rest:[0.45,0.15] };
   // Anticipation: a 60–100 ms dip before the main move (1–2 frames on twos), never a hold the user waits on.
   const ANTICIPATE = { hello:0.08, cheer:0.10, picked:0.06, stash:0.06 };
   const springs = {}; for (const k in REST){ springs[k]=new Spring(REST[k]); }
@@ -228,8 +230,17 @@ ul.rules li { margin-bottom:4px; }
     let hopY=0, tailW=34;
     if (state==='dook' && !reduce){ const e=elapsed, env=Math.max(0,1-e/1.4); const ph=e*2*Math.PI*2.2; shx+=Math.sin(ph*0.5)*26*env; hopY=-Math.abs(Math.sin(ph))*22*env; const land=Math.max(0,Math.cos(ph)); squashY*=1-sq*land*env; squashX=1/squashY; tailW=34+12*env; }
     el.tail.setAttribute('stroke-width',tailW);
+    // peek (from Firefox's kit.gif): the whole character rises from below the stage edge over ~0.6 s, then two eye darts
+    // (each 1–2 frames, as Williams has it) at 1.2 s and 2.1 s, then it sinks back during the last 0.6 s.
+    let rise=0;
+    if (state==='peek'){ const e=elapsed; const inS=Math.min(1,e/0.6), outS=Math.max(0,(e-2.8)/0.6); rise=(1-(1-Math.pow(1-inS,3)))*300 + Math.pow(Math.min(1,outS),2)*300;
+      const dart=(t0)=> (e>t0 && e<t0+0.08) ? 1 : (e>=t0+0.08 && e<t0+0.5) ? 1 : 0;
+      springs.lookX.t = dart(1.2)? -7 : dart(2.1)? 7 : 0; }
+    // head tilt during the picked celebration only (Firefox gates its looping head-tilt SVG to earned moments): ±3° slow sway
+    const tilt = (state==='picked' && !reduce) ? Math.sin(elapsed*2*Math.PI/1.6)*3 : 0;
     // ---- apply ----
-    el.char.setAttribute('transform',`translate(${256+shx} ${456+v.bodyY+hopY}) rotate(${v.lean}) scale(${squashX} ${squashY}) translate(-256 -456)`);
+    el.char.setAttribute('transform',`translate(${256+shx} ${456+v.bodyY+hopY+rise}) rotate(${v.lean+tilt}) scale(${squashX} ${squashY}) translate(-256 -456)`);
+    el.tail.setAttribute('transform',`translate(0 ${rise})`);
     el.earL.setAttribute('transform',`rotate(${v.earL} 178 196)`); el.earR.setAttribute('transform',`rotate(${v.earR} 334 196)`);
     // tail: base at the body, two control points lag; tailA lifts the tip, tailB tucks it down
     const tipX=392+ta*0-tb*40, tipY=312-ta*70+tb*120, c1x=440-tb*30, c1y=430-ta*40+tb*20, c2x=430+ta*10, c2y=340-ta*60+tb*90;
