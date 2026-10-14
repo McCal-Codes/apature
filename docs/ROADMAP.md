@@ -22,8 +22,8 @@
 
 ## Requested 2026-10-14 (owner)
 - [x] Drag and drop a folder or file onto the window to open it (2026-10-14)
-- [ ] **Tabs**: several folders open at once as tabs, like Finder/Safari on macOS and tabbed apps on Windows; each tab keeps its own view, selection and scroll. Native NSWindow tabbing vs in-app tab strip to be decided in the design doc (Photo Mechanic uses in-app contact-sheet tabs).
-- [ ] **Settings page**: colour-class names and colours, shortcut profile, advance-after-mark, thumbnail size defaults, cache location/size, stationery and code-replacement files, appearance override. Replaces the "Settings… (M3)" placeholder in the app menu.
+- [x] **Tabs** (2026-10-14): in-app tab strip, per-tab view/selection/filter/undo, ⌘T/⌘W/⌘⇧]/⌘⇧[, restored at launch.
+- [x] **Settings window** (2026-10-14): appearance, colour classes, metadata files + delimiter, ingest defaults, cache, shortcut table (profiles still to come).
 
 ## Idea to research (owner, 2026-10-14): auto-ingester from the camera
 Frames should land on a drive already in the right folder, named and

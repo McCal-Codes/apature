@@ -32,6 +32,10 @@ pub struct Launch {
     pub ingest: bool,
     pub ingest_source: Option<PathBuf>,
     pub ingest_dest: Option<PathBuf>,
+    /// Open the Settings window at start (screenshots).
+    pub settings: bool,
+    /// Extra folders to open as tabs.
+    pub more_folders: Vec<PathBuf>,
 }
 
 fn parse_args() -> Launch {
@@ -55,11 +59,18 @@ fn parse_args() -> Launch {
             "--ingest" => l.ingest = true,
             "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
             "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),
+            "--settings" => l.settings = true,
             "--assignment" => l.assignment = args.next().map(PathBuf::from),
             "--frames" => {
                 l.screenshot_frame = args.next().and_then(|v| v.parse().ok()).unwrap_or(120)
             }
-            _ => l.folder = Some(PathBuf::from(a)),
+            _ => {
+                if l.folder.is_none() {
+                    l.folder = Some(PathBuf::from(a));
+                } else {
+                    l.more_folders.push(PathBuf::from(a));
+                }
+            }
         }
     }
     l
