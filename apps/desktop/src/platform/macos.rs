@@ -179,6 +179,17 @@ impl MenuBar {
                 acc(cmd, Code::Minus),
             ),
             &PredefinedMenuItem::separator(),
+            &item(
+                Command::ToggleZoom,
+                "Zoom 1:1 / Fit",
+                Some(Accelerator::new(Modifiers::empty(), Code::KeyZ)),
+            ),
+            &item(
+                Command::ToggleCompare,
+                "Compare Selected",
+                Some(Accelerator::new(Modifiers::empty(), Code::KeyC)),
+            ),
+            &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::fullscreen(None),
         ])?;
 

@@ -41,6 +41,8 @@ pub struct Done {
     pub exif: Option<ExifSummary>,
     pub millis: f32,
     pub cache_hit: bool,
+    /// Preview only: the decode is the file's full resolution (nothing larger exists).
+    pub full: bool,
 }
 
 type Key = (usize, JobKind);
@@ -169,7 +171,7 @@ fn run(s: &Shared, job: &Job) -> Done {
     let mut cache_hit = false;
     let key = ThumbCache::key(&job.path, job.size, job.modified, job.long_side);
 
-    let result: Result<(Rgb, Option<ExifSummary>), String> = (|| {
+    let result: Result<(Rgb, Option<ExifSummary>, bool), String> = (|| {
         let src = Source::open(&job.path).map_err(|e| e.to_string())?;
         let exif = apature_metadata::exif::from_bytes(src.data());
         let orientation = exif.as_ref().map(|e| e.orientation).unwrap_or(1);
@@ -178,7 +180,7 @@ fn run(s: &Shared, job: &Job) -> Done {
             if let Some(c) = &s.cache {
                 if let Some(rgb) = c.get(&key) {
                     cache_hit = true;
-                    return Ok((rgb, exif));
+                    return Ok((rgb, exif, false));
                 }
             }
         }
@@ -191,9 +193,16 @@ fn run(s: &Shared, job: &Job) -> Done {
             JobKind::Preview => job.long_side,
         };
         let rgb = src.decode_for(target).map_err(|e| e.to_string())?;
+        // The decoder stops at the nearest DCT scale at or above the target;
+        // when it could not reach the target, this is everything the file has.
+        let full = job.kind == JobKind::Preview && rgb.long_side() <= job.long_side;
         let rgb = apature_preview::rotate(rgb, orientation);
         let rgb = match job.kind {
             JobKind::Thumb => apature_preview::thumbnail(&rgb, job.long_side),
+            // Never hand the GPU more than was asked for (texture limits).
+            JobKind::Preview if rgb.long_side() > job.long_side => {
+                apature_preview::thumbnail(&rgb, job.long_side)
+            }
             JobKind::Preview => rgb,
         };
         if job.kind == JobKind::Thumb {
@@ -203,12 +212,12 @@ fn run(s: &Shared, job: &Job) -> Done {
                 }
             }
         }
-        Ok((rgb, exif))
+        Ok((rgb, exif, full))
     })();
 
-    let (result, exif) = match result {
-        Ok((rgb, exif)) => (Ok(rgb), exif),
-        Err(e) => (Err(e), None),
+    let (result, exif, full) = match result {
+        Ok((rgb, exif, full)) => (Ok(rgb), exif, full),
+        Err(e) => (Err(e), None, false),
     };
     Done {
         idx: job.idx,
@@ -218,5 +227,6 @@ fn run(s: &Shared, job: &Job) -> Done {
         exif,
         millis: t0.elapsed().as_secs_f32() * 1000.0,
         cache_hit,
+        full,
     }
 }
