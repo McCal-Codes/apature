@@ -286,14 +286,62 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         });
                     });
 
-                    section(ui, t, "Caption", "M4", |ui| {
-                        ui.label(
-                            RichText::new(
-                                "IPTC caption, headline, keywords and credit arrive in M4.",
-                            )
-                            .size(11.0)
-                            .color(t.muted),
-                        );
+                    let needs = app
+                        .inspector_iptc
+                        .as_ref()
+                        .map(|(i, _)| *i != idx)
+                        .unwrap_or(true);
+                    if needs {
+                        app.inspector_iptc =
+                            Some((idx, apature_metadata::items::read_iptc(&app.items[idx])));
+                    }
+                    let iptc = app
+                        .inspector_iptc
+                        .as_ref()
+                        .map(|(_, i)| i.clone())
+                        .unwrap_or_default();
+                    section(ui, t, "Caption", "⌘⇧3", |ui| {
+                        if let Some(h) = &iptc.headline {
+                            ui.label(RichText::new(h).size(12.0).color(t.text));
+                        }
+                        match &iptc.description {
+                            Some(d) if !d.is_empty() => {
+                                ui.add(
+                                    egui::Label::new(RichText::new(d).size(11.5).color(t.text2))
+                                        .wrap(),
+                                );
+                            }
+                            _ => {
+                                ui.label(
+                                    RichText::new(
+                                        "No caption yet. ⌘⇧3 opens the Caption workspace.",
+                                    )
+                                    .size(11.0)
+                                    .color(t.muted),
+                                );
+                            }
+                        }
+                        let mut small = Vec::new();
+                        if let Some(c) = &iptc.credit {
+                            small.push(c.clone());
+                        }
+                        if let Some(k) = &iptc.keywords {
+                            if !k.is_empty() {
+                                small.push(format!(
+                                    "{} keyword{}",
+                                    k.len(),
+                                    if k.len() == 1 { "" } else { "s" }
+                                ));
+                            }
+                        }
+                        if !small.is_empty() {
+                            ui.label(
+                                RichText::new(small.join(" · "))
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(t.muted),
+                            );
+                        }
                     });
 
                     section(ui, t, "Files", "", |ui| {

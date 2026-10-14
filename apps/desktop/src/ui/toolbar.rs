@@ -18,12 +18,13 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = S3;
-                let sb = ui
-                    .add(
-                        egui::Button::new(RichText::new("⊞").size(15.0))
-                            .selected(app.prefs.sidebar_visible),
-                    )
-                    .on_hover_text("Show or hide the sidebar (⌃⌘S)");
+                let sb = super::icons::button(
+                    ui,
+                    t,
+                    super::icons::Icon::Sidebar,
+                    app.prefs.sidebar_visible,
+                    "Show or hide the sidebar (⌃⌘S)",
+                );
                 if sb.clicked() {
                     cmds.push(Command::ToggleSidebar);
                 }
@@ -55,12 +56,13 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
 
                 // Filter button + popup, then one chip per active clause.
                 let active = app.filter.is_active();
-                let fb = ui
-                    .add(
-                        egui::Button::new(if active { "Filter ●" } else { "Filter" })
-                            .selected(active),
-                    )
-                    .on_hover_text("Filter by rating, class, tag (⌥⌘F clears)");
+                let fb = super::icons::button(
+                    ui,
+                    t,
+                    super::icons::Icon::Funnel,
+                    active,
+                    "Filter by rating, class, tag (⌥⌘F clears)",
+                );
                 if fb.clicked() {
                     app.filter_popup_open = !app.filter_popup_open;
                 }
@@ -221,12 +223,13 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = S3;
-                    let ins = ui
-                        .add(
-                            egui::Button::new(RichText::new("ⓘ").size(15.0))
-                                .selected(app.prefs.inspector_visible),
-                        )
-                        .on_hover_text("Show or hide the inspector (⌥⌘I)");
+                    let ins = super::icons::button(
+                        ui,
+                        t,
+                        super::icons::Icon::Inspector,
+                        app.prefs.inspector_visible,
+                        "Show or hide the inspector (⌥⌘I)",
+                    );
                     if ins.clicked() {
                         cmds.push(Command::ToggleInspector);
                     }
