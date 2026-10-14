@@ -61,6 +61,24 @@ Events.
 | Motion: sidebar/inspector/filmstrip collapse and reveal eased; tab highlight slides and the new sheet fades in (160 ms); Preview grows out of the focused cell; filter chips, drop overlay and status text fade in (120 ms); ingest progress eases; all durations 0 under Reduce Motion (`App::anim`) | implemented; motion cannot be judged from stills, so **unreviewed by eye**; builds, runs, 60 tests |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
 
+## Motion slice 1 and card-mount detection (2026-10-14)
+
+Implemented: thumbnail arrival fade (120 ms), selection ring fade, focus
+ring slide after a keyboard move (cuts when the old cell is more than four
+cells away), ingest rows staggered 15 ms apart on start, ✓ colour fade,
+progress bar driven by verified bytes, 600 ms accent flash on the Progress
+card when the run ends. All durations go to 0 under Reduce Motion
+(`App::anim`). Seen in screenshots: the arrival fade and the finished
+ingest; not yet watched by eye: selection fade and focus slide (no key
+input in screenshot mode).
+
+Card mount: `/Volumes` is polled every 2 s (no new dependency; FSEvents can
+replace it later). A newly mounted volume with `DCIM/` sets the status
+"Card mounted: NAME" and, when Settings › Ingest "When a camera card
+mounts, open Ingest" is on (default), switches to Ingest with that card as
+the source. Tested by attaching the "NIKON Z6" disk image while the app
+ran: workspace switched, plan built (6 skipped, already in the ledger).
+
 ## End-to-end ingest in the app (2026-10-14, tested)
 
 `apature --ingest-run --ingest-source <card> --ingest-dest <dir>
