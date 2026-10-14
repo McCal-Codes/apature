@@ -1,18 +1,18 @@
-# Apature brand kit
+# Apature brand kit (v0.2, 2026-10-14)
 
-Structured like a brand portal (the way Mozilla publishes Firefox's):
-guidelines plus downloadable libraries. Everything here is SVG, drawn from
-one parts set, so new poses and sizes stay consistent.
+Character: **Dek**, an owl drawn in Firefox Kit's language (soft gradient body,
+dark eyes with a lavender catchlight, no mouth, ear tufts and wings as the
+acting parts). Provisional name; Cutline and Lede also checked clear.
 
-* **portal.html** — the browsable kit (also published as a Claude artifact).
+* **portal.html** — the browsable kit (published as a Claude artifact).
+* **mascot/** — ten poses, a three-view turnaround, an expression strip,
+  `dek-character-sheet.png` (the one page to work from).
 * **logo/** — mark (dark, light, mono white, mono ink), app icon tile,
   wordmark, horizontal and stacked lockups.
-* **mascot/** — Snap in eight poses (`hello`, `rest`, `card`, `picked`,
-  `cheer`, `thinking`, `sleep`, `oops`) and an expression sheet.
-* **pictograms/** — twelve line pictograms, 24 px grid, 2 px stroke.
-* **environment/** — darkroom and studio backdrops.
+* **pictograms/**, **environment/** — unchanged from v0.1.
+* **archive/snap/** — the v0.1 camera-with-a-face character, kept for the record.
 
-Guidelines (voice, colour, spacing, product placement, motion) live in the
-portal page. Status 2026-10-14: proposal; the app still ships the 2×2
-contact-sheet icon until the owner adopts Snap. The wordmark references
-SF Pro Display and must be outlined before use off-Mac.
+Everything is generated from one parts set by the script in the commit
+history, so a new pose is a few lines, not a drawing. Rules (placement,
+motion, licence) are in the portal and in `docs/design/MASCOT_RESEARCH.md`.
+Status: proposal; the app still ships the 2×2 contact-sheet icon until adopted.
