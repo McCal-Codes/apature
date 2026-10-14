@@ -1,4 +1,5 @@
 //! Apature desktop. `apature [folder] [--theme dark|light] [--screenshot out.png [--frames N]]`
+//! `--ingest-run --ingest-source <card> --ingest-dest <dir>` ingests headlessly and reports.
 //!
 //! The screenshot flags exist so the shell can be checked visually in both
 //! appearances without a bundled app or screen-recording permission.
@@ -32,6 +33,10 @@ pub struct Launch {
     pub ingest: bool,
     pub ingest_source: Option<PathBuf>,
     pub ingest_dest: Option<PathBuf>,
+    /// Start the ingest as soon as the plan is ready, print the report, then
+    /// quit (or screenshot first when `--screenshot` is given). End-to-end
+    /// check of the real app path without a mouse.
+    pub ingest_run: bool,
     /// Open the Settings window at start (screenshots).
     pub settings: bool,
     /// Extra folders to open as tabs.
@@ -59,6 +64,10 @@ fn parse_args() -> Launch {
             "--ingest" => l.ingest = true,
             "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
             "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),
+            "--ingest-run" => {
+                l.ingest = true;
+                l.ingest_run = true;
+            }
             "--settings" => l.settings = true,
             "--assignment" => l.assignment = args.next().map(PathBuf::from),
             "--frames" => {
