@@ -32,9 +32,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
             .min(inner.height() / size.y)
             .min(1.0);
         let fitted = Rect::from_center_size(rect.center(), size * s);
+        // Grow out of the cell it came from, then settle at fit.
+        let k = super::motion::progress(app.preview_since, app.anim(0.16));
+        let shown = match app.preview_from {
+            Some(from) if k < 1.0 => {
+                let fs = (from.width() / size.x).min(from.height() / size.y);
+                let from_fit = Rect::from_center_size(from.center(), size * fs);
+                super::motion::lerp_rect(from_fit, fitted, k)
+            }
+            _ => fitted,
+        };
         p.image(
             tex.id(),
-            fitted,
+            shown,
             Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
             Color32::WHITE,
         );
