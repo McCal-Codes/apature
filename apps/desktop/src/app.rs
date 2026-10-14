@@ -37,6 +37,41 @@ const PREFETCH_ROWS: usize = 3;
 const KEEP_ROWS: usize = 12;
 const PREVIEW_LRU: usize = 6;
 
+/// Everything that belongs to one open folder. The active tab's state lives
+/// directly in `App` (so the UI code reads `app.items` etc.); inactive tabs
+/// are parked here and swapped in with `switch_tab`.
+pub struct TabState {
+    pub folder: Option<PathBuf>,
+    pub items: Vec<PhotoItem>,
+    pub marks: Vec<Marks>,
+    pub conflicts: Vec<Vec<String>>,
+    pub exif: Vec<Option<ExifSummary>>,
+    pub thumbs: Vec<Option<TextureHandle>>,
+    pub thumb_err: Vec<Option<String>>,
+    pub previews: HashMap<usize, (TextureHandle, u32)>,
+    pub preview_lru: VecDeque<usize>,
+    pub generation: u64,
+    pub cursor: usize,
+    pub selection: Selection,
+    pub view: Vec<usize>,
+    pub pos: Vec<Option<usize>>,
+    pub filter: Filter,
+    pub undo: UndoStack,
+    pub cols: usize,
+    pub last_visible_rows: Range<usize>,
+    pub stats: Stats,
+    pub caption_draft: Option<Draft>,
+    pub inspector_iptc: Option<(usize, apature_metadata::Iptc)>,
+}
+
+/// A tab slot: the folder it shows and, when inactive, its parked state.
+pub struct Tab {
+    pub folder: PathBuf,
+    pub state: Option<TabState>,
+    /// Photo count for the strip while the state is parked.
+    pub count: usize,
+}
+
 #[derive(Default)]
 pub struct IngestState {
     pub opts: apature_ingest::Options,
@@ -101,6 +136,14 @@ pub struct App {
     pub drag_hover: usize,
     /// IPTC of the focused photo, read once per focus change for the inspector.
     pub inspector_iptc: Option<(usize, apature_metadata::Iptc)>,
+    pub tabs: Vec<Tab>,
+    pub active: usize,
+    next_generation: u64,
+    pub settings_open: bool,
+    pub settings_page: ui::settings::Page,
+    pub cache_size: Option<(usize, u64)>,
+    applied_appearance: Option<crate::prefs::Appearance>,
+    dispatch_later: Option<Command>,
     platform: Platform,
     reduce_motion: bool,
     launch: Launch,
@@ -148,7 +191,7 @@ impl App {
             cols: 1,
             last_visible_rows: 0..0,
             scroll_to_cursor: false,
-            scheme: ColorClassScheme::default(),
+            scheme: prefs.scheme.clone(),
             stats: Stats::default(),
             status: String::new(),
             prefs,
@@ -163,6 +206,14 @@ impl App {
             ingest_jobs: IngestJobs::new(cc.egui_ctx.clone(), ledger_path),
             drag_hover: 0,
             inspector_iptc: None,
+            tabs: Vec::new(),
+            active: 0,
+            next_generation: 1,
+            settings_open: false,
+            settings_page: ui::settings::Page::General,
+            cache_size: None,
+            applied_appearance: None,
+            dispatch_later: None,
             platform,
             reduce_motion: Platform::reduce_motion(),
             launch: launch.clone(),
@@ -180,13 +231,36 @@ impl App {
         if let Some(p) = launch.assignment.clone() {
             app.load_assignment(&p);
         }
-        let first = launch
-            .folder
+        app.platform.set_class_names(&app.scheme.names);
+        let restored: Vec<PathBuf> = app
+            .prefs
+            .open_tabs
             .clone()
-            .or_else(|| app.prefs.recent.first().cloned())
-            .filter(|f| f.is_dir());
+            .into_iter()
+            .filter(|f| f.is_dir())
+            .collect();
+        for f in &restored {
+            app.open_folder(f);
+        }
+        if !restored.is_empty() {
+            let want = app.prefs.active_tab.min(app.tabs.len().saturating_sub(1));
+            app.switch_tab(want);
+        }
+        let first = launch.folder.clone().filter(|f| f.is_dir()).or_else(|| {
+            if restored.is_empty() {
+                app.prefs.recent.first().cloned().filter(|f| f.is_dir())
+            } else {
+                None
+            }
+        });
         if let Some(f) = first {
             app.open_folder(&f);
+        }
+        for f in launch.more_folders.iter().filter(|f| f.is_dir()) {
+            app.open_folder(f);
+        }
+        if launch.settings {
+            app.settings_open = true;
         }
         if launch.demo && !app.view.is_empty() {
             app.selection.all(&app.view);
@@ -280,13 +354,14 @@ impl App {
                     }
                 }
                 Msg::Report(rep) => {
+                    let ok = self
+                        .ingest
+                        .plan
+                        .as_ref()
+                        .map(|p| rep.all_verified(p))
+                        .unwrap_or(false);
+                    let open_after = ok && self.prefs.open_after_ingest && !self.ingest.apply_pad;
                     if let Some(r) = self.ingest.running.as_mut() {
-                        let ok = self
-                            .ingest
-                            .plan
-                            .as_ref()
-                            .map(|p| rep.all_verified(p))
-                            .unwrap_or(false);
                         self.status = if ok {
                             format!("Ingest complete: {} files verified", rep.files_ok())
                         } else {
@@ -294,10 +369,16 @@ impl App {
                         };
                         r.done = Some(rep);
                     }
+                    if open_after {
+                        self.dispatch_later = Some(Command::IngestOpenResult);
+                    }
                 }
                 Msg::PadApplied { files, failed } => {
                     if let Some(r) = self.ingest.running.as_mut() {
                         r.pad = Some((files, failed));
+                    }
+                    if self.prefs.open_after_ingest {
+                        self.dispatch_later = Some(Command::IngestOpenResult);
                     }
                 }
             }
@@ -539,12 +620,146 @@ impl App {
         self.volumes = v;
     }
 
+    /// Open `dir` in a new tab, or switch to it if it is already open.
     pub fn open_folder(&mut self, dir: &Path) {
+        if let Some(i) = self.tabs.iter().position(|t| t.folder == dir) {
+            self.switch_tab(i);
+            return;
+        }
+        if !self.tabs.is_empty() {
+            let parked = self.take_tab();
+            let count = parked.items.len();
+            let cur = self.active;
+            self.tabs[cur].state = Some(parked);
+            self.tabs[cur].count = count;
+        }
+        self.tabs.push(Tab {
+            folder: dir.to_path_buf(),
+            state: None,
+            count: 0,
+        });
+        self.active = self.tabs.len() - 1;
+        self.load_folder(dir);
+        self.remember_tabs();
+    }
+
+    fn remember_tabs(&mut self) {
+        self.prefs.open_tabs = self.tabs.iter().map(|t| t.folder.clone()).collect();
+        self.prefs.active_tab = self.active;
+        self.prefs_dirty = true;
+    }
+
+    /// Move the active tab's state out of `App`, leaving empty fields behind.
+    fn take_tab(&mut self) -> TabState {
+        self.next_generation += 1;
+        TabState {
+            folder: self.folder.take(),
+            items: std::mem::take(&mut self.items),
+            marks: std::mem::take(&mut self.marks),
+            conflicts: std::mem::take(&mut self.conflicts),
+            exif: std::mem::take(&mut self.exif),
+            thumbs: std::mem::take(&mut self.thumbs),
+            thumb_err: std::mem::take(&mut self.thumb_err),
+            previews: std::mem::take(&mut self.previews),
+            preview_lru: std::mem::take(&mut self.preview_lru),
+            generation: std::mem::replace(&mut self.generation, self.next_generation),
+            cursor: std::mem::take(&mut self.cursor),
+            selection: std::mem::take(&mut self.selection),
+            view: std::mem::take(&mut self.view),
+            pos: std::mem::take(&mut self.pos),
+            filter: std::mem::take(&mut self.filter),
+            undo: std::mem::take(&mut self.undo),
+            cols: std::mem::replace(&mut self.cols, 1),
+            last_visible_rows: std::mem::replace(&mut self.last_visible_rows, 0..0),
+            stats: std::mem::take(&mut self.stats),
+            caption_draft: self.caption_draft.take(),
+            inspector_iptc: self.inspector_iptc.take(),
+        }
+    }
+
+    fn put_tab(&mut self, t: TabState) {
+        self.folder = t.folder;
+        self.items = t.items;
+        self.marks = t.marks;
+        self.conflicts = t.conflicts;
+        self.exif = t.exif;
+        self.thumbs = t.thumbs;
+        self.thumb_err = t.thumb_err;
+        self.previews = t.previews;
+        self.preview_lru = t.preview_lru;
+        self.generation = t.generation;
+        self.cursor = t.cursor;
+        self.selection = t.selection;
+        self.view = t.view;
+        self.pos = t.pos;
+        self.filter = t.filter;
+        self.undo = t.undo;
+        self.cols = t.cols;
+        self.last_visible_rows = t.last_visible_rows;
+        self.stats = t.stats;
+        self.caption_draft = t.caption_draft;
+        self.inspector_iptc = t.inspector_iptc;
+        self.scroll_to_cursor = true;
+    }
+
+    pub fn switch_tab(&mut self, i: usize) {
+        if i >= self.tabs.len() || i == self.active {
+            return;
+        }
+        self.save_caption(false);
+        let parked = self.take_tab();
+        let cur = self.active;
+        self.tabs[cur].count = parked.items.len();
+        self.tabs[cur].state = Some(parked);
+        if let Some(next) = self.tabs[i].state.take() {
+            self.put_tab(next);
+        }
+        self.active = i;
+        self.pool.clear_pending();
+        if matches!(self.workspace, Workspace::Preview | Workspace::Caption)
+            && self.items.is_empty()
+        {
+            self.workspace = Workspace::Sheet;
+        }
+        self.remember_tabs();
+    }
+
+    pub fn close_tab(&mut self, i: usize) {
+        if i >= self.tabs.len() {
+            return;
+        }
+        if i == self.active {
+            self.save_caption(false);
+            let _ = self.take_tab();
+            self.pool.clear_pending();
+            self.tabs.remove(i);
+            if self.tabs.is_empty() {
+                self.active = 0;
+                self.workspace = Workspace::Sheet;
+            } else {
+                let next = i.min(self.tabs.len() - 1);
+                if let Some(st) = self.tabs[next].state.take() {
+                    self.put_tab(st);
+                }
+                self.active = next;
+            }
+        } else {
+            self.tabs.remove(i);
+            if i < self.active {
+                self.active -= 1;
+            }
+        }
+        self.remember_tabs();
+    }
+
+    /// Load `dir` into the active (empty or replaced) tab fields.
+    fn load_folder(&mut self, dir: &Path) {
         let t0 = Instant::now();
         match apature_core::scan(dir, &ScanOptions::default()) {
             Ok(items) => {
                 self.pool.clear_pending();
-                self.generation += 1;
+                self.next_generation += 1;
+                self.generation = self.next_generation;
                 let scheme = self.scheme.clone();
                 // Marks, conflicts and EXIF for every item up front: all three are
                 // cheap (sidecars are tiny, EXIF is a few page faults via mmap) and
@@ -597,9 +812,36 @@ impl App {
                 self.prefs.note_recent(dir);
                 self.prefs_dirty = true;
                 self.refresh_volumes();
+                if let Some(t) = self.tabs.get_mut(self.active) {
+                    t.count = n;
+                }
             }
-            Err(e) => self.status = format!("Could not open {}: {e}", dir.display()),
+            Err(e) => {
+                self.status = format!("Could not open {}: {e}", dir.display());
+                if self.tabs.get(self.active).is_some_and(|t| t.folder == dir) {
+                    self.tabs.remove(self.active);
+                    self.active = self.active.min(self.tabs.len().saturating_sub(1));
+                }
+            }
         }
+    }
+
+    /// The launch-time screenshot target, when one was requested.
+    pub fn screenshot_path(&self) -> Option<PathBuf> {
+        self.launch.screenshot.clone()
+    }
+
+    pub fn cache_dir(&self) -> PathBuf {
+        directories::ProjectDirs::from("dev", "mccal", "Apature")
+            .map(|d| d.cache_dir().join("thumbs"))
+            .unwrap_or_else(|| PathBuf::from("thumbs"))
+    }
+
+    /// The colour-class scheme changed in Settings: push it everywhere.
+    pub fn scheme_changed(&mut self) {
+        self.scheme = self.prefs.scheme.clone();
+        self.prefs_dirty = true;
+        self.platform.set_class_names(&self.scheme.names);
     }
 
     fn pick_folder(&mut self) {
@@ -1150,6 +1392,34 @@ impl App {
                     r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
             }
+            Command::CloseTab => {
+                let i = self.active;
+                self.close_tab(i);
+            }
+            Command::NextTab => {
+                if !self.tabs.is_empty() {
+                    let i = (self.active + 1) % self.tabs.len();
+                    self.switch_tab(i);
+                }
+            }
+            Command::PrevTab => {
+                if !self.tabs.is_empty() {
+                    let i = (self.active + self.tabs.len() - 1) % self.tabs.len();
+                    self.switch_tab(i);
+                }
+            }
+            Command::SelectTab(i) => self.switch_tab(i),
+            Command::OpenSettings => {
+                self.settings_open = true;
+                self.cache_size = None;
+            }
+            Command::ClearThumbCache => {
+                let dir = self.cache_dir();
+                let _ = std::fs::remove_dir_all(&dir);
+                let _ = std::fs::create_dir_all(&dir);
+                self.cache_size = Some((0, 0));
+                self.status = "Thumbnail cache cleared".into();
+            }
             Command::IngestOpenResult => {
                 let dest = self
                     .ingest
@@ -1234,8 +1504,14 @@ impl App {
                 if has_menu {
                     return;
                 }
-                if pressed(Key::O) {
+                if pressed(Key::O) || pressed(Key::T) {
                     out.push(Command::PickFolder);
+                }
+                if pressed(Key::W) {
+                    out.push(Command::CloseTab);
+                }
+                if pressed(Key::Comma) {
+                    out.push(Command::OpenSettings);
                 }
                 if pressed(Key::A) {
                     out.push(if shift {
@@ -1360,8 +1636,17 @@ impl App {
         self.frames += 1;
         if self.frames == self.launch.screenshot_frame && !self.screenshot_requested {
             self.screenshot_requested = true;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+            if self.launch.settings {
+                ctx.send_viewport_cmd_to(
+                    egui::ViewportId::from_hash_of("apature-settings"),
+                    egui::ViewportCommand::Screenshot(egui::UserData::default()),
+                );
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+            }
         }
+        // Screenshot events for every viewport (the Settings window included)
+        // arrive in the root input queue.
         let shot = ctx.input(|i| {
             i.events.iter().find_map(|e| match e {
                 egui::Event::Screenshot { image, .. } => Some(image.clone()),
@@ -1394,9 +1679,20 @@ impl eframe::App for App {
             };
             self.stats.frame_ms_max = self.stats.frame_ms_max.max(dt_ms);
         }
+        if self.applied_appearance != Some(self.prefs.appearance) {
+            ctx.set_theme(match self.prefs.appearance {
+                crate::prefs::Appearance::System => egui::ThemePreference::System,
+                crate::prefs::Appearance::Dark => egui::ThemePreference::Dark,
+                crate::prefs::Appearance::Light => egui::ThemePreference::Light,
+            });
+            self.applied_appearance = Some(self.prefs.appearance);
+        }
         let t = Theme::for_ctx(ctx);
         t.apply(ctx, self.reduce_motion);
         self.platform.on_first_frame();
+        if let Some(c) = self.dispatch_later.take() {
+            self.dispatch(ctx, c);
+        }
 
         self.drain_results(ctx);
         self.drain_ingest();
@@ -1412,6 +1708,8 @@ impl eframe::App for App {
             self.sync_caption_draft();
         }
         ui::toolbar::show(self, ctx, &t);
+        ui::tabs::show(self, ctx, &t);
+        ui::settings::show(self, ctx, &t);
         ui::status::show(self, ctx, &t);
         ui::sidebar::show(self, ctx, &t);
         match self.workspace {

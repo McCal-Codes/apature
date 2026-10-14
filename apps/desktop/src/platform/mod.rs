@@ -64,6 +64,15 @@ impl Platform {
         let _ = (sidebar, inspector, filmstrip, advance);
     }
 
+    pub fn set_class_names(&self, names: &[String; 8]) {
+        #[cfg(target_os = "macos")]
+        if let Some(m) = &self.menu {
+            m.set_class_names(names);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = names;
+    }
+
     /// System "Reduce Motion", read once at startup.
     pub fn reduce_motion() -> bool {
         #[cfg(target_os = "macos")]

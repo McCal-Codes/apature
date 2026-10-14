@@ -7,9 +7,11 @@ pub mod icons;
 pub mod ingest;
 pub mod inspector;
 pub mod preview;
+pub mod settings;
 pub mod sheet;
 pub mod sidebar;
 pub mod status;
+pub mod tabs;
 pub mod tokens;
 pub mod toolbar;
 

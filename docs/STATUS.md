@@ -55,7 +55,19 @@ Events.
 | Ingest workspace (⌘⇧4): volumes + folder as source, subfolders, only-new, file filter, primary/secondary pickers, folder and rename templates, headline (prefilled from the assignment), sequence start, optional pad-after-ingest, plan rebuilt on a worker thread on every change with collisions in red, Start disabled until clean, per-file ✓/✕ list with error text, cancel after current file, report, "Open the ingested folder" | implemented, verified in a screenshot (plan state); the run path verified through the CLI, not clicked in the GUI |
 | Drag and drop: a folder dropped on the window opens as a contact sheet; a file opens its folder with that photo focused; overlay while hovering | implemented, **not yet exercised** (needs a real drag; eframe's dropped_files API) |
 | Toolbar icons drawn with the painter (sidebar, inspector, funnel) instead of Unicode glyphs; app icon redrawn (variant B), bracket variant kept in assets | implemented, verified in screenshots |
+| Tabs: one contact sheet per tab (view, selection, filter, undo, caption draft per tab); ⌘O/⌘T open in a new tab, ⌘W closes, ⌘⇧]/⌘⇧[ cycle, strip under the toolbar with close boxes and "+"; open tabs restored at launch; a folder already open just switches to its tab | implemented, verified in a screenshot with three tabs |
+| Settings window (⌘,): appearance (system/dark/light), advance after mark, open folder after ingest, default thumbnail size; colour-class names and colours (menu items follow); assignment and code files, code delimiter; ingest defaults; thumbnail cache size and clear; shortcut table | implemented; **layout not yet reviewed** (child windows cannot be screenshotted by the app itself) |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
+
+## M6a notes (2026-10-14): tabs and settings
+
+* Tabs are in-app (Photo Mechanic style), not NSWindow tabs: the app is one
+  egui window, and per-folder state is swapped in and out of the `App`
+  fields (`TabState`) so the UI code did not change. Parked tabs keep their
+  textures; many large tabs will hold GPU memory until closed.
+* The Settings window is an egui immediate viewport (a real second window).
+* Changing a colour-class name renames the Image › Color Class menu items
+  live; existing sidecars keep their stored label until rewritten.
 
 ## M5 notes (2026-10-14)
 

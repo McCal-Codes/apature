@@ -35,7 +35,9 @@ bar. Marks are undoable (⌘Z), one entry per batch.
 | cell size | ⌘= ⌘- | conflicts with egui's UI zoom, which moves to Settings |
 | sidebar / inspector / filmstrip | ⌃⌘S / ⌥⌘I / ⇧F | HIG: also in View menu |
 | clear filters | ⌥⌘F | filter popup from the toolbar button |
-| open folder / ingest | ⌘O / ⌘⇧I | |
+| open folder in a new tab / new tab / close tab | ⌘O / ⌘T / ⌘W | Close Window is ⇧⌘W |
+| next / previous tab | ⌘⇧] / ⌘⇧[ | Safari convention |
+| ingest / settings | ⌘⇧I / ⌘, | |
 | save caption and advance | ⌘⏎ | Caption workspace |
 | undo / redo | ⌘Z / ⌘⇧Z | |
 | full screen | ⌃⌘F | system |
