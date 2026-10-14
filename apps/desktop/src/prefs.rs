@@ -7,6 +7,14 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Appearance {
+    #[default]
+    System,
+    Dark,
+    Light,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
@@ -24,6 +32,12 @@ pub struct Prefs {
     pub assignment_file: Option<PathBuf>,
     pub codes_file: Option<PathBuf>,
     pub ingest: Option<apature_ingest::Options>,
+    pub scheme: apature_core::ColorClassScheme,
+    pub appearance: Appearance,
+    pub open_tabs: Vec<PathBuf>,
+    pub active_tab: usize,
+    pub code_delimiter: char,
+    pub open_after_ingest: bool,
 }
 
 impl Default for Prefs {
@@ -43,6 +57,12 @@ impl Default for Prefs {
             assignment_file: None,
             codes_file: None,
             ingest: None,
+            scheme: apature_core::ColorClassScheme::default(),
+            appearance: Appearance::System,
+            open_tabs: Vec::new(),
+            active_tab: 0,
+            code_delimiter: '\\',
+            open_after_ingest: true,
         }
     }
 }

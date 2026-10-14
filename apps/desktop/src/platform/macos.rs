@@ -14,6 +14,7 @@ pub struct MenuBar {
     advance: CheckMenuItem,
     inspector: CheckMenuItem,
     filmstrip: CheckMenuItem,
+    class_items: Vec<MenuItem>,
 }
 
 fn item(cmd: Command, text: &str, acc: Option<Accelerator>) -> MenuItem {
@@ -51,7 +52,7 @@ impl MenuBar {
                 }),
             ),
             &PredefinedMenuItem::separator(),
-            &disabled("Settings… (M3)"),
+            &item(Command::OpenSettings, "Settings…", acc(cmd, Code::Comma)),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::hide(None),
             &PredefinedMenuItem::hide_others(None),
@@ -62,7 +63,13 @@ impl MenuBar {
 
         let file = Submenu::new("File", true);
         file.append_items(&[
-            &item(Command::PickFolder, "Open Folder…", acc(cmd, Code::KeyO)),
+            &item(
+                Command::PickFolder,
+                "Open Folder in New Tab…",
+                acc(cmd, Code::KeyO),
+            ),
+            &item(Command::PickFolder, "New Tab…", acc(cmd, Code::KeyT)),
+            &item(Command::CloseTab, "Close Tab", acc(cmd, Code::KeyW)),
             &item(Command::AddFavorite, "Add Folder to Favorites", None),
             &PredefinedMenuItem::separator(),
             &item(Command::LoadAssignment, "Load Assignment…", None),
@@ -76,7 +83,7 @@ impl MenuBar {
                 acc(cmd, Code::KeyR),
             ),
             &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::close_window(None),
+            &PredefinedMenuItem::close_window(Some("Close Window")),
         ])?;
 
         let edit = Submenu::new("Edit", true);
@@ -171,6 +178,7 @@ impl MenuBar {
 
         let class = Submenu::new("Color Class", true);
         let names = apature_core::ColorClassScheme::default().names;
+        let mut class_items = Vec::new();
         for (i, n) in names.iter().enumerate() {
             let code = [
                 Code::Digit1,
@@ -182,11 +190,13 @@ impl MenuBar {
                 Code::Digit7,
                 Code::Digit8,
             ][i];
-            class.append(&item(
+            let it = item(
                 Command::SetClass(i as u8 + 1),
                 &format!("{} {n}", i + 1),
                 Some(Accelerator::new(Modifiers::empty(), code)),
-            ))?;
+            );
+            class.append(&it)?;
+            class_items.push(it);
         }
         class.append_items(&[
             &PredefinedMenuItem::separator(),
@@ -257,6 +267,17 @@ impl MenuBar {
         window.append_items(&[
             &PredefinedMenuItem::minimize(None),
             &PredefinedMenuItem::maximize(None),
+            &PredefinedMenuItem::separator(),
+            &item(
+                Command::NextTab,
+                "Show Next Tab",
+                acc(cmd_shift, Code::BracketRight),
+            ),
+            &item(
+                Command::PrevTab,
+                "Show Previous Tab",
+                acc(cmd_shift, Code::BracketLeft),
+            ),
         ])?;
         let help = Submenu::new("Help", true);
         help.append(&disabled("Apature Help (M6)"))?;
@@ -271,6 +292,7 @@ impl MenuBar {
             inspector,
             filmstrip,
             advance,
+            class_items,
         })
     }
 
@@ -284,6 +306,12 @@ impl MenuBar {
         self.window.set_as_windows_menu_for_nsapp();
         self.help.set_as_help_menu_for_nsapp();
         self.installed = true;
+    }
+
+    pub fn set_class_names(&self, names: &[String; 8]) {
+        for (i, it) in self.class_items.iter().enumerate() {
+            it.set_text(format!("{} {}", i + 1, names[i]));
+        }
     }
 
     pub fn drain(&self) -> Vec<Command> {
