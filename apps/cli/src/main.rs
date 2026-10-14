@@ -117,6 +117,20 @@ enum Cmd {
         #[arg(long)]
         overwrite: bool,
     },
+    /// Rename photos in place with a template ({seqn} counts from --seq-start).
+    Rename {
+        paths: Vec<PathBuf>,
+        #[arg(long)]
+        template: String,
+        #[arg(long, default_value_t = 1)]
+        seq_start: u32,
+        #[arg(long)]
+        headline: Option<String>,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Move photos (all variants and sidecars) to the Trash.
+    Trash { paths: Vec<PathBuf> },
     Ingest {
         #[arg(long)]
         source: PathBuf,
@@ -194,6 +208,14 @@ fn main() -> Result<()> {
         } => cmd_export(
             paths, out, long, quality, rename, assignment, no_iim, no_exif, decode_raw, overwrite,
         ),
+        Cmd::Rename {
+            paths,
+            template,
+            seq_start,
+            headline,
+            dry_run,
+        } => cmd_rename(paths, template, seq_start, headline, dry_run),
+        Cmd::Trash { paths } => cmd_trash(paths),
         Cmd::Ingest {
             source,
             primary,
@@ -595,28 +617,9 @@ fn mark(file: &Path, rating: Option<i8>, class: Option<u8>, tag: Option<bool>) -
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_export(
-    paths: Vec<PathBuf>,
-    out: PathBuf,
-    long: u32,
-    quality: u8,
-    rename: Option<String>,
-    assignment: Option<PathBuf>,
-    no_iim: bool,
-    no_exif: bool,
-    decode_raw: bool,
-    overwrite: bool,
-) -> Result<()> {
-    use apature_ingest::plan::facts_for;
-    use apature_ingest::template::expand;
-    let pad = match assignment {
-        Some(p) => Some(apature_metadata::stationery::Assignment::parse(
-            &std::fs::read_to_string(p)?,
-        )?),
-        None => None,
-    };
-    // Group the requested files by folder; a folder means all of it.
+/// Photos named by `paths`: a folder means every photo in it, a file means
+/// the photo (pair) it belongs to.
+fn items_for_paths(paths: Vec<PathBuf>) -> Result<Vec<apature_core::PhotoItem>> {
     let mut items: Vec<apature_core::PhotoItem> = Vec::new();
     let mut dirs: Vec<(PathBuf, Option<Vec<PathBuf>>)> = Vec::new();
     for p in paths {
@@ -642,6 +645,96 @@ fn cmd_export(
             }
         }
     }
+    Ok(items)
+}
+
+/// Rename photos in place with a template; every variant and the sidecar move together.
+fn cmd_rename(
+    paths: Vec<PathBuf>,
+    template: String,
+    seq_start: u32,
+    headline: Option<String>,
+    dry_run: bool,
+) -> Result<()> {
+    use apature_ingest::plan::facts_for;
+    use apature_ingest::template::expand;
+    let items = items_for_paths(paths)?;
+    if items.is_empty() {
+        anyhow::bail!("nothing to rename");
+    }
+    let stems: Vec<String> = items
+        .iter()
+        .enumerate()
+        .map(|(i, it)| {
+            let facts = facts_for(it, it.path(), headline.as_deref());
+            expand(&template, &facts, seq_start + i as u32)
+        })
+        .collect();
+    let pairs: Vec<(&apature_core::PhotoItem, String)> = items.iter().zip(stems).collect();
+    let plan = apature_core::fileops::plan_rename(&pairs)?;
+    for (from, to) in &plan.moves {
+        println!(
+            "  {}  →  {}",
+            from.display(),
+            to.file_name().unwrap_or_default().to_string_lossy()
+        );
+    }
+    for (p, why) in &plan.collisions {
+        println!("  ✕ {}  {why}", p.display());
+    }
+    if !plan.can_run() {
+        anyhow::bail!("{} collision(s); nothing renamed", plan.collisions.len());
+    }
+    if dry_run {
+        println!("dry run: {} files would be renamed", plan.moves.len());
+        return Ok(());
+    }
+    let done = apature_core::fileops::rename(&plan)?;
+    println!("renamed {} files", done.len());
+    Ok(())
+}
+
+/// Move photos (every variant and the sidecar) to the Trash.
+fn cmd_trash(paths: Vec<PathBuf>) -> Result<()> {
+    let items = items_for_paths(paths)?;
+    let files: Vec<PathBuf> = items
+        .iter()
+        .flat_map(apature_core::fileops::item_files)
+        .collect();
+    for f in &files {
+        println!("  → Trash: {}", f.display());
+    }
+    apature_core::fileops::trash(&files)?;
+    println!(
+        "moved {} photos ({} files) to the Trash",
+        items.len(),
+        files.len()
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_export(
+    paths: Vec<PathBuf>,
+    out: PathBuf,
+    long: u32,
+    quality: u8,
+    rename: Option<String>,
+    assignment: Option<PathBuf>,
+    no_iim: bool,
+    no_exif: bool,
+    decode_raw: bool,
+    overwrite: bool,
+) -> Result<()> {
+    use apature_ingest::plan::facts_for;
+    use apature_ingest::template::expand;
+    let pad = match assignment {
+        Some(p) => Some(apature_metadata::stationery::Assignment::parse(
+            &std::fs::read_to_string(p)?,
+        )?),
+        None => None,
+    };
+    let items = items_for_paths(paths)?;
     if items.is_empty() {
         anyhow::bail!("nothing to export");
     }

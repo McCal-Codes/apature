@@ -61,7 +61,7 @@ for the owner's deadline workflow (Butler Eagle / TribLive).
 | Metadata | Metadata (IPTC) template / stationery pad, variables, code replacements, hot codes, structured keywords panel, GPS, batch apply, "Set Sequence Variable", copy/paste metadata | have pad, codes, variables, caption workspace; no keywords panel, no GPS, no copy/paste metadata | **copy/paste metadata between frames**, persistent sequence (3) |
 | Save As / Export | resize, JPEG quality, sRGB, keep/strip metadata, watermark, rename on export, "Send photos to" | **have (M7)**: resize, quality, EXIF/XMP/IIM/ICC, rename; no sRGB conversion, no watermark | done except colour conversion and watermark |
 | Delivery | FTP/SFTP upload, email, Send to, Dropbox folder | nothing | FTP/SFTP after export (5) |
-| File ops | copy/move/rename/delete to trash, "Rename Photos" tool with variables | ingest copy only | **rename in place (batch) and move-to-trash** (3) |
+| File ops | copy/move/rename/delete to trash, "Rename Photos" tool with variables | rename in place with the template engine, move to Trash (M9); no move/copy between folders | copy/move to folder later |
 | Live Ingest | watched folders | nothing | after export; pairs with the camera idea (6) |
 | Colour | ICC display, embedded preview colour space | none | ICC-aware preview (4) |
 | Catalog (Plus) | catalogs, collections, search | nothing | later |

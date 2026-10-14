@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- B: Snap — two eyes above a lens belly, waving arm -->
+  <rect width="512" height="512" fill="#1B1B1F"/>
+  <!-- waving arm -->
+  <path d="M398 262 Q450 230 440 170" fill="none" stroke="#BDB4EE" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="440" cy="166" r="22" fill="#BDB4EE"/>
+  <!-- other arm -->
+  <path d="M114 290 Q80 320 92 352" fill="none" stroke="#BDB4EE" stroke-width="30" stroke-linecap="round"/>
+  <!-- legs -->
+  <rect x="186" y="394" width="36" height="54" rx="16" fill="#BDB4EE"/>
+  <rect x="290" y="394" width="36" height="54" rx="16" fill="#BDB4EE"/>
+  <!-- body -->
+  <rect x="108" y="146" width="296" height="260" rx="56" fill="#26262B"/>
+  <rect x="108.5" y="146.5" width="295" height="259" rx="56" fill="none" stroke="#FFFFFF" stroke-opacity="0.12"/>
+  <!-- prism -->
+  <rect x="210" y="112" width="92" height="46" rx="14" fill="#26262B"/>
+  <rect x="340" y="124" width="38" height="24" rx="8" fill="#BDB4EE"/>
+  <!-- eyes -->
+  <circle cx="206" cy="206" r="18" fill="#FFFFFF"/>
+  <circle cx="306" cy="206" r="18" fill="#FFFFFF"/>
+  <circle cx="211" cy="209" r="9" fill="#15151A"/>
+  <circle cx="311" cy="209" r="9" fill="#15151A"/>
+  <!-- cheeks -->
+  <circle cx="166" cy="236" r="10" fill="#F2A6C9" fill-opacity="0.9"/>
+  <circle cx="346" cy="236" r="10" fill="#F2A6C9" fill-opacity="0.9"/>
+  <!-- smile -->
+  <path d="M238 236 Q256 250 274 236" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+  <!-- lens belly -->
+  <circle cx="256" cy="318" r="66" fill="#E2DDFB"/>
+  <circle cx="256" cy="318" r="50" fill="#BDB4EE"/>
+  <circle cx="256" cy="318" r="30" fill="#15151A"/>
+  <circle cx="268" cy="306" r="9" fill="#FFFFFF"/>
+</svg>
