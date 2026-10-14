@@ -35,6 +35,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         Workspace::Preview,
                         Workspace::Caption,
                         Workspace::Ingest,
+                        Workspace::Export,
                     ] {
                         let selected = app.workspace == w;
                         match w.available() {

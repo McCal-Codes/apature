@@ -85,6 +85,17 @@ pub struct IngestState {
     pub apply_pad: bool,
 }
 
+/// Export workspace state; settings live in `Prefs::export`.
+#[derive(Default)]
+pub struct ExportState {
+    /// Export everything in the view rather than the selection.
+    pub scope_all: bool,
+    pub running: Option<crate::export_job::Running>,
+    /// Planned (item index, output path) for the current scope and names.
+    pub names: Vec<(usize, PathBuf)>,
+    names_key: Option<(Vec<usize>, String, PathBuf, Option<String>)>,
+}
+
 #[derive(Default)]
 pub struct Stats {
     pub thumbs_done: usize,
@@ -133,6 +144,8 @@ pub struct App {
     pub assignment: Option<Assignment>,
     pub codes: CodeTable,
     pub ingest: IngestState,
+    pub export: ExportState,
+    export_jobs: crate::export_job::ExportJobs,
     ingest_jobs: IngestJobs,
     /// Files currently being dragged over the window, for the drop overlay.
     pub drag_hover: usize,
@@ -164,7 +177,7 @@ pub struct App {
     last_status: String,
     launch: Launch,
     quit_after_frame: bool,
-    ingest_run_done: bool,
+    run_done: bool,
     frames: u64,
     screenshot_requested: bool,
 }
@@ -221,6 +234,8 @@ impl App {
             assignment: None,
             codes: CodeTable::default(),
             ingest: IngestState::default(),
+            export: ExportState::default(),
+            export_jobs: crate::export_job::ExportJobs::new(cc.egui_ctx.clone()),
             ingest_jobs: IngestJobs::new(cc.egui_ctx.clone(), ledger_path),
             drag_hover: 0,
             inspector_iptc: None,
@@ -245,7 +260,7 @@ impl App {
             last_status: String::new(),
             launch: launch.clone(),
             quit_after_frame: false,
-            ingest_run_done: false,
+            run_done: false,
             frames: 0,
             screenshot_requested: false,
         };
@@ -312,7 +327,165 @@ impl App {
             app.workspace = Workspace::Ingest;
             app.ingest_options_changed();
         }
+        if launch.export {
+            app.workspace = Workspace::Export;
+            app.export.scope_all = true;
+            if let Some(d) = launch.export_dest.clone() {
+                app.prefs.export.dest = Some(d);
+            }
+            if launch.export_run {
+                app.dispatch_later = Some(Command::ExportStart);
+            }
+        }
         app
+    }
+
+    // ----- export ------------------------------------------------------------
+
+    fn export_targets(&self) -> Vec<usize> {
+        if self.export.scope_all {
+            self.view.clone()
+        } else {
+            self.selection.targets(self.cursor)
+        }
+    }
+
+    /// Planned output paths for the current scope, names and destination.
+    /// Cached on those inputs so the workspace can show them every frame.
+    pub fn export_names(&mut self) -> Vec<(usize, PathBuf)> {
+        let Some(dest) = self.prefs.export.dest.clone() else {
+            return Vec::new();
+        };
+        let targets = self.export_targets();
+        let headline = self.assignment.as_ref().map(|a| a.slug.clone());
+        let key = (
+            targets.clone(),
+            self.prefs.export.rename.clone(),
+            dest.clone(),
+            headline.clone(),
+        );
+        if self.export.names_key.as_ref() == Some(&key) {
+            return self.export.names.clone();
+        }
+        let template = self.prefs.export.rename.trim().to_string();
+        let mut names = Vec::with_capacity(targets.len());
+        for (i, &idx) in targets.iter().enumerate() {
+            let it = &self.items[idx];
+            let mut facts = apature_ingest::plan::facts_for(it, it.path(), headline.as_deref());
+            facts.ext = "jpg".into();
+            let name = if template.is_empty() {
+                format!("{}.jpg", facts.stem)
+            } else {
+                apature_ingest::template::expand(&template, &facts, (i + 1) as u32)
+            };
+            let name = if name.to_lowercase().ends_with(".jpg") {
+                name
+            } else {
+                format!("{name}.jpg")
+            };
+            names.push((idx, dest.join(name)));
+        }
+        self.export.names = names.clone();
+        self.export.names_key = Some(key);
+        names
+    }
+
+    fn export_start(&mut self) {
+        let Some(dest) = self.prefs.export.dest.clone() else {
+            return;
+        };
+        if self.export.running.as_ref().is_some_and(|r| !r.finished) {
+            return;
+        }
+        let names = self.export_names();
+        if names.is_empty() {
+            if self.launch.export_run {
+                eprintln!("export-run: nothing to export");
+                self.finish_headless_run();
+            }
+            return;
+        }
+        let pad = self.assignment.as_ref().map(|a| a.iptc());
+        let jobs = names
+            .iter()
+            .map(|(idx, out)| crate::export_job::Job {
+                item: self.items[*idx].clone(),
+                out: out.clone(),
+                pad: pad.clone(),
+            })
+            .collect();
+        let settings = apature_export::Settings {
+            long_side: self.prefs.export.long_side,
+            quality: self.prefs.export.quality,
+            keep_exif: self.prefs.export.keep_exif,
+            write_iim: self.prefs.export.write_iim,
+            ..Default::default()
+        };
+        if self.launch.export_run {
+            eprintln!("export-run: {} files to {}", names.len(), dest.display());
+        }
+        self.export.running = Some(self.export_jobs.start(jobs, settings, dest));
+        self.status = "Exporting…".into();
+    }
+
+    fn drain_export(&mut self) {
+        use crate::export_job::{Msg as EMsg, Status as EStatus};
+        while let Some(msg) = self.export_jobs.try_recv() {
+            let finished = {
+                let Some(r) = self.export.running.as_mut() else {
+                    continue;
+                };
+                match msg {
+                    EMsg::Started { index } => {
+                        if let Some(s) = r.statuses.get_mut(index) {
+                            *s = EStatus::Working;
+                        }
+                        None
+                    }
+                    EMsg::Done { index, result } => {
+                        match result {
+                            Ok(o) => {
+                                r.ok += 1;
+                                r.bytes += o.bytes;
+                                r.outs[index] = Some(o.out);
+                                r.statuses[index] = EStatus::Done;
+                            }
+                            Err(e) => {
+                                r.failed += 1;
+                                r.errors[index] = Some(e);
+                                r.statuses[index] = EStatus::Failed;
+                            }
+                        }
+                        None
+                    }
+                    EMsg::Finished => {
+                        r.finished = true;
+                        r.done_since = Some(Instant::now());
+                        let errors: Vec<String> = r.errors.iter().flatten().cloned().collect();
+                        Some((r.ok, r.failed, r.dest.clone(), errors))
+                    }
+                }
+            };
+            if let Some((ok, failed, dest, errors)) = finished {
+                self.status = if failed == 0 {
+                    format!(
+                        "Export complete: {ok} JPEG{}",
+                        if ok == 1 { "" } else { "s" }
+                    )
+                } else {
+                    format!("Export finished with {failed} failed file(s)")
+                };
+                if self.launch.export_run {
+                    eprintln!("export-run: {ok} ok, {failed} failed");
+                    for e in &errors {
+                        eprintln!("export-run: {e}");
+                    }
+                    self.finish_headless_run();
+                } else if failed == 0 && self.prefs.export.open_after {
+                    self.dispatch_later = Some(Command::OpenFolder(dest));
+                }
+            }
+        }
     }
 
     // ----- ingest ------------------------------------------------------------
@@ -369,14 +542,14 @@ impl App {
                                     p.entries.len(),
                                     p.collisions.len()
                                 );
-                                self.finish_ingest_run();
+                                self.finish_headless_run();
                             }
                             None => {
                                 eprintln!(
                                     "ingest-run: plan failed: {}",
                                     self.ingest.plan_error.as_deref().unwrap_or("?")
                                 );
-                                self.finish_ingest_run();
+                                self.finish_headless_run();
                             }
                         }
                     }
@@ -459,7 +632,7 @@ impl App {
                             }
                         }
                         if !self.ingest.apply_pad {
-                            self.finish_ingest_run();
+                            self.finish_headless_run();
                         }
                     }
                 }
@@ -469,7 +642,7 @@ impl App {
                     }
                     if self.launch.ingest_run {
                         eprintln!("ingest-run: pad applied to {files} files, {failed} failed");
-                        self.finish_ingest_run();
+                        self.finish_headless_run();
                     }
                     if self.prefs.open_after_ingest {
                         self.dispatch_later = Some(Command::IngestOpenResult);
@@ -481,8 +654,8 @@ impl App {
 
     /// `--ingest-run` is over: screenshot the finished workspace a moment
     /// later when asked for, otherwise quit now.
-    fn finish_ingest_run(&mut self) {
-        self.ingest_run_done = true;
+    fn finish_headless_run(&mut self) {
+        self.run_done = true;
         if self.launch.screenshot.is_some() {
             self.frames = self.launch.screenshot_frame.saturating_sub(30);
             self.screenshot_requested = false;
@@ -1545,6 +1718,24 @@ impl App {
                     self.ingest_options_changed();
                 }
             }
+            Command::ExportChooseDest => {
+                if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                    self.prefs.export.dest = Some(p);
+                    self.prefs_dirty = true;
+                }
+            }
+            Command::ExportStart => self.export_start(),
+            Command::ExportCancel => {
+                if let Some(r) = &self.export.running {
+                    r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            Command::ExportOpenResult => {
+                if let Some(d) = self.export.running.as_ref().map(|r| r.dest.clone()) {
+                    self.export.running = None;
+                    self.open_folder(&d);
+                }
+            }
             Command::IngestStart => self.ingest_start(),
             Command::IngestCancel => {
                 if let Some(r) = &self.ingest.running {
@@ -1809,7 +2000,7 @@ impl App {
         let Some(path) = self.launch.screenshot.clone() else {
             return;
         };
-        if self.launch.ingest_run && !self.ingest_run_done {
+        if (self.launch.ingest_run || self.launch.export_run) && !self.run_done {
             // Hold the screenshot until the run has reported.
             ctx.request_repaint();
             return;
@@ -1882,6 +2073,8 @@ impl eframe::App for App {
         let ingest_live =
             self.ingest.running.as_ref().is_some_and(|r| {
                 r.started.elapsed().as_secs_f32() < 0.6 || live(r.done_since, 0.6)
+            }) || self.export.running.as_ref().is_some_and(|r| {
+                r.started.elapsed().as_secs_f32() < 0.6 || live(r.done_since, 0.6)
             });
         if !self.reduce_motion
             && (live(self.sheet_fade_since, 0.16)
@@ -1904,6 +2097,7 @@ impl eframe::App for App {
 
         self.drain_results(ctx);
         self.drain_ingest();
+        self.drain_export();
         self.handle_drops(ctx);
         for c in self.platform.drain_menu() {
             self.dispatch(ctx, c);
@@ -1922,7 +2116,7 @@ impl eframe::App for App {
         ui::sidebar::show(self, ctx, &t);
         match self.workspace {
             Workspace::Caption => ui::caption::show_fields(self, ctx, &t),
-            Workspace::Ingest => {}
+            Workspace::Ingest | Workspace::Export => {}
             _ => ui::inspector::show(self, ctx, &t),
         }
         ui::filmstrip::show(self, ctx, &t);
@@ -1956,6 +2150,7 @@ impl eframe::App for App {
                     Workspace::Preview => ui::preview::show(self, ui, &t),
                     Workspace::Caption => ui::caption::show_photo(self, ui, &t),
                     Workspace::Ingest => ui::ingest::show(self, ui, &t),
+                    Workspace::Export => ui::export::show(self, ui, &t),
                 }
             });
         let r = ctx.content_rect();

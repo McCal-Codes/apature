@@ -58,7 +58,7 @@ named. Needs: folder watching (`notify`), a daemon mode for the CLI, and
 the erase/unmount gates designed first.
 
 ## From the Photo Mechanic gap analysis (docs/research/pm-feature-gap.md, 2026-10-14)
-1. Export / Save As (M7) — resize, quality, sRGB, keep metadata + IIM, rename, batch.
+1. ~~Export / Save As (M7)~~ done 2026-10-14: resize, quality, keep EXIF/XMP/IIM/ICC, rename, batch. Left: sRGB conversion, presets per outlet, watermark.
 2. Preview 1:1 + pan, compare view.
 3. Rename in place, move to trash, copy/paste metadata, persistent {seqn} counters.
 4. Ingest polish: card-mount trigger, unmount, preserve structure, WAV companions, auto-suffix, open sheet while ingesting, multi-source.

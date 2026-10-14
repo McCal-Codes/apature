@@ -1,11 +1,13 @@
 //! Apature desktop. `apature [folder] [--theme dark|light] [--screenshot out.png [--frames N]]`
-//! `--ingest-run --ingest-source <card> --ingest-dest <dir>` ingests headlessly and reports.
+//! `--ingest-run --ingest-source <card> --ingest-dest <dir>` ingests headlessly and reports;
+//! `--export-run --export-dest <dir>` does the same for export.
 //!
 //! The screenshot flags exist so the shell can be checked visually in both
 //! appearances without a bundled app or screen-recording permission.
 
 mod app;
 mod commands;
+mod export_job;
 mod filter;
 mod ingest_job;
 mod platform;
@@ -37,6 +39,11 @@ pub struct Launch {
     /// quit (or screenshot first when `--screenshot` is given). End-to-end
     /// check of the real app path without a mouse.
     pub ingest_run: bool,
+    /// Start in the Export workspace, all photos in view, optional destination.
+    pub export: bool,
+    pub export_dest: Option<PathBuf>,
+    /// Export at once, print the report, then quit (or screenshot first).
+    pub export_run: bool,
     /// Open the Settings window at start (screenshots).
     pub settings: bool,
     /// Extra folders to open as tabs.
@@ -64,6 +71,12 @@ fn parse_args() -> Launch {
             "--ingest" => l.ingest = true,
             "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
             "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),
+            "--export" => l.export = true,
+            "--export-dest" => l.export_dest = args.next().map(PathBuf::from),
+            "--export-run" => {
+                l.export = true;
+                l.export_run = true;
+            }
             "--ingest-run" => {
                 l.ingest = true;
                 l.ingest_run = true;
