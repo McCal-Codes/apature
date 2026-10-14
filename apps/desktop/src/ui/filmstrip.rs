@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::commands::Command;
 
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
-    if !app.prefs.filmstrip_visible || app.items.is_empty() {
+    if !app.prefs.filmstrip_visible || app.view.is_empty() {
         return;
     }
     let mut cmds = Vec::new();
@@ -70,7 +70,11 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         )
                     });
                     if resp.clicked() {
-                        cmds.push(Command::Move(idx as isize - app.cursor as isize));
+                        cmds.push(Command::Click {
+                            idx,
+                            shift: false,
+                            command: false,
+                        });
                     }
                 }
             });

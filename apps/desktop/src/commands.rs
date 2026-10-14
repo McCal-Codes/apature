@@ -34,6 +34,27 @@ impl Workspace {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     OpenFolder(PathBuf),
+    /// Click on a cell with modifiers.
+    Click {
+        idx: usize,
+        shift: bool,
+        command: bool,
+    },
+    /// Keyboard focus move by `delta` positions in the view, with modifiers.
+    MoveFocus {
+        delta: isize,
+        shift: bool,
+        command: bool,
+    },
+    SelectAll,
+    SelectNone,
+    Undo,
+    Redo,
+    SetFilter(crate::filter::Filter),
+    ClearFilter(Option<crate::filter::Clause>),
+    SetSort(crate::filter::Sort),
+    ToggleSortReversed,
+    ToggleAdvanceAfterMark,
     PickFolder,
     AddFavorite,
     RemoveFavorite(PathBuf),
@@ -66,6 +87,14 @@ impl Command {
             Command::ToggleInspector => "view.inspector".into(),
             Command::ToggleFilmstrip => "view.filmstrip".into(),
             Command::SetWorkspace(w) => format!("view.workspace.{}", w.label().to_lowercase()),
+            Command::SelectAll => "edit.selectall".into(),
+            Command::SelectNone => "edit.selectnone".into(),
+            Command::Undo => "edit.undo".into(),
+            Command::Redo => "edit.redo".into(),
+            Command::ClearFilter(None) => "view.clearfilter".into(),
+            Command::SetSort(s) => format!("view.sort.{}", s.label().replace(' ', "")),
+            Command::ToggleSortReversed => "view.sortreversed".into(),
+            Command::ToggleAdvanceAfterMark => "image.advance".into(),
             Command::ZoomIn => "view.zoomin".into(),
             Command::ZoomOut => "view.zoomout".into(),
             Command::SetRating(r) => format!("image.rating.{r}"),
@@ -87,11 +116,24 @@ impl Command {
             "view.workspace.preview" => Command::SetWorkspace(Workspace::Preview),
             "view.workspace.caption" => Command::SetWorkspace(Workspace::Caption),
             "view.workspace.ingest" => Command::SetWorkspace(Workspace::Ingest),
+            "edit.selectall" => Command::SelectAll,
+            "edit.selectnone" => Command::SelectNone,
+            "edit.undo" => Command::Undo,
+            "edit.redo" => Command::Redo,
+            "view.clearfilter" => Command::ClearFilter(None),
+            "view.sortreversed" => Command::ToggleSortReversed,
+            "image.advance" => Command::ToggleAdvanceAfterMark,
             "view.zoomin" => Command::ZoomIn,
             "view.zoomout" => Command::ZoomOut,
             "image.tag" => Command::ToggleTag,
             _ => {
-                if let Some(r) = id.strip_prefix("image.rating.") {
+                if let Some(k) = id.strip_prefix("view.sort.") {
+                    Command::SetSort(
+                        *crate::filter::Sort::ALL
+                            .iter()
+                            .find(|s| s.label().replace(' ', "") == k)?,
+                    )
+                } else if let Some(r) = id.strip_prefix("image.rating.") {
                     Command::SetRating(r.parse().ok()?)
                 } else if let Some(c) = id.strip_prefix("image.class.") {
                     Command::SetClass(c.parse().ok()?)

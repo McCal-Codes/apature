@@ -55,13 +55,13 @@ impl Platform {
     }
 
     /// Reflect the state of toggles in the menu (checkmarks).
-    pub fn sync_toggles(&self, sidebar: bool, inspector: bool, filmstrip: bool) {
+    pub fn sync_toggles(&self, sidebar: bool, inspector: bool, filmstrip: bool, advance: bool) {
         #[cfg(target_os = "macos")]
         if let Some(m) = &self.menu {
-            m.sync_toggles(sidebar, inspector, filmstrip);
+            m.sync_toggles(sidebar, inspector, filmstrip, advance);
         }
         #[cfg(not(target_os = "macos"))]
-        let _ = (sidebar, inspector, filmstrip);
+        let _ = (sidebar, inspector, filmstrip, advance);
     }
 
     /// System "Reduce Motion", read once at startup.

@@ -45,7 +45,18 @@ Events.
 | Reduce Motion read at startup → animation time 0 | implemented, not tested with the setting on |
 | App icon (assets/icon.svg → icon-256.png, Apature.icns) as window/Dock icon | implemented; Dock shows it when launched; the app-menu title still reads as the launching process until an .app bundle exists (M6) |
 | SF Pro / SF Mono at runtime | **not loaded**: the system variable fonts fail ab_glyph validation, so egui's bundled fonts are used (visible in screenshots) |
-| Multi-select, filters, sort, undo | M3 |
+| Selection separate from focus: click, ⇧-range in view order, ⌘-toggle, ⌘-arrows keep, ⌘A/⌘⇧A; marks apply to the selection when the focused item is in it; "mixed" shown in the inspector | implemented, **unit-tested** (`selection.rs`), verified in a demo screenshot |
+| Filters: rating ≥, hide rejected, classes, tag, pairs; chips in the toolbar; "showing x of y" | implemented, unit-tested (`filter.rs`), verified in screenshot |
+| Sort: name, capture time, rating, class, reverse; EXIF read for all items at open | implemented, unit-tested |
+| Undo/redo, one entry per action (⌘Z/⌘⇧Z, Edit menu) | implemented, unit-tested (`undo.rs`); writes files on undo |
+| Advance after mark (Image menu toggle, shown in the status bar) | implemented |
+
+## M3 notes (2026-10-14)
+
+Batch writes are synchronous on the UI thread: marking 100 selected pairs
+writes 200 files (~ms each). Acceptable for now; a background writer with a
+progress row is the fix when it is felt. Workspace shortcuts moved to ⌘⇧1/⌘⇧2
+because ⌘1–5 are Photo Mechanic's ratings.
 
 ## Previous probe (superseded)
 

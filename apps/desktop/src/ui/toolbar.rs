@@ -1,8 +1,9 @@
 use egui::{Align, Layout, RichText};
 
-use super::tokens::{Theme, S3, S4, TOOLBAR_H};
+use super::tokens::{Theme, S2, S3, S4, TOOLBAR_H};
 use crate::app::App;
 use crate::commands::{Command, Workspace};
+use crate::filter::{Filter, Sort};
 
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
     let mut cmds = Vec::new();
@@ -26,7 +27,6 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 if sb.clicked() {
                     cmds.push(Command::ToggleSidebar);
                 }
-                // Workspace switcher.
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
                     for w in [
@@ -52,10 +52,172 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         }
                     }
                 });
-                ui.add_enabled(false, egui::Button::new("Filter"))
-                    .on_disabled_hover_text("Filtering by rating, class and tag arrives in M3");
-                ui.add_enabled(false, egui::Button::new("Sort: name ▾"))
-                    .on_disabled_hover_text("Sort by capture time arrives in M3");
+
+                // Filter button + popup, then one chip per active clause.
+                let active = app.filter.is_active();
+                let fb = ui
+                    .add(
+                        egui::Button::new(if active { "Filter ●" } else { "Filter" })
+                            .selected(active),
+                    )
+                    .on_hover_text("Filter by rating, class, tag (⌥⌘F clears)");
+                if fb.clicked() {
+                    app.filter_popup_open = !app.filter_popup_open;
+                }
+                if app.filter_popup_open {
+                    let mut draft = app.filter.clone();
+                    let mut changed = false;
+                    let area = egui::Area::new(egui::Id::new("filter_popup"))
+                        .order(egui::Order::Foreground)
+                        .fixed_pos(fb.rect.left_bottom() + egui::vec2(0.0, S2))
+                        .show(ctx, |ui| {
+                            egui::Frame::popup(ui.style())
+                                .fill(t.raised)
+                                .show(ui, |ui| {
+                                    ui.set_width(260.0);
+                                    ui.spacing_mut().item_spacing.y = S2;
+                                    super::eyebrow(ui, t, "Rating at least");
+                                    ui.horizontal(|ui| {
+                                        for r in 0..=5u8 {
+                                            let on = draft.min_rating.unwrap_or(0) == r;
+                                            let label = if r == 0 {
+                                                "any".to_string()
+                                            } else {
+                                                "★".repeat(r as usize)
+                                            };
+                                            if ui.selectable_label(on, label).clicked() {
+                                                draft.min_rating =
+                                                    if r == 0 { None } else { Some(r) };
+                                                changed = true;
+                                            }
+                                        }
+                                    });
+                                    if ui
+                                        .checkbox(&mut draft.hide_rejected, "Hide rejected")
+                                        .changed()
+                                    {
+                                        changed = true;
+                                    }
+                                    ui.add_space(S2);
+                                    super::eyebrow(ui, t, "Color class");
+                                    ui.horizontal_wrapped(|ui| {
+                                        for c in 0..=8u8 {
+                                            let on = draft.classes.contains(&c);
+                                            let (label, color) = if c == 0 {
+                                                ("none".to_string(), t.muted)
+                                            } else {
+                                                let cc = apature_core::ColorClass(c);
+                                                (
+                                                    format!(
+                                                        "{c} {}",
+                                                        app.scheme.name(cc).unwrap_or("")
+                                                    ),
+                                                    t.class_color(&app.scheme, cc)
+                                                        .unwrap_or(t.muted),
+                                                )
+                                            };
+                                            if ui
+                                                .selectable_label(
+                                                    on,
+                                                    RichText::new(format!("● {label}"))
+                                                        .color(color),
+                                                )
+                                                .clicked()
+                                            {
+                                                if on {
+                                                    draft.classes.remove(&c);
+                                                } else {
+                                                    draft.classes.insert(c);
+                                                }
+                                                changed = true;
+                                            }
+                                        }
+                                    });
+                                    ui.add_space(S2);
+                                    super::eyebrow(ui, t, "Tag");
+                                    ui.horizontal(|ui| {
+                                        for (v, label) in [
+                                            (None, "any"),
+                                            (Some(true), "tagged"),
+                                            (Some(false), "untagged"),
+                                        ] {
+                                            if ui
+                                                .selectable_label(draft.tagged == v, label)
+                                                .clicked()
+                                            {
+                                                draft.tagged = v;
+                                                changed = true;
+                                            }
+                                        }
+                                    });
+                                    if ui
+                                        .checkbox(&mut draft.pairs_only, "RAW+JPEG pairs only")
+                                        .changed()
+                                    {
+                                        changed = true;
+                                    }
+                                    ui.add_space(S2);
+                                    ui.horizontal(|ui| {
+                                        if ui.button("Clear").clicked() {
+                                            draft = Filter::default();
+                                            changed = true;
+                                        }
+                                        if ui.button("Done").clicked() {
+                                            app.filter_popup_open = false;
+                                        }
+                                    });
+                                });
+                        });
+                    if changed {
+                        cmds.push(Command::SetFilter(draft));
+                    }
+                    if ctx.input(|i| i.pointer.any_click())
+                        && !area.response.hovered()
+                        && !fb.hovered()
+                    {
+                        app.filter_popup_open = false;
+                    }
+                }
+                for (label, clause) in app.filter.chips(&app.scheme) {
+                    let chip = ui.add(
+                        egui::Button::new(
+                            RichText::new(format!("{label}  ×"))
+                                .size(12.0)
+                                .color(t.accent),
+                        )
+                        .fill(t.accent_wash)
+                        .stroke(egui::Stroke::new(1.0, t.accent)),
+                    );
+                    if chip.on_hover_text("Remove this filter").clicked() {
+                        cmds.push(Command::ClearFilter(Some(clause)));
+                    }
+                }
+
+                // Sort.
+                let sort_label = format!(
+                    "Sort: {}{}",
+                    app.prefs.sort.label(),
+                    if app.prefs.sort_reversed { " ↓" } else { "" }
+                );
+                egui::ComboBox::from_id_salt("sort")
+                    .selected_text(sort_label)
+                    .show_ui(ui, |ui| {
+                        for s in Sort::ALL {
+                            if ui
+                                .selectable_label(app.prefs.sort == s, s.label())
+                                .clicked()
+                            {
+                                cmds.push(Command::SetSort(s));
+                            }
+                        }
+                        ui.separator();
+                        if ui
+                            .selectable_label(app.prefs.sort_reversed, "reverse order")
+                            .clicked()
+                        {
+                            cmds.push(Command::ToggleSortReversed);
+                        }
+                    });
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = S3;
@@ -82,7 +244,6 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 });
             });
         });
-    // A 1 pt line under the toolbar, drawn by the next panel's top stroke.
     for c in cmds {
         app.dispatch(ctx, c);
     }
