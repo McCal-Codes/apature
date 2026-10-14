@@ -111,6 +111,9 @@ enum Cmd {
         no_iim: bool,
         #[arg(long)]
         no_exif: bool,
+        /// Render RAW files with the macOS RAW engine instead of the embedded preview.
+        #[arg(long)]
+        decode_raw: bool,
         #[arg(long)]
         overwrite: bool,
     },
@@ -186,9 +189,10 @@ fn main() -> Result<()> {
             assignment,
             no_iim,
             no_exif,
+            decode_raw,
             overwrite,
         } => cmd_export(
-            paths, out, long, quality, rename, assignment, no_iim, no_exif, overwrite,
+            paths, out, long, quality, rename, assignment, no_iim, no_exif, decode_raw, overwrite,
         ),
         Cmd::Ingest {
             source,
@@ -601,6 +605,7 @@ fn cmd_export(
     assignment: Option<PathBuf>,
     no_iim: bool,
     no_exif: bool,
+    decode_raw: bool,
     overwrite: bool,
 ) -> Result<()> {
     use apature_ingest::plan::facts_for;
@@ -646,6 +651,11 @@ fn cmd_export(
         keep_exif: !no_exif,
         write_iim: !no_iim,
         overwrite,
+        raw: if decode_raw {
+            apature_export::RawPixels::SystemDecode
+        } else {
+            apature_export::RawPixels::EmbeddedPreview
+        },
         ..Default::default()
     };
     let headline = pad.as_ref().map(|a| a.slug.clone());
@@ -685,11 +695,12 @@ fn cmd_export(
             Ok(o) => {
                 ok += 1;
                 println!(
-                    "  ✓ {}  {}×{}  {:.1} MB  exif:{:?}  {} ms",
+                    "  ✓ {}  {}×{}  {:.1} MB  pixels:{:?} exif:{:?}  {} ms",
                     o.out.display(),
                     o.width,
                     o.height,
                     o.bytes as f64 / 1e6,
+                    o.pixels,
                     o.exif,
                     o.millis
                 );

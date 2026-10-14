@@ -28,6 +28,8 @@ pub struct ExportPrefs {
     pub keep_exif: bool,
     pub write_iim: bool,
     pub open_after: bool,
+    /// Render RAW-only photos with the system RAW engine (macOS) instead of the preview.
+    pub decode_raw: bool,
 }
 
 impl Default for ExportPrefs {
@@ -40,6 +42,7 @@ impl Default for ExportPrefs {
             keep_exif: true,
             write_iim: true,
             open_after: true,
+            decode_raw: false,
         }
     }
 }

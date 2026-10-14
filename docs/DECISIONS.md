@@ -192,10 +192,18 @@ tested with a mounted disk image, not yet with a physical card.
 
 ## ADR-017 — Export pixels and metadata (2026-10-14)
 
-**Decisions.** (1) Export never decodes RAW: a pair exports its JPEG, a
+**Decisions.** (1) Export does not demosaic RAW itself: a pair exports its JPEG, a
 RAW alone exports its largest embedded preview (the camera's rendering,
-8256 px on a D850). A real RAW pipeline waits for a permissively licensed
-demosaic. (2) The source ICC profile is copied, not converted: an Adobe RGB
+8256 px on a D850). An opt-in **system RAW decode** renders the RAW with
+the operating system's engine instead: on macOS ImageIO through
+`/usr/bin/sips`, matched to sRGB, with the camera EXIF carried over and
+the orientation tag left for our own rotate step (sips does not bake it,
+measured). No new dependency, no licence question, Apple's rendering (the
+one Preview and Photos show). It is off by default because it is slow
+(several seconds a frame, measured in STATUS.md) and because the camera's
+JPEG is what the photographer judged on the back of the camera. Other
+platforms fall back to the preview and say so. A built-in demosaic waits
+for a permissively licensed one (candidates: `quickraw`, MIT, unverified). (2) The source ICC profile is copied, not converted: an Adobe RGB
 JPEG stays Adobe RGB and correctly tagged. Conversion to sRGB needs a CMS
 (`moxcms`, BSD-3, is the candidate). (3) IPTC-IIM is written next to XMP
 with identical values; over-length values are written whole rather than

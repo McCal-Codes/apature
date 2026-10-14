@@ -135,7 +135,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if ui.checkbox(&mut app.prefs.export.open_after, "Open the folder when the export finishes").changed() {
                         prefs_changed = true;
                     }
-                    ui.add(egui::Label::new(RichText::new("Pixels come from the JPEG of a pair, or a RAW's embedded full-size preview. The source's ICC profile is kept; no colour conversion yet.").size(10.5).color(t.muted)).wrap());
+                    if ui.checkbox(&mut app.prefs.export.decode_raw, "Decode RAW-only photos with the macOS RAW engine (slower, sRGB)").changed() {
+                        prefs_changed = true;
+                    }
+                    ui.add(egui::Label::new(RichText::new("Pairs export their JPEG. A RAW alone uses its embedded full-size preview unless decoding is on. A JPEG's own ICC profile is kept.").size(10.5).color(t.muted)).wrap());
                 });
             });
         });
