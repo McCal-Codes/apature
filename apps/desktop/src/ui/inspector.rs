@@ -165,8 +165,22 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         }
                     });
 
-                    section(ui, t, "Marks", "", |ui| {
+                    let targets = app.selection.targets(idx);
+                    let mixed = |f: &dyn Fn(&apature_core::Marks) -> i32| {
+                        targets
+                            .iter()
+                            .any(|&i| f(&app.marks[i]) != f(&app.marks[idx]))
+                    };
+                    let trailing = if targets.len() > 1 {
+                        format!("{} selected", targets.len())
+                    } else {
+                        String::new()
+                    };
+                    section(ui, t, "Marks", &trailing, |ui| {
                         let m = app.marks[idx];
+                        let rating_mixed = mixed(&|m| m.rating.0 as i32);
+                        let class_mixed = mixed(&|m| m.color_class.0 as i32);
+                        let tag_mixed = mixed(&|m| m.tagged as i32);
                         ui.horizontal(|ui| {
                             ui.add_sized(
                                 [64.0, 18.0],
@@ -219,11 +233,14 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                 )
                                 .halign(egui::Align::LEFT),
                             );
-                            let current = app
-                                .scheme
-                                .name(m.color_class)
-                                .map(|n| format!("{} {n}", m.color_class.0))
-                                .unwrap_or_else(|| "None".into());
+                            let current = if class_mixed {
+                                "mixed".to_string()
+                            } else {
+                                app.scheme
+                                    .name(m.color_class)
+                                    .map(|n| format!("{} {n}", m.color_class.0))
+                                    .unwrap_or_else(|| "None".into())
+                            };
                             egui::ComboBox::from_id_salt("class")
                                 .selected_text(current)
                                 .width(140.0)

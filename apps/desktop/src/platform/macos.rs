@@ -11,6 +11,7 @@ pub struct MenuBar {
     help: Submenu,
     installed: bool,
     sidebar: CheckMenuItem,
+    advance: CheckMenuItem,
     inspector: CheckMenuItem,
     filmstrip: CheckMenuItem,
 }
@@ -75,13 +76,19 @@ impl MenuBar {
 
         let edit = Submenu::new("Edit", true);
         edit.append_items(&[
-            &disabled("Undo (M3)"),
-            &disabled("Redo (M3)"),
+            &item(Command::Undo, "Undo", acc(cmd, Code::KeyZ)),
+            &item(Command::Redo, "Redo", acc(cmd_shift, Code::KeyZ)),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::cut(None),
             &PredefinedMenuItem::copy(None),
             &PredefinedMenuItem::paste(None),
-            &PredefinedMenuItem::select_all(None),
+            &PredefinedMenuItem::separator(),
+            &item(Command::SelectAll, "Select All", acc(cmd, Code::KeyA)),
+            &item(
+                Command::SelectNone,
+                "Deselect All",
+                acc(cmd_shift, Code::KeyA),
+            ),
         ])?;
 
         let sidebar = CheckMenuItem::with_id(
@@ -105,6 +112,14 @@ impl MenuBar {
             false,
             acc(Modifiers::SHIFT, Code::KeyF),
         );
+        let sort = Submenu::new("Sort By", true);
+        for so in crate::filter::Sort::ALL {
+            sort.append(&item(Command::SetSort(so), &capitalize(so.label()), None))?;
+        }
+        sort.append_items(&[
+            &PredefinedMenuItem::separator(),
+            &item(Command::ToggleSortReversed, "Reverse Order", None),
+        ])?;
         let view = Submenu::new("View", true);
         view.append_items(&[
             &item(
@@ -123,6 +138,13 @@ impl MenuBar {
             &sidebar,
             &inspector,
             &filmstrip,
+            &PredefinedMenuItem::separator(),
+            &sort,
+            &item(
+                Command::ClearFilter(None),
+                "Clear Filters",
+                acc(cmd_alt, Code::KeyF),
+            ),
             &PredefinedMenuItem::separator(),
             &item(Command::ZoomIn, "Larger Thumbnails", acc(cmd, Code::Equal)),
             &item(
@@ -191,6 +213,13 @@ impl MenuBar {
             ),
         ])?;
         let image = Submenu::new("Image", true);
+        let advance = CheckMenuItem::with_id(
+            Command::ToggleAdvanceAfterMark.menu_id(),
+            "Advance After Marking",
+            true,
+            true,
+            None,
+        );
         image.append_items(&[
             &class,
             &rating,
@@ -200,6 +229,8 @@ impl MenuBar {
                 "Toggle Tag",
                 Some(Accelerator::new(Modifiers::empty(), Code::KeyT)),
             ),
+            &PredefinedMenuItem::separator(),
+            &advance,
         ])?;
 
         let window = Submenu::new("Window", true);
@@ -219,6 +250,7 @@ impl MenuBar {
             sidebar,
             inspector,
             filmstrip,
+            advance,
         })
     }
 
@@ -244,10 +276,19 @@ impl MenuBar {
         out
     }
 
-    pub fn sync_toggles(&self, sidebar: bool, inspector: bool, filmstrip: bool) {
+    pub fn sync_toggles(&self, sidebar: bool, inspector: bool, filmstrip: bool, advance: bool) {
         self.sidebar.set_checked(sidebar);
         self.inspector.set_checked(inspector);
         self.filmstrip.set_checked(filmstrip);
+        self.advance.set_checked(advance);
+    }
+}
+
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
     }
 }
 

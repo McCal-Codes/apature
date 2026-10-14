@@ -18,6 +18,9 @@ pub struct Prefs {
     pub cell: f32,
     pub favorites: Vec<PathBuf>,
     pub recent: Vec<PathBuf>,
+    pub sort: crate::filter::Sort,
+    pub sort_reversed: bool,
+    pub advance_after_mark: bool,
 }
 
 impl Default for Prefs {
@@ -31,6 +34,9 @@ impl Default for Prefs {
             cell: 180.0,
             favorites: Vec::new(),
             recent: Vec::new(),
+            sort: crate::filter::Sort::Name,
+            sort_reversed: false,
+            advance_after_mark: true,
         }
     }
 }
