@@ -120,6 +120,15 @@ impl Default for PreviewView {
     }
 }
 
+/// Rename Photos dialog state.
+pub struct RenameDialog {
+    pub template: String,
+    pub seq_start: u32,
+    pub targets: Vec<usize>,
+    pub plan: Option<apature_core::fileops::RenamePlan>,
+    pub error: Option<String>,
+}
+
 /// Export workspace state; settings live in `Prefs::export`.
 #[derive(Default)]
 pub struct ExportState {
@@ -183,6 +192,9 @@ pub struct App {
     pub export: ExportState,
     export_jobs: crate::export_job::ExportJobs,
     pub pv: PreviewView,
+    pub rename_dialog: Option<RenameDialog>,
+    /// Items awaiting confirmation to go to the Trash.
+    pub trash_dialog: Option<Vec<usize>>,
     ingest_jobs: IngestJobs,
     /// Files currently being dragged over the window, for the drop overlay.
     pub drag_hover: usize,
@@ -273,6 +285,8 @@ impl App {
             ingest: IngestState::default(),
             export: ExportState::default(),
             pv: PreviewView::default(),
+            rename_dialog: None,
+            trash_dialog: None,
             export_jobs: crate::export_job::ExportJobs::new(cc.egui_ctx.clone()),
             ingest_jobs: IngestJobs::new(cc.egui_ctx.clone(), ledger_path),
             drag_hover: 0,
@@ -388,6 +402,18 @@ impl App {
                 app.pv.zoom_since = None;
             }
         }
+        if launch.rename_dialog && !app.view.is_empty() {
+            app.selection.all(&app.view.clone());
+            app.open_rename_dialog();
+            if let Some(d) = app.rename_dialog.as_mut() {
+                d.template = "100726-SPO-BGLF-{seqn:3}".into();
+            }
+            app.rename_recompute();
+        }
+        if launch.trash_dialog && !app.view.is_empty() {
+            let picks: Vec<usize> = app.view.iter().take(2).copied().collect();
+            app.trash_dialog = Some(picks);
+        }
         if launch.export {
             app.workspace = Workspace::Export;
             app.export.scope_all = true;
@@ -399,6 +425,158 @@ impl App {
             }
         }
         app
+    }
+
+    // ----- file operations ---------------------------------------------------
+
+    pub fn open_rename_dialog(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let mut targets = self.selection.targets(self.cursor);
+        targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
+        self.rename_dialog = Some(RenameDialog {
+            template: self.prefs.rename_template.clone(),
+            seq_start: 1,
+            targets,
+            plan: None,
+            error: None,
+        });
+        self.rename_recompute();
+    }
+
+    /// New stem for `idx` under `template` with sequence number `seq`.
+    fn rename_stem(&self, idx: usize, template: &str, seq: u32) -> String {
+        let it = &self.items[idx];
+        let headline = self.assignment.as_ref().map(|a| a.slug.clone());
+        let facts = apature_ingest::plan::facts_for(it, it.path(), headline.as_deref());
+        let mut name = apature_ingest::template::expand(template, &facts, seq);
+        // The template names the photo, not a file: drop a typed extension.
+        for v in it.variants() {
+            if let Some(ext) = v.path.extension().and_then(|e| e.to_str()) {
+                let suffix = format!(".{ext}");
+                if name.to_lowercase().ends_with(&suffix.to_lowercase()) {
+                    name.truncate(name.len() - suffix.len());
+                }
+            }
+        }
+        name
+    }
+
+    pub fn rename_recompute(&mut self) {
+        let Some(d) = self.rename_dialog.as_ref() else {
+            return;
+        };
+        let template = d.template.trim().to_string();
+        let seq_start = d.seq_start;
+        let targets = d.targets.clone();
+        if template.is_empty() {
+            if let Some(d) = self.rename_dialog.as_mut() {
+                d.plan = None;
+                d.error = None;
+            }
+            return;
+        }
+        let stems: Vec<(usize, String)> = targets
+            .iter()
+            .enumerate()
+            .map(|(i, &idx)| (idx, self.rename_stem(idx, &template, seq_start + i as u32)))
+            .collect();
+        let pairs: Vec<(&PhotoItem, String)> = stems
+            .iter()
+            .map(|(idx, s)| (&self.items[*idx], s.clone()))
+            .collect();
+        let result = apature_core::fileops::plan_rename(&pairs);
+        if let Some(d) = self.rename_dialog.as_mut() {
+            match result {
+                Ok(p) => {
+                    d.plan = Some(p);
+                    d.error = None;
+                }
+                Err(e) => {
+                    d.plan = None;
+                    d.error = Some(e.to_string());
+                }
+            }
+        }
+    }
+
+    fn rename_apply(&mut self) {
+        let Some(d) = self.rename_dialog.as_ref() else {
+            return;
+        };
+        let Some(plan) = d.plan.clone() else {
+            return;
+        };
+        let template = d.template.trim().to_string();
+        match apature_core::fileops::rename(&plan) {
+            Ok(moves) => {
+                let mut photos = 0;
+                for it in self.items.iter_mut() {
+                    let mut touched = false;
+                    for v in std::iter::once(&mut it.primary).chain(it.secondary.iter_mut()) {
+                        if let Some((_, to)) = moves.iter().find(|(from, _)| *from == v.path) {
+                            v.path = to.clone();
+                            touched = true;
+                        }
+                    }
+                    if touched {
+                        it.stem = it
+                            .primary
+                            .path
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| it.stem.clone());
+                        photos += 1;
+                    }
+                }
+                self.prefs.rename_template = template;
+                self.prefs_dirty = true;
+                self.rename_dialog = None;
+                self.rebuild_view();
+                self.status = format!(
+                    "Renamed {photos} photo{} ({} files)",
+                    if photos == 1 { "" } else { "s" },
+                    moves.len()
+                );
+            }
+            Err(e) => {
+                if let Some(d) = self.rename_dialog.as_mut() {
+                    d.error = Some(e.to_string());
+                }
+            }
+        }
+    }
+
+    fn trash_confirm(&mut self) {
+        let Some(targets) = self.trash_dialog.take() else {
+            return;
+        };
+        let files: Vec<PathBuf> = targets
+            .iter()
+            .flat_map(|&i| apature_core::fileops::item_files(&self.items[i]))
+            .collect();
+        let n = targets.len();
+        match apature_core::fileops::trash(&files) {
+            Ok(()) => {
+                let pos = self.cursor_pos();
+                if let Some(dir) = self.folder.clone() {
+                    self.load_folder(&dir);
+                }
+                if !self.view.is_empty() {
+                    let p = pos.min(self.view.len() - 1);
+                    self.cursor = self.view[p];
+                    self.selection.only(self.cursor);
+                    self.scroll_to_cursor = true;
+                }
+                self.status = format!(
+                    "Moved {n} photo{} ({} files) to the Trash",
+                    if n == 1 { "" } else { "s" },
+                    files.len()
+                );
+            }
+            Err(e) => self.status = e.to_string(),
+        }
     }
 
     // ----- export ------------------------------------------------------------
@@ -1881,6 +2059,20 @@ impl App {
                 }
             }
             Command::ToggleZoom => self.toggle_zoom(None, self.pv.last_rect),
+            Command::RenamePhotos => self.open_rename_dialog(),
+            Command::RenameApply => self.rename_apply(),
+            Command::MoveToTrash => {
+                if !self.items.is_empty() {
+                    let mut targets = self.selection.targets(self.cursor);
+                    targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
+                    self.trash_dialog = Some(targets);
+                }
+            }
+            Command::TrashConfirm => self.trash_confirm(),
+            Command::CloseDialog => {
+                self.rename_dialog = None;
+                self.trash_dialog = None;
+            }
             Command::ToggleCompare => self.toggle_compare(),
             Command::IngestStart => self.ingest_start(),
             Command::IngestCancel => {
@@ -1943,7 +2135,10 @@ impl App {
                 self.mark(if to { "tag" } else { "untag" }, |m| m.tagged = to)
             }
             Command::Escape => {
-                if self.filter_popup_open {
+                if self.rename_dialog.is_some() || self.trash_dialog.is_some() {
+                    self.rename_dialog = None;
+                    self.trash_dialog = None;
+                } else if self.filter_popup_open {
                     self.filter_popup_open = false;
                 } else if self.workspace == Workspace::Preview && self.pv.compare.is_some() {
                     self.pv.compare = None;
@@ -1976,6 +2171,12 @@ impl App {
     fn keyboard_commands(&self, ctx: &egui::Context) -> Vec<Command> {
         let mut out = Vec::new();
         if ctx.wants_keyboard_input() {
+            return out;
+        }
+        if self.rename_dialog.is_some() || self.trash_dialog.is_some() {
+            if ctx.input(|i| i.key_pressed(Key::Escape)) {
+                out.push(Command::Escape);
+            }
             return out;
         }
         ctx.input(|i| {
@@ -2011,6 +2212,12 @@ impl App {
                 }
                 if pressed(Key::W) {
                     out.push(Command::CloseTab);
+                }
+                if pressed(Key::R) && shift {
+                    out.push(Command::RenamePhotos);
+                }
+                if pressed(Key::Backspace) {
+                    out.push(Command::MoveToTrash);
                 }
                 if pressed(Key::Comma) {
                     out.push(Command::OpenSettings);
@@ -2271,6 +2478,7 @@ impl eframe::App for App {
         ui::toolbar::show(self, ctx, &t);
         ui::tabs::show(self, ctx, &t);
         ui::settings::show(self, ctx, &t);
+        ui::dialogs::show(self, ctx, &t);
         ui::status::show(self, ctx, &t);
         ui::sidebar::show(self, ctx, &t);
         match self.workspace {

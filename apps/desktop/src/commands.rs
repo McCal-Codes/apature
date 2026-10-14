@@ -78,6 +78,12 @@ pub enum Command {
     ExportOpenResult,
     /// Preview: toggle 1:1 and fit.
     ToggleZoom,
+    /// File ops: open the Rename dialog, apply it, open the Trash dialog, confirm it.
+    RenamePhotos,
+    RenameApply,
+    MoveToTrash,
+    TrashConfirm,
+    CloseDialog,
     /// Preview: compare the selection side by side.
     ToggleCompare,
     CloseTab,
@@ -132,6 +138,8 @@ impl Command {
             Command::SaveCaption => "image.savecaption".into(),
             Command::IngestStart => "file.ingest".into(),
             Command::ExportStart => "file.export".into(),
+            Command::RenamePhotos => "file.rename".into(),
+            Command::MoveToTrash => "file.trash".into(),
             Command::CloseTab => "file.closetab".into(),
             Command::NextTab => "window.nexttab".into(),
             Command::PrevTab => "window.prevtab".into(),
@@ -172,6 +180,8 @@ impl Command {
             "image.savecaption" => Command::SaveCaption,
             "file.ingest" => Command::SetWorkspace(Workspace::Ingest),
             "file.export" => Command::SetWorkspace(Workspace::Export),
+            "file.rename" => Command::RenamePhotos,
+            "file.trash" => Command::MoveToTrash,
             "view.workspace.export" => Command::SetWorkspace(Workspace::Export),
             "file.closetab" => Command::CloseTab,
             "window.nexttab" => Command::NextTab,

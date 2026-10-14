@@ -2,6 +2,7 @@
 //! through `App` state and `Command`s; no module owns business logic.
 
 pub mod caption;
+pub mod dialogs;
 pub mod export;
 pub mod filmstrip;
 pub mod icons;
