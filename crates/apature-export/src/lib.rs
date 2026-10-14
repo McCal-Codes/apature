@@ -8,7 +8,12 @@
 //! is `Settings::long_side`, and re-encoded at `Settings::quality`.
 //!
 //! Colour: the source's ICC profile is copied (an Adobe RGB JPEG stays
-//! Adobe RGB and tagged); no conversion to sRGB happens yet, see README.
+//! Adobe RGB and tagged); no conversion to sRGB happens for JPEG sources.
+//!
+//! RAW decode: with [`RawPixels::SystemDecode`] a RAW alone is rendered by
+//! the operating system's RAW engine (macOS ImageIO through `sips`,
+//! matched to sRGB) instead of its embedded preview. Slower, full quality,
+//! macOS only; other platforms fall back to the preview and say so.
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +21,15 @@ use apature_core::{Kind, PhotoItem};
 use apature_metadata::jpeg_xmp::{header_segments, is_exif_segment};
 use apature_metadata::{exif, exif_write, iim, iptc, Iptc};
 use apature_preview::{decode_jpeg, find_embedded_jpegs, rotate, Rgb};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RawPixels {
+    /// The camera's embedded full-size JPEG (fast, the camera's rendering).
+    #[default]
+    EmbeddedPreview,
+    /// Demosaic with the system RAW engine (macOS), matched to sRGB.
+    SystemDecode,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
@@ -28,6 +42,7 @@ pub struct Settings {
     pub write_iim: bool,
     pub keep_icc: bool,
     pub overwrite: bool,
+    pub raw: RawPixels,
 }
 
 impl Default for Settings {
@@ -40,6 +55,7 @@ impl Default for Settings {
             write_iim: true,
             keep_icc: true,
             overwrite: false,
+            raw: RawPixels::EmbeddedPreview,
         }
     }
 }
@@ -53,9 +69,17 @@ pub enum ExifSource {
     None,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixelSource {
+    Jpeg,
+    EmbeddedPreview,
+    SystemRawDecode,
+}
+
 #[derive(Clone, Debug)]
 pub struct Outcome {
     pub source: PathBuf,
+    pub pixels: PixelSource,
     pub out: PathBuf,
     pub width: u32,
     pub height: u32,
@@ -82,6 +106,45 @@ pub enum ExportError {
     Xmp(#[from] apature_metadata::xmp::XmpError),
     #[error("{0}")]
     Jpeg(#[from] apature_metadata::jpeg_xmp::JpegXmpError),
+    #[error("system RAW decode of {0} failed: {1}")]
+    RawDecode(PathBuf, String),
+}
+
+/// Render a RAW with the macOS RAW engine (ImageIO via `sips`) to a JPEG at
+/// quality 100, matched to sRGB, optionally resampled so the long side is
+/// `long_side` (0 = full size). Returns the JPEG bytes.
+#[cfg(target_os = "macos")]
+pub fn system_decode_raw(path: &Path, long_side: u32) -> Result<Vec<u8>, String> {
+    let tmp = std::env::temp_dir().join(format!(
+        "apature-raw-{}-{}.jpg",
+        std::process::id(),
+        path.file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    ));
+    let mut cmd = std::process::Command::new("/usr/bin/sips");
+    cmd.args(["-s", "format", "jpeg", "-s", "formatOptions", "100"]);
+    cmd.args([
+        "--matchTo",
+        "/System/Library/ColorSync/Profiles/sRGB Profile.icc",
+    ]);
+    if long_side > 0 {
+        cmd.args(["--resampleHeightWidthMax", &long_side.to_string()]);
+    }
+    cmd.arg(path).arg("--out").arg(&tmp);
+    let out = cmd.output().map_err(|e| e.to_string())?;
+    let result = if out.status.success() && tmp.is_file() {
+        std::fs::read(&tmp).map_err(|e| e.to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    };
+    let _ = std::fs::remove_file(&tmp);
+    result
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn system_decode_raw(_path: &Path, _long_side: u32) -> Result<Vec<u8>, String> {
+    Err("system RAW decode is only available on macOS".into())
 }
 
 /// Which file supplies the pixels, and whether it is a real JPEG (with its
@@ -136,8 +199,25 @@ pub fn export(
     if out.exists() && !settings.overwrite {
         return Err(ExportError::Exists(out.to_path_buf()));
     }
-    let (src_path, is_jpeg) = pixel_source(item)?;
-    let data = std::fs::read(&src_path).map_err(|e| ExportError::Io(src_path.clone(), e))?;
+    let (src_path, mut is_jpeg) = pixel_source(item)?;
+    let mut pixels = if is_jpeg {
+        PixelSource::Jpeg
+    } else {
+        PixelSource::EmbeddedPreview
+    };
+    let mut data = std::fs::read(&src_path).map_err(|e| ExportError::Io(src_path.clone(), e))?;
+    if !is_jpeg && settings.raw == RawPixels::SystemDecode {
+        match system_decode_raw(&src_path, settings.long_side) {
+            Ok(rendered) => {
+                data = rendered;
+                is_jpeg = true;
+                pixels = PixelSource::SystemRawDecode;
+            }
+            Err(e) => {
+                log::warn!("{}: {e}; using the embedded preview", src_path.display());
+            }
+        }
+    }
     let jpeg_bytes: &[u8] = if is_jpeg {
         &data
     } else {
@@ -147,8 +227,11 @@ pub fn export(
             .ok_or_else(|| ExportError::NoPixels(src_path.clone()))?;
         best.bytes(&data)
     };
-    let summary =
-        exif::read(&src_path).unwrap_or_else(|_| exif::from_bytes(&data).unwrap_or_default());
+    let summary = if pixels == PixelSource::SystemRawDecode {
+        exif::from_bytes(&data).unwrap_or_default()
+    } else {
+        exif::read(&src_path).unwrap_or_else(|_| exif::from_bytes(&data).unwrap_or_default())
+    };
     let target = if settings.long_side == 0 {
         None
     } else {
@@ -171,10 +254,16 @@ pub fn export(
         Vec::new()
     };
     if settings.keep_exif {
-        let copied = src_segs
-            .iter()
-            .find(|s| is_exif_segment(&data, s))
-            .map(|s| s.payload(&data)[6..].to_vec());
+        // A system RAW render carries the RAW's TIFF-flavoured IFD0, which
+        // validators reject in a JPEG; build a clean block from the summary.
+        let copied = if pixels == PixelSource::SystemRawDecode {
+            None
+        } else {
+            src_segs
+                .iter()
+                .find(|s| is_exif_segment(&data, s))
+                .map(|s| s.payload(&data)[6..].to_vec())
+        };
         match copied {
             Some(mut block) => {
                 exif_write::patch_for_export(&mut block, width, height);
@@ -247,6 +336,7 @@ pub fn export(
     }
     Ok(Outcome {
         source: src_path,
+        pixels,
         out: out.to_path_buf(),
         width,
         height,

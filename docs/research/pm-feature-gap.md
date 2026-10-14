@@ -54,6 +54,7 @@ for the owner's deadline workflow (Butler Eagle / TribLive).
 |---|---|---|---|
 | Contact sheet | thumbnails from embedded previews, sort by name/capture/etc., filter by class/rating/tag, select, tag, class, rate, zoom, multiple tabs | have (tabs, filters, sort, marks) | — |
 | RAW+JPEG | combined or separate display; which is primary | pairs combined, RAW primary | partial: a "show JPEG as primary" option |
+| RAW → JPEG conversion | Save As renders RAW through its own engine | opt-in system RAW decode on export (macOS ImageIO), else embedded preview | **have (opt-in)**; built-in demosaic later |
 | Preview | loupe, zoom 100 %/fit, pan, compare two or more frames, rotate, crop guide, overlays | fit only; no 1:1, no pan, no compare | **1:1 zoom + pan, compare view** (2) |
 | Rotation | lossless rotate (orientation tag) | none | rotate via `tiff:Orientation`/`Orientation` write (4) |
 | Crop | crop stored in XMP, applied on export | none | later |

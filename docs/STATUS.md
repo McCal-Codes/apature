@@ -88,10 +88,22 @@ Photo Mechanic does. Verified: IIM and XMP read back identical to the
 source captions; a source tagged Orientation 6 exports upright at 666×1000
 with matching EXIF dimensions; sRGB profile carried.
 
-Not done: colour conversion to sRGB for Adobe RGB sources (profile is kept
-so the file stays correct), HEIC sources, watermark, export of marks
-(rating/class are deliberately not written to delivery files), per-outlet
-presets. `--export-run --export-dest <dir>` runs the app path headlessly.
+**RAW → JPEG (opt-in, macOS):** "Decode RAW-only photos with the macOS RAW
+engine" in the Export workspace, `--decode-raw` in the CLI. The RAW is
+rendered by ImageIO through `/usr/bin/sips` at full resolution (8256×5504
+from a D850 NEF), matched to sRGB, then goes through the same resize and
+metadata path with a clean EXIF block built from the camera fields.
+Measured: about 8 s per NEF on this machine (sips' own time; the
+embedded-preview path takes 0.3 s), so it is off by default. A NEF tagged
+Orientation 6 came out upright at 1365×2048; `exiftool -validate` OK on
+both outputs. Other platforms fall back to the preview with a log line.
+A built-in demosaic needs a permissively licensed crate (ADR-017).
+
+Not done: colour conversion to sRGB for Adobe RGB JPEG sources (profile
+is kept so the file stays correct), HEIC sources, watermark, export of
+marks (rating/class are deliberately not written to delivery files),
+per-outlet presets. `--export-run --export-dest <dir>` runs the app path
+headlessly.
 
 ## Motion slice 1 and card-mount detection (2026-10-14)
 

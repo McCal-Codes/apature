@@ -419,6 +419,11 @@ impl App {
             quality: self.prefs.export.quality,
             keep_exif: self.prefs.export.keep_exif,
             write_iim: self.prefs.export.write_iim,
+            raw: if self.prefs.export.decode_raw {
+                apature_export::RawPixels::SystemDecode
+            } else {
+                apature_export::RawPixels::EmbeddedPreview
+            },
             ..Default::default()
         };
         if self.launch.export_run {
