@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::commands::Command;
 
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
-    if !app.prefs.filmstrip_visible || app.view.is_empty() {
+    if app.view.is_empty() {
         return;
     }
     let mut cmds = Vec::new();
@@ -17,7 +17,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 .inner_margin(egui::Margin::symmetric(S3 as i8, S2 as i8))
                 .stroke(egui::Stroke::NONE),
         )
-        .show(ctx, |ui| {
+        .show_animated(ctx, app.prefs.filmstrip_visible, |ui| {
             let frame_h = FILMSTRIP_H - S2 * 2.0;
             let frame_w = frame_h * 1.5;
             let count = ((ui.available_width() + S2) / (frame_w + S2))
