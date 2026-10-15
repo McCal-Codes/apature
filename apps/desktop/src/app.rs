@@ -779,6 +779,11 @@ impl App {
             );
         }
         self.ingest_window = true;
+        // Opening the window reads the card straight away when the sheet is
+        // already set up, instead of waiting for an option to change.
+        if self.ingest.plan.is_none() && !self.ingest.planning && self.ingest.running.is_none() {
+            self.ingest_options_changed();
+        }
     }
 
     fn show_ingest_window(&mut self, ctx: &egui::Context, t: &ui::tokens::Theme) {
