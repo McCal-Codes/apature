@@ -155,6 +155,9 @@ enum Cmd {
         /// Add -1, -2… to a file name that is already taken instead of refusing.
         #[arg(long)]
         suffix: bool,
+        /// Only photos captured on this day, e.g. 2026-09-26.
+        #[arg(long)]
+        day: Option<String>,
     },
     /// Print where the thumbnail cache lives.
     CacheDir,
@@ -229,8 +232,9 @@ fn main() -> Result<()> {
             all,
             dry_run,
             suffix,
+            day,
         } => ingest(
-            source, primary, secondary, folder, rename, headline, all, dry_run, suffix,
+            source, primary, secondary, folder, rename, headline, all, dry_run, suffix, day,
         ),
         Cmd::Iptc { file } => {
             let item = item_for(&file)?;
@@ -470,8 +474,16 @@ fn ingest(
     all: bool,
     dry_run: bool,
     suffix: bool,
+    day: Option<String>,
 ) -> Result<()> {
     use apature_ingest::{build_plan, run, CollisionPolicy, Event, Ledger, Options};
+    let day = match day {
+        Some(s) => Some(
+            apature_metadata::codes::parse_date(&s.replace('-', ":"))
+                .ok_or_else(|| anyhow::anyhow!("--day wants YYYY-MM-DD, got {s}"))?,
+        ),
+        None => None,
+    };
     let ledger_path = directories::ProjectDirs::from("dev", "mccal", "Apature")
         .context("no home directory")?
         .data_dir()
@@ -490,6 +502,7 @@ fn ingest(
         } else {
             CollisionPolicy::Refuse
         },
+        day,
         ..Default::default()
     };
     let plan = build_plan(&opts, &ledger)?;

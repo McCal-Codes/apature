@@ -30,12 +30,29 @@ pub fn scan(dir: &Path, opts: &ScanOptions) -> Result<Vec<PhotoItem>, ScanError>
     // Group by (directory, lowercase stem) so that pairs in the same folder collapse.
     let mut groups: BTreeMap<(PathBuf, String), Vec<Variant>> = BTreeMap::new();
 
-    for entry in WalkDir::new(dir)
+    // Hidden directories (.Trashes, .Spotlight-V100, .fseventsd on a card) are
+    // skipped before descent: macOS refuses to read some of them, and a
+    // permission error there must not abort the whole scan. Any other
+    // unreadable entry is skipped too, never fatal.
+    let walker = WalkDir::new(dir)
         .max_depth(depth)
         .follow_links(false)
         .sort_by_file_name()
-    {
-        let entry = entry?;
+        .into_iter()
+        .filter_entry(|e| e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.'));
+    for entry in walker {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(err) => {
+                log::warn!(
+                    "scan: skipping {}: {err}",
+                    err.path()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default()
+                );
+                continue;
+            }
+        };
         if !entry.file_type().is_file() {
             continue;
         }

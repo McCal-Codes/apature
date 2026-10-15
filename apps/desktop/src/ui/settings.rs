@@ -181,7 +181,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         ui.label(RichText::new("Rename template").size(12.0).color(t.text2));
                         changed |= ui.add(egui::TextEdit::singleline(&mut o.rename_template).desired_width(f32::INFINITY)).changed();
                         changed |= ui.checkbox(&mut o.only_new, "Only photos not ingested before").changed();
-                        if ui.button("Reset to defaults  ({headline} folder · {headline}{seqn:3}-{month0}{day0}{yr2})").clicked() {
+                        if ui.button("Reset to defaults  ({year4}/{month0} {monthname}/{mnn3} {day0} {headline} · {headline}{seqn:3}-{month0}{day0}{yr2})").clicked() {
                             let keep = (o.source.clone(), o.primary.clone(), o.secondary.clone());
                             o = apature_ingest::Options { source: keep.0, primary: keep.1, secondary: keep.2, ..crate::prefs::default_ingest_options() };
                             changed = true;
