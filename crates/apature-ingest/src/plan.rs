@@ -35,6 +35,8 @@ pub struct Options {
     pub headline: Option<String>,
     /// What to do when a destination name is taken.
     pub on_collision: CollisionPolicy,
+    /// Only photos captured on this (year, month, day); None = every day.
+    pub day: Option<(i32, u32, u32)>,
 }
 
 /// Photo Mechanic's `IngestAutoIncSuffix`: either refuse the plan (the
@@ -61,6 +63,7 @@ impl Default for Options {
             only_new: true,
             headline: None,
             on_collision: CollisionPolicy::Refuse,
+            day: None,
         }
     }
 }
@@ -97,6 +100,11 @@ pub struct Plan {
     pub suffixed: usize,
     pub total_bytes: u64,
     pub items: usize,
+    /// Capture days present on the source with their photo counts (before
+    /// the day filter), newest last.
+    pub days: Vec<((i32, u32, u32), usize)>,
+    /// Photos left out because they were taken on another day.
+    pub other_days: usize,
 }
 
 impl Plan {
@@ -184,6 +192,18 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
             continue;
         }
         let facts0 = facts_for(item, &variants[0].path, opts.headline.as_deref());
+        if let Some(d) = facts0.date {
+            match plan.days.iter_mut().find(|(k, _)| *k == d) {
+                Some((_, n)) => *n += 1,
+                None => plan.days.push((d, 1)),
+            }
+        }
+        if let Some(want) = opts.day {
+            if facts0.date != Some(want) {
+                plan.other_days += 1;
+                continue;
+            }
+        }
         // Folder: one per item so a pair never splits.
         let folder_rel: PathBuf = if opts.folder_template.trim().is_empty() {
             PathBuf::new()
@@ -314,6 +334,7 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
             seq += 1;
         }
     }
+    plan.days.sort();
     // Deduplicate identical collision reports.
     let mut seen = BTreeSet::new();
     plan.collisions
@@ -378,6 +399,37 @@ mod tests {
             .unwrap()
             .starts_with(t.path().join("Backup")));
         assert_eq!(plan.total_bytes, 3 * "data-DSC_0001.NEF".len() as u64);
+    }
+
+    #[test]
+    fn day_filter_keeps_one_capture_day_and_reports_the_rest() {
+        // Two plain JPEGs with no EXIF: date is None, so a day filter leaves both out
+        // and reports them; without a filter both are planned and `days` is empty.
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        std::fs::write(src.path().join("A.JPG"), b"a").unwrap();
+        std::fs::write(src.path().join("B.JPG"), b"b").unwrap();
+        let ledger = Ledger::default();
+        let base = Options {
+            source: src.path().to_path_buf(),
+            primary: dst.path().to_path_buf(),
+            folder_template: String::new(),
+            only_new: false,
+            ..Default::default()
+        };
+        let all = build_plan(&base, &ledger).unwrap();
+        assert_eq!(all.entries.len(), 2);
+        assert!(all.days.is_empty());
+        let one = build_plan(
+            &Options {
+                day: Some((2026, 9, 26)),
+                ..base.clone()
+            },
+            &ledger,
+        )
+        .unwrap();
+        assert_eq!(one.entries.len(), 0);
+        assert_eq!(one.other_days, 2);
     }
 
     #[test]
