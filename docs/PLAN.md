@@ -9,7 +9,7 @@ Owner's parity order is in ROADMAP.md ("Requested 2026-10-15").
 
 Workflow gaps
 - Secondary (backup) destination never tested on a real drive; cancel mid-ingest never tested on real hardware.
-- Copy safety on power loss: confirm the copier writes to a temporary name and renames only after the hash matches (verify in `copy.rs`; fix if not).
+- Copy safety on power loss: confirmed 2026-10-15, `copy.rs` writes to a temporary name, hashes it, then renames; a dead copy leaves only a temp file.
 - Opening a big day (Aug 30, 839 photos) from the card: measure scan, thumbnail and memory; the 2,400-photo card root too.
 - CLI ingest timing: run reported 45.9 s, wall clock 125 s; instrument plan / copy / ledger-save / exit.
 - Export naming hint clips at narrow widths; shorten the hint.
@@ -32,7 +32,7 @@ Observed once, unexplained
 Small (each fits in a slice of a session)
 1. Preserve the card's folder structure (option) + copy WAV/XMP companions. Planner + one checkbox + test on the real card.
 2. Open the contact sheet while the ingest runs: open the destination tab after the first verified file, keep ingesting; the window stays for progress.
-3. Copy-safety check (temp name + rename) and the CLI timing instrumentation.
+3. CLI timing instrumentation (plan / copy / ledger-save / exit).
 4. Export hint, stale roadmap, performance numbers on the 839-photo day.
 5. CI workflow file.
 
