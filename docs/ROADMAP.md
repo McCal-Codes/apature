@@ -9,16 +9,16 @@
 - [x] full-screen preview with prefetch of neighbours
 - [x] `apature-cli` CLI and benchmarks
 - [x] benchmarks recorded (docs/benchmarks/2026-10-13-m1pro.md); a real 1 000-NEF assignment is still outstanding
-- [ ] multi-select and shift-range marking
-- [ ] filter the sheet by rating / class / tag
+- [x] multi-select and shift-range marking (done; ticked 2026-10-15)
+- [x] filter the sheet by rating / class / tag (done; ticked 2026-10-15)
 - [ ] HEIC and CR3 previews
 
 ## 0.2 — ingest and metadata
-- [ ] IPTC stationery: headline, caption, byline, credit, copyright, location, keywords
-- [ ] code replacements and `{variables}` compatible with the existing Butler Eagle files
-- [ ] caption editor with the "type subject, append saved tail" flow
-- [ ] ingest UI on top of `apature-ingest`: card detection, two destinations, rename template, report
-- [ ] write IPTC into JPEG exports (sidecar stays the source for RAW)
+- [x] IPTC stationery: headline, caption, byline, credit, copyright, location, keywords (done; ticked 2026-10-15)
+- [x] code replacements and `{variables}` compatible with the existing Butler Eagle files (done; ticked 2026-10-15)
+- [x] caption editor with the "type subject, append saved tail" flow (done; ticked 2026-10-15)
+- [x] ingest UI on top of `apature-ingest`: card detection, two destinations, rename template, report (done; ticked 2026-10-15)
+- [x] write IPTC into JPEG exports (sidecar stays the source for RAW) (done; ticked 2026-10-15)
 
 ## Requested 2026-10-15 (owner): Photo Mechanic parity, in order of value
 After the first real-card ingest (Ryan's birthday, 134 NEF, verified) the owner
