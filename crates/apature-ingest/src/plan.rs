@@ -105,6 +105,10 @@ pub struct Plan {
     pub days: Vec<((i32, u32, u32), usize)>,
     /// Photos left out because they were taken on another day.
     pub other_days: usize,
+    /// The sequence number the next ingest with the same counter should start
+    /// at (seq_start + photos planned). Lets the app keep `{seqn}` running
+    /// across runs, per headline.
+    pub next_seq: u32,
 }
 
 impl Plan {
@@ -395,6 +399,7 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
         }
     }
     plan.days.sort();
+    plan.next_seq = seq;
     // Deduplicate identical collision reports.
     let mut seen = BTreeSet::new();
     plan.collisions

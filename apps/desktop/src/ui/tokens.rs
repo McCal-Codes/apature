@@ -92,6 +92,16 @@ impl Theme {
         }
     }
 
+    /// Accessibility: lift the quiet greys one step and strengthen borders.
+    /// Hierarchy survives (text > text2 > muted), the floor just rises.
+    pub fn high_contrast(mut self) -> Theme {
+        self.muted = self.text2;
+        self.text2 = self.text;
+        self.line = self.line_strong;
+        self.line_strong = self.text2;
+        self
+    }
+
     /// Push the tokens into egui's own widget styling so built-in widgets
     /// (buttons, sliders, combo boxes) match the panels.
     pub fn apply(&self, ctx: &egui::Context, reduce_motion: bool) {

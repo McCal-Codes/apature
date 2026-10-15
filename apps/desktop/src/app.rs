@@ -214,7 +214,8 @@ pub struct App {
     applied_appearance: Option<crate::prefs::Appearance>,
     dispatch_later: Option<Command>,
     platform: Platform,
-    reduce_motion: bool,
+    system_reduce_motion: bool,
+    applied_ui_scale: Option<f32>,
     /// Motion state: when the sheet last changed tab, when the preview opened
     /// and from which cell, where the focused cell was drawn, when the status
     /// text last changed.
@@ -307,7 +308,8 @@ impl App {
             applied_appearance: None,
             dispatch_later: None,
             platform,
-            reduce_motion: Platform::reduce_motion(),
+            system_reduce_motion: Platform::reduce_motion(),
+            applied_ui_scale: None,
             sheet_fade_since: None,
             preview_since: None,
             preview_from: None,
@@ -745,6 +747,22 @@ impl App {
 
     pub const INGEST_VIEWPORT: &'static str = "apature-ingest";
 
+    /// Reduce Motion: the system setting unless Settings › Accessibility overrides it.
+    pub fn reduce_motion(&self) -> bool {
+        match self.prefs.motion {
+            crate::prefs::Motion::System => self.system_reduce_motion,
+            crate::prefs::Motion::Reduce => true,
+            crate::prefs::Motion::Full => false,
+        }
+    }
+
+    /// Where `{seqn}` should start for the current headline when the counter
+    /// is persistent: the number after the last verified ingest with it.
+    pub fn seq_start_for_headline(&self) -> u32 {
+        let key = crate::prefs::seq_key(self.ingest.opts.headline.as_deref());
+        self.prefs.seq_counters.get(&key).copied().unwrap_or(1)
+    }
+
     /// Open Ingest: a separate window in normal use (the contact sheet stays
     /// in the main window, so culling can go on while a card copies), inline
     /// as a workspace for headless screenshot and `--ingest-run` sessions,
@@ -924,6 +942,19 @@ impl App {
                     }
                     if open_after {
                         self.dispatch_later = Some(Command::IngestOpenResult);
+                    }
+                    if ok {
+                        // Persistent sequence: remember where this headline's
+                        // counter stops, so the next ingest continues it.
+                        if let Some(next) = self.ingest.plan.as_ref().map(|p| p.next_seq) {
+                            let key = crate::prefs::seq_key(self.ingest.opts.headline.as_deref());
+                            self.prefs.seq_counters.insert(key, next);
+                            self.prefs_dirty = true;
+                            if self.prefs.seq_continue {
+                                self.ingest.opts.seq_start = next;
+                                self.prefs.ingest = Some(self.ingest.opts.clone());
+                            }
+                        }
                     }
                     if ok && self.prefs.eject_after_ingest {
                         let src = self.ingest.opts.source.clone();
@@ -1462,7 +1493,7 @@ impl App {
 
     /// Animation duration honouring Reduce Motion (0 = instant).
     pub fn anim(&self, secs: f32) -> f32 {
-        if self.reduce_motion {
+        if self.reduce_motion() {
             0.0
         } else {
             secs
@@ -2557,8 +2588,15 @@ impl eframe::App for App {
             });
             self.applied_appearance = Some(self.prefs.appearance);
         }
-        let t = Theme::for_ctx(ctx);
-        t.apply(ctx, self.reduce_motion);
+        if self.applied_ui_scale != Some(self.prefs.ui_scale) {
+            ctx.set_zoom_factor(self.prefs.ui_scale.clamp(0.8, 1.8));
+            self.applied_ui_scale = Some(self.prefs.ui_scale);
+        }
+        let mut t = Theme::for_ctx(ctx);
+        if self.prefs.high_contrast {
+            t = t.high_contrast();
+        }
+        t.apply(ctx, self.reduce_motion());
         self.platform.on_first_frame();
         if self.status != self.last_status {
             self.last_status = self.status.clone();
@@ -2574,7 +2612,7 @@ impl eframe::App for App {
             }) || self.export.running.as_ref().is_some_and(|r| {
                 r.started.elapsed().as_secs_f32() < 0.6 || live(r.done_since, 0.6)
             });
-        if !self.reduce_motion
+        if !self.reduce_motion()
             && (live(self.sheet_fade_since, 0.16)
                 || live(self.preview_since, 0.16)
                 || live(self.focus_since, 0.16)

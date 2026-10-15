@@ -2,6 +2,7 @@
 //! Application Support directory. Everything here is a convenience; losing
 //! the file loses nothing photographic.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -72,6 +73,17 @@ pub struct Prefs {
     pub open_after_ingest: bool,
     /// When a volume with a DCIM folder mounts, switch to Ingest with it as the source.
     pub open_ingest_on_card: bool,
+    /// `{seqn}` keeps counting across ingests with the same headline
+    /// (Photo Mechanic's persistent sequence variable, one counter per slug).
+    pub seq_continue: bool,
+    /// Next sequence number per headline key (lower-cased, trimmed; "" = none).
+    pub seq_counters: BTreeMap<String, u32>,
+    /// Accessibility: whole-UI scale (text and controls), 1.0 = default.
+    pub ui_scale: f32,
+    /// Accessibility: follow the system Reduce Motion setting, or force it.
+    pub motion: Motion,
+    /// Accessibility: stronger text and borders.
+    pub high_contrast: bool,
     pub export: ExportPrefs,
     /// Last template used in Rename Photos.
     pub rename_template: String,
@@ -103,6 +115,11 @@ impl Default for Prefs {
             code_delimiter: '\\',
             open_after_ingest: true,
             open_ingest_on_card: true,
+            seq_continue: true,
+            seq_counters: BTreeMap::new(),
+            ui_scale: 1.0,
+            motion: Motion::System,
+            high_contrast: false,
             export: ExportPrefs::default(),
             rename_template: String::new(),
             eject_after_ingest: false,
@@ -151,4 +168,18 @@ impl Prefs {
         self.recent.insert(0, folder.to_path_buf());
         self.recent.truncate(10);
     }
+}
+
+/// Motion preference: follow macOS Reduce Motion, or override it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Motion {
+    #[default]
+    System,
+    Reduce,
+    Full,
+}
+
+/// Key for the per-headline sequence counter.
+pub fn seq_key(headline: Option<&str>) -> String {
+    headline.unwrap_or("").trim().to_lowercase()
 }
