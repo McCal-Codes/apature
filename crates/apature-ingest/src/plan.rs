@@ -146,6 +146,20 @@ pub enum PlanError {
 /// Naming facts for one file of `item` (capture date/time from EXIF).
 pub fn facts_for(item: &PhotoItem, variant_path: &Path, headline: Option<&str>) -> Facts {
     let exif = apature_metadata::exif::read(item.path()).ok();
+    let (camera, make, lens, iso, f_number, exposure, focal_mm) = exif
+        .as_ref()
+        .map(|e| {
+            (
+                e.model.clone(),
+                e.make.clone(),
+                e.lens.clone(),
+                e.iso,
+                e.f_number,
+                e.exposure_time,
+                e.focal_length_mm,
+            )
+        })
+        .unwrap_or_default();
     let (date, time) = exif
         .and_then(|e| e.date_time_original)
         .map(|d| {
@@ -172,6 +186,19 @@ pub fn facts_for(item: &PhotoItem, variant_path: &Path, headline: Option<&str>) 
         date,
         time,
         headline: headline.map(|h| h.to_string()),
+        folder: variant_path
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|s| s.to_string_lossy().into_owned()),
+        camera,
+        make,
+        lens,
+        iso,
+        f_number,
+        exposure,
+        focal_mm,
+        today: Some(today()),
+        ..Default::default()
     }
 }
 
@@ -757,6 +784,7 @@ mod tests {
             date: Some((2026, 9, 26)),
             time: Some((19, 4, 0)),
             headline: None,
+            ..Default::default()
         };
         let (folder, name) = example_names(&opts, &facts).unwrap();
         assert_eq!(folder, "2026/09 September/Sep 26 RyansBday");

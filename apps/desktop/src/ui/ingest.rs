@@ -94,14 +94,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(RichText::new("DAYS").monospace().size(9.5).color(t.muted));
                             let total: usize = days.iter().map(|(_, n)| n).sum();
-                            if ui.selectable_label(app.ingest.opts.day.is_none(), format!("all · {total}")).clicked() {
+                            if super::icons::chip(ui, t, &format!("all · {total}"), app.ingest.opts.day.is_none()).clicked() {
                                 app.ingest.opts.day = None;
                                 opts_changed = true;
                             }
                             const MON: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
                             for ((y, m, d), n) in days {
                                 let label = format!("{} {d:02} · {n}", MON[(m.clamp(1, 12) - 1) as usize]);
-                                if ui.selectable_label(app.ingest.opts.day == Some((y, m, d)), label).on_hover_text(format!("{y}-{m:02}-{d:02}")).clicked() {
+                                if super::icons::chip(ui, t, &label, app.ingest.opts.day == Some((y, m, d))).on_hover_text(format!("{y}-{m:02}-{d:02}")).clicked() {
                                     app.ingest.opts.day = Some((y, m, d));
                                     opts_changed = true;
                                 }
@@ -111,7 +111,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("FILES").monospace().size(9.5).color(t.muted));
                         for (f, label) in [(FileFilter::All, "all"), (FileFilter::RawOnly, "RAW only"), (FileFilter::JpegOnly, "JPEG only")] {
-                            if ui.selectable_label(app.ingest.opts.filter == f, label).clicked() {
+                            if super::icons::chip(ui, t, label, app.ingest.opts.filter == f).clicked() {
                                 app.ingest.opts.filter = f;
                                 opts_changed = true;
                             }
@@ -211,7 +211,20 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                             .day
                             .or_else(|| app.ingest.plan.as_ref().and_then(|p| p.days.first().map(|(d, _)| *d)))
                             .unwrap_or_else(apature_ingest::today);
-                        let facts = apature_ingest::Facts { stem, ext, date: Some(date), time: Some((19, 4, 0)), headline: None };
+                        let facts = apature_ingest::Facts {
+                            stem,
+                            ext,
+                            date: Some(date),
+                            time: Some((19, 4, 0)),
+                            folder: Some("100NIKON".into()),
+                            camera: Some("NIKON Z 6_2".into()),
+                            iso: Some(800),
+                            f_number: Some(2.8),
+                            exposure: Some((1, 250)),
+                            focal_mm: Some(70.0),
+                            today: Some(apature_ingest::today()),
+                            ..Default::default()
+                        };
                         let line = match apature_ingest::example_names(o, &facts) {
                             Ok((folder, name)) if folder.is_empty() => name,
                             Ok((folder, name)) => format!("{folder}/{name}"),
@@ -226,7 +239,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if app.assignment.is_some() {
                         ui.checkbox(&mut app.ingest.apply_pad, "Apply the loaded assignment pad to the copies");
                     }
-                    ui.add(egui::Label::new(RichText::new("tokens: {filename} {ext} {frame} {seqn} {seqn:4} {headline} {date} {yymmdd} {year} {month} {day} {time}").monospace().size(9.5).color(t.muted)).wrap());
+                    ui.add(egui::Label::new(RichText::new("tokens: {filename} {ext} {frame} {seqn:3} {headline} {date} {datesort} {yymmdd} {year4} {yr2} {month0} {monthname} {mnn3} {day0} {dow3} {time} {hour} {hour12}{ampm} {camera} {lens} {iso} {aperture} {shutter} {focal} {folder} {today} {todaysort}").monospace().size(9.5).color(t.muted)).wrap());
                 });
             });
         });

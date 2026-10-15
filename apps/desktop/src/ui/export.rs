@@ -56,10 +56,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     ui.add_space(S2);
                     labeled(ui, t, "Photos", |ui| {
                         ui.horizontal(|ui| {
-                            if ui.selectable_label(!app.export.scope_all, format!("Selected ({selected})")).clicked() {
+                            if super::icons::chip(ui, t, &format!("Selected ({selected})"), !app.export.scope_all).clicked() {
                                 app.export.scope_all = false;
                             }
-                            if ui.selectable_label(app.export.scope_all, format!("All in view ({in_view})")).clicked() {
+                            if super::icons::chip(ui, t, &format!("All in view ({in_view})"), app.export.scope_all).clicked() {
                                 app.export.scope_all = true;
                             }
                         });
@@ -78,7 +78,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                         });
                     });
                     labeled(ui, t, "Naming", |ui| {
-                        if ui.add(egui::TextEdit::singleline(&mut app.prefs.export.rename).desired_width(f32::INFINITY).hint_text("{filename}  or  100726-SPO-BGLF-{seqn:3}  (empty = keep names)")).changed() {
+                        if ui.add(egui::TextEdit::singleline(&mut app.prefs.export.rename).desired_width(f32::INFINITY).hint_text("{filename}  ·  {headline}-{seqn:3}  ·  empty keeps names")).changed() {
                             prefs_changed = true;
                         }
                     });
@@ -107,7 +107,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     labeled(ui, t, "Long side", |ui| {
                         ui.horizontal(|ui| {
                             for (px, label) in [(2048, "2048"), (3000, "3000"), (4096, "4096"), (0, "Full size")] {
-                                if ui.selectable_label(app.prefs.export.long_side == px, label).clicked() {
+                                if super::icons::chip(ui, t, &label, app.prefs.export.long_side == px).clicked() {
                                     app.prefs.export.long_side = px;
                                     prefs_changed = true;
                                 }

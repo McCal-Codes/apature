@@ -164,3 +164,37 @@ pub fn volume_chip(
         VolumeKind::System => "System volume",
     })
 }
+
+/// A plain selectable chip (no glyph): the one style for DAYS, FILES, export
+/// scope and size choices, matching `volume_chip`.
+pub fn chip(ui: &mut egui::Ui, t: &Theme, label: &str, selected: bool) -> egui::Response {
+    let font = egui::FontId::proportional(13.0);
+    let galley = ui.fonts_mut(|f| f.layout_no_wrap(label.to_string(), font, t.text));
+    let w = 10.0 + galley.size().x + 10.0;
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
+    let p = ui.painter();
+    if selected {
+        p.rect_filled(rect, CornerRadius::same(6), t.accent_wash);
+        p.rect_stroke(
+            rect,
+            CornerRadius::same(6),
+            Stroke::new(1.0, t.accent),
+            StrokeKind::Inside,
+        );
+    } else if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(6), t.raised);
+    } else {
+        p.rect_stroke(
+            rect,
+            CornerRadius::same(6),
+            Stroke::new(1.0, t.line),
+            StrokeKind::Inside,
+        );
+    }
+    p.galley(
+        Pos2::new(rect.left() + 10.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        if selected { t.text } else { t.text2 },
+    );
+    resp
+}
