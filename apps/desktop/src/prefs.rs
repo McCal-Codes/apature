@@ -110,6 +110,16 @@ impl Default for Prefs {
     }
 }
 
+/// The app's ingest defaults: the owner's TribLive convention without the
+/// section prefix, one folder per shoot and files `Headline001-MMDDYY.ext`.
+pub fn default_ingest_options() -> apature_ingest::Options {
+    apature_ingest::Options {
+        folder_template: "{headline}".into(),
+        rename_template: "{headline}{seqn:3}-{month0}{day0}{yr2}".into(),
+        ..Default::default()
+    }
+}
+
 impl Prefs {
     pub fn path() -> Option<PathBuf> {
         directories::ProjectDirs::from("dev", "mccal", "Apature")
