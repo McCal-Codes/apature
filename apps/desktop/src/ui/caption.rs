@@ -27,6 +27,10 @@ pub struct DraftFields {
     pub credit: String,
     pub copyright: String,
     pub source: String,
+    pub title: String,
+    pub caption_writer: String,
+    pub instructions: String,
+    pub transmission_reference: String,
 }
 
 impl DraftFields {
@@ -48,6 +52,10 @@ impl DraftFields {
             credit: s(&i.credit),
             copyright: s(&i.copyright),
             source: s(&i.source),
+            title: s(&i.title),
+            caption_writer: s(&i.caption_writer),
+            instructions: s(&i.instructions),
+            transmission_reference: s(&i.transmission_reference),
         }
     }
 
@@ -84,6 +92,13 @@ impl DraftFields {
             credit: d(&self.credit, &original.credit),
             copyright: d(&self.copyright, &original.copyright),
             source: d(&self.source, &original.source),
+            title: d(&self.title, &original.title),
+            caption_writer: d(&self.caption_writer, &original.caption_writer),
+            instructions: d(&self.instructions, &original.instructions),
+            transmission_reference: d(
+                &self.transmission_reference,
+                &original.transmission_reference,
+            ),
             ..Default::default()
         }
     }
@@ -110,12 +125,39 @@ fn field(
     value: &mut String,
     multiline: bool,
 ) -> egui::Response {
-    ui.label(
-        RichText::new(label.to_uppercase())
-            .monospace()
-            .size(9.5)
-            .color(t.muted),
-    );
+    field_h(ui, t, label, value, multiline, &[])
+}
+
+/// A field with a ▾ menu of recent values (newest first) when there are any.
+fn field_h(
+    ui: &mut egui::Ui,
+    t: &Theme,
+    label: &str,
+    value: &mut String,
+    multiline: bool,
+    history: &[String],
+) -> egui::Response {
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(label.to_uppercase())
+                .monospace()
+                .size(9.5)
+                .color(t.muted),
+        );
+        if !history.is_empty() {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.menu_button(RichText::new("▾ recent").size(10.0).color(t.text2), |ui| {
+                    ui.set_min_width(220.0);
+                    for h in history {
+                        if ui.button(RichText::new(h).size(12.0)).clicked() {
+                            *value = h.clone();
+                            ui.close();
+                        }
+                    }
+                });
+            });
+        }
+    });
     let edit = if multiline {
         egui::TextEdit::multiline(value)
             .desired_rows(4)
@@ -272,22 +314,39 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         }
                     }
                 }
-                field(ui, t, "Headline", &mut draft.fields.headline, false);
-                field(ui, t, "Keywords (; separated)", &mut draft.fields.keywords, false);
+                let hist = |k: &str| -> Vec<String> { app.prefs.caption_history.get(k).cloned().unwrap_or_default() };
+                field_h(ui, t, "Headline", &mut draft.fields.headline, false, &hist("headline"));
+                field_h(ui, t, "Keywords (; separated)", &mut draft.fields.keywords, false, &hist("keywords"));
                 ui.columns(2, |cols| {
-                    field(&mut cols[0], t, "Sublocation", &mut draft.fields.sublocation, false);
-                    field(&mut cols[1], t, "City", &mut draft.fields.city, false);
+                    field_h(&mut cols[0], t, "Sublocation", &mut draft.fields.sublocation, false, &hist("sublocation"));
+                    field_h(&mut cols[1], t, "City", &mut draft.fields.city, false, &hist("city"));
                 });
                 ui.columns(2, |cols| {
-                    field(&mut cols[0], t, "State", &mut draft.fields.state, false);
-                    field(&mut cols[1], t, "Country", &mut draft.fields.country, false);
+                    field_h(&mut cols[0], t, "State", &mut draft.fields.state, false, &hist("state"));
+                    field_h(&mut cols[1], t, "Country", &mut draft.fields.country, false, &hist("country"));
                 });
-                field(ui, t, "Creator", &mut draft.fields.creator, false);
-                field(ui, t, "Credit", &mut draft.fields.credit, false);
+                field_h(ui, t, "Creator", &mut draft.fields.creator, false, &hist("creator"));
+                field_h(ui, t, "Credit", &mut draft.fields.credit, false, &hist("credit"));
                 ui.columns(2, |cols| {
-                    field(&mut cols[0], t, "Copyright", &mut draft.fields.copyright, false);
-                    field(&mut cols[1], t, "Source", &mut draft.fields.source, false);
+                    field_h(&mut cols[0], t, "Copyright", &mut draft.fields.copyright, false, &hist("copyright"));
+                    field_h(&mut cols[1], t, "Source", &mut draft.fields.source, false, &hist("source"));
                 });
+                // The rest of Photo Mechanic's IPTC Info dialog, folded away
+                // until a desk asks for them.
+                let more_used = !(draft.fields.title.is_empty()
+                    && draft.fields.caption_writer.is_empty()
+                    && draft.fields.instructions.is_empty()
+                    && draft.fields.transmission_reference.is_empty());
+                egui::CollapsingHeader::new(RichText::new("More fields").size(11.0).color(t.text2))
+                    .default_open(more_used)
+                    .show(ui, |ui| {
+                        ui.columns(2, |cols| {
+                            field_h(&mut cols[0], t, "Title", &mut draft.fields.title, false, &hist("title"));
+                            field_h(&mut cols[1], t, "Caption writer", &mut draft.fields.caption_writer, false, &hist("caption_writer"));
+                        });
+                        field_h(ui, t, "Instructions", &mut draft.fields.instructions, false, &hist("instructions"));
+                        field_h(ui, t, "Transmission reference", &mut draft.fields.transmission_reference, false, &hist("transmission_reference"));
+                    });
                 let delim = app.prefs.code_delimiter;
                 if !app.codes.codes.is_empty() {
                     let list: Vec<String> = app.codes.codes.iter().take(12).map(|(c, _)| format!("{delim}{c}{delim}")).collect();
@@ -302,6 +361,15 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     }
                     if ui.add_enabled(dirty, egui::Button::new("Save")).clicked() {
                         cmds.push(Command::SaveCaption);
+                    }
+                    let n = app.selection.targets(app.cursor).len();
+                    if n > 1
+                        && ui
+                            .add_enabled(dirty, egui::Button::new(format!("Save to {n} selected")))
+                            .on_hover_text("Writes only the fields you changed to every selected photo")
+                            .clicked()
+                    {
+                        cmds.push(Command::SaveCaptionToSelection);
                     }
                     if ui.add_enabled(dirty, egui::Button::new("Revert")).clicked() {
                         cmds.push(Command::RevertCaption);

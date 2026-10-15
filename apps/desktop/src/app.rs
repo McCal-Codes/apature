@@ -1213,6 +1213,7 @@ impl App {
         let idx = draft.idx;
         match items::write_iptc(&self.items[idx], &changes) {
             Ok(w) => {
+                self.remember_caption_history(&changes);
                 if let Some(d) = self.caption_draft.as_mut() {
                     d.original = d.fields.clone();
                 }
@@ -1232,6 +1233,77 @@ impl App {
                 false
             }
         }
+    }
+
+    /// Feed the ▾ recent-values menus from what was just written.
+    fn remember_caption_history(&mut self, c: &apature_metadata::iptc::Iptc) {
+        let pairs: [(&str, &Option<String>); 11] = [
+            ("headline", &c.headline),
+            ("sublocation", &c.sublocation),
+            ("city", &c.city),
+            ("state", &c.state),
+            ("country", &c.country),
+            ("credit", &c.credit),
+            ("copyright", &c.copyright),
+            ("source", &c.source),
+            ("title", &c.title),
+            ("caption_writer", &c.caption_writer),
+            ("instructions", &c.instructions),
+        ];
+        let mut any = false;
+        for (k, v) in pairs {
+            if let Some(v) = v {
+                self.prefs.remember_caption_value(k, v);
+                any = true;
+            }
+        }
+        if let Some(list) = &c.creator {
+            self.prefs
+                .remember_caption_value("creator", &list.join("; "));
+            any = true;
+        }
+        if let Some(list) = &c.keywords {
+            self.prefs
+                .remember_caption_value("keywords", &list.join("; "));
+            any = true;
+        }
+        if any {
+            self.prefs_dirty = true;
+        }
+    }
+
+    /// Photo Mechanic's "apply to all selected": only the fields that changed
+    /// in the draft go to every selected photo; untouched fields stay as each
+    /// photo had them.
+    fn save_caption_to_selection(&mut self) {
+        let Some(draft) = self.caption_draft.as_ref() else {
+            return;
+        };
+        if !draft.dirty() {
+            return;
+        }
+        let changes = draft.fields.changes_from(&draft.original);
+        let targets = self.selection.targets(self.cursor);
+        let mut written = 0usize;
+        let mut failed: Option<String> = None;
+        for &i in &targets {
+            match items::write_iptc(&self.items[i], &changes) {
+                Ok(_) => written += 1,
+                Err(e) => failed = Some(e.to_string()),
+            }
+        }
+        self.remember_caption_history(&changes);
+        if let Some(d) = self.caption_draft.as_mut() {
+            d.original = d.fields.clone();
+        }
+        self.inspector_iptc = None;
+        self.status = match failed {
+            None => format!("Caption fields saved to {written} photos"),
+            Some(e) => format!(
+                "Saved to {written} of {} photos; last error: {e}",
+                targets.len()
+            ),
+        };
     }
 
     fn apply_stationery(&mut self) {
@@ -2237,6 +2309,7 @@ impl App {
             Command::SaveCaption => {
                 self.save_caption(true);
             }
+            Command::SaveCaptionToSelection => self.save_caption_to_selection(),
             Command::SaveCaptionAndNext => {
                 self.save_caption(true);
                 self.move_focus(1, Mods::default());

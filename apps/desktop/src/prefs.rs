@@ -80,6 +80,9 @@ pub struct Prefs {
     pub seq_continue: bool,
     /// Next sequence number per headline key (lower-cased, trimmed; "" = none).
     pub seq_counters: BTreeMap<String, u32>,
+    /// Recent values per caption field (headline, credit, city…), newest first,
+    /// offered from the ▾ next to the field like Photo Mechanic's autocomplete.
+    pub caption_history: BTreeMap<String, Vec<String>>,
     /// Accessibility: whole-UI scale (text and controls), 1.0 = default.
     pub ui_scale: f32,
     /// Accessibility: follow the system Reduce Motion setting, or force it.
@@ -120,6 +123,7 @@ impl Default for Prefs {
             open_ingest_on_card: true,
             seq_continue: true,
             seq_counters: BTreeMap::new(),
+            caption_history: BTreeMap::new(),
             ui_scale: 1.0,
             motion: Motion::System,
             high_contrast: false,
@@ -195,4 +199,18 @@ pub enum NumberKeys {
     Rating,
     /// 1–8 set the colour class, 0 clears it; ⌘0–⌘5 set the rating (Photo Mechanic).
     ColorClass,
+}
+
+impl Prefs {
+    /// Remember a field value for the ▾ menu: newest first, no duplicates, 12 kept.
+    pub fn remember_caption_value(&mut self, field: &str, value: &str) {
+        let v = value.trim();
+        if v.is_empty() {
+            return;
+        }
+        let list = self.caption_history.entry(field.to_string()).or_default();
+        list.retain(|x| x != v);
+        list.insert(0, v.to_string());
+        list.truncate(12);
+    }
 }
