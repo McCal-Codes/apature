@@ -13,6 +13,17 @@ fn row(
     count: Option<usize>,
     selected: bool,
 ) -> egui::Response {
+    row_glyph(ui, t, label, count, selected, None)
+}
+
+fn row_glyph(
+    ui: &mut egui::Ui,
+    t: &Theme,
+    label: &str,
+    count: Option<usize>,
+    selected: bool,
+    volume: Option<crate::platform::VolumeKind>,
+) -> egui::Response {
     let (rect, resp) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), ROW_H), Sense::click());
     let p = ui.painter();
@@ -26,12 +37,17 @@ fn row(
         egui::pos2(rect.left() + S2 + 6.0, rect.center().y),
         egui::vec2(12.0, 12.0),
     );
-    p.rect_stroke(
-        glyph,
-        egui::CornerRadius::same(3),
-        egui::Stroke::new(1.5, fg),
-        egui::StrokeKind::Inside,
-    );
+    match volume {
+        Some(kind) => super::icons::volume_glyph(p, glyph.center(), kind, fg),
+        None => {
+            p.rect_stroke(
+                glyph,
+                egui::CornerRadius::same(3),
+                egui::Stroke::new(1.5, fg),
+                egui::StrokeKind::Inside,
+            );
+        }
+    }
     let text_x = rect.left() + S2 + 12.0 + S2;
     let mut max_w = rect.right() - S2 - text_x;
     if let Some(n) = count {
@@ -155,7 +171,8 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     ui.add_space(S3);
                     super::eyebrow(ui, t, "Drives & cards");
                     for (name, path) in app.volumes.clone() {
-                        if row(ui, t, &name, None, false).clicked() {
+                        let kind = app.volume_kinds.get(&path).copied();
+                        if row_glyph(ui, t, &name, None, false, kind).clicked() {
                             cmds.push(Command::OpenFolder(path));
                         }
                     }
