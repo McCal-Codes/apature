@@ -390,6 +390,19 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
         let mut added_any = false;
         // The stem the photo ended up with, so companions follow a suffix.
         let mut placed_stem: Option<String> = None;
+        let item_companions = if opts.copy_companions {
+            companions(item)
+        } else {
+            Vec::new()
+        };
+        let companion_exts: Vec<String> = item_companions
+            .iter()
+            .map(|c| {
+                c.extension()
+                    .map(|e| e.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+            .collect();
         for v in &variants {
             // Read once: the ledger check and the entry share it.
             let fp = fingerprint(&v.path);
@@ -434,6 +447,8 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
             };
             // With the suffix policy, walk `name`, `stem-1.ext`, `stem-2.ext`…
             // until the name is free at every destination and in this plan.
+            // The first photo file fixes the stem its companions take, so
+            // their names must be free under it too.
             let (name, suffixed) = if opts.on_collision == CollisionPolicy::Suffix {
                 let (stem, ext) = match name.rfind('.') {
                     Some(i) if i > 0 => (name[..i].to_string(), name[i..].to_string()),
@@ -446,15 +461,24 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
                     } else {
                         format!("{stem}-{k}{ext}")
                     };
-                    let p = opts.primary.join(&folder_rel).join(&cand);
-                    let s = opts
-                        .secondary
-                        .as_ref()
-                        .map(|s| s.join(&folder_rel).join(&cand));
-                    let taken = p.exists()
-                        || seen_dest.contains_key(&p)
-                        || s.as_ref()
-                            .is_some_and(|s| s.exists() || seen_dest.contains_key(s));
+                    let cand_stem = if k == 0 {
+                        stem.clone()
+                    } else {
+                        format!("{stem}-{k}")
+                    };
+                    let mut names = vec![cand.clone()];
+                    if placed_stem.is_none() {
+                        names.extend(companion_exts.iter().map(|e| format!("{cand_stem}.{e}")));
+                    }
+                    let is_taken = |n: &String| {
+                        let p = opts.primary.join(&folder_rel).join(n);
+                        let s = opts.secondary.as_ref().map(|s| s.join(&folder_rel).join(n));
+                        p.exists()
+                            || seen_dest.contains_key(&p)
+                            || s.as_ref()
+                                .is_some_and(|s| s.exists() || seen_dest.contains_key(s))
+                    };
+                    let taken = names.iter().any(is_taken);
                     if !taken || k > 9999 {
                         break (cand, k > 0);
                     }
@@ -487,9 +511,9 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
             );
             added_any = true;
         }
-        if added_any && opts.copy_companions {
+        if added_any {
             let stem = placed_stem.unwrap_or_default();
-            for c in companions(item) {
+            for c in item_companions {
                 let ext = c
                     .extension()
                     .map(|e| e.to_string_lossy().into_owned())
@@ -662,6 +686,39 @@ mod tests {
             ..Default::default()
         };
         let plan = build_plan(&opts, &Ledger::in_memory()).unwrap();
+        let names: Vec<String> = plan
+            .entries
+            .iter()
+            .map(|e| {
+                e.primary
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert_eq!(names, vec!["DSC_0001-1.JPG", "DSC_0001-1.WAV"]);
+    }
+
+    #[test]
+    fn a_taken_memo_name_moves_the_whole_photo_to_a_free_suffix() {
+        // The photo's name is free but its memo's is not: with the suffix
+        // policy both move to -1 instead of the plan being refused.
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        fs::write(src.path().join("DSC_0001.JPG"), b"one").unwrap();
+        fs::write(src.path().join("DSC_0001.WAV"), b"memo").unwrap();
+        fs::write(dst.path().join("DSC_0001.WAV"), b"old memo").unwrap();
+        let opts = Options {
+            source: src.path().to_path_buf(),
+            primary: dst.path().to_path_buf(),
+            folder_template: String::new(),
+            only_new: false,
+            on_collision: CollisionPolicy::Suffix,
+            ..Default::default()
+        };
+        let plan = build_plan(&opts, &Ledger::in_memory()).unwrap();
+        assert!(plan.can_run(), "{:?}", plan.collisions);
         let names: Vec<String> = plan
             .entries
             .iter()
