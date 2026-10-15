@@ -174,6 +174,9 @@ pub struct App {
     pub filter: Filter,
     pub undo: UndoStack,
     pub workspace: Workspace,
+    /// The Ingest window (a separate native window, like Photo Mechanic's
+    /// ingest dialog) is open. Headless runs keep Ingest inline instead.
+    pub ingest_window: bool,
     pub cols: usize,
     pub last_visible_rows: Range<usize>,
     pub scroll_to_cursor: bool,
@@ -270,6 +273,7 @@ impl App {
             filter: Filter::default(),
             undo: UndoStack::default(),
             workspace: Workspace::Sheet,
+            ingest_window: false,
             cols: 1,
             last_visible_rows: 0..0,
             scroll_to_cursor: false,
@@ -381,7 +385,7 @@ impl App {
             app.ingest.opts.primary = d;
         }
         if launch.ingest {
-            app.workspace = Workspace::Ingest;
+            app.open_ingest(&cc.egui_ctx);
             app.ingest_options_changed();
         }
         if launch.preview && !app.view.is_empty() {
@@ -738,6 +742,65 @@ impl App {
     }
 
     // ----- ingest ------------------------------------------------------------
+
+    pub const INGEST_VIEWPORT: &'static str = "apature-ingest";
+
+    /// Open Ingest: a separate window in normal use (the contact sheet stays
+    /// in the main window, so culling can go on while a card copies), inline
+    /// as a workspace for headless screenshot and `--ingest-run` sessions,
+    /// which capture the main viewport only.
+    pub fn open_ingest(&mut self, ctx: &egui::Context) {
+        if self.launch.screenshot.is_some() || self.launch.ingest_run {
+            self.workspace = Workspace::Ingest;
+            return;
+        }
+        if self.ingest_window {
+            ctx.send_viewport_cmd_to(
+                egui::ViewportId::from_hash_of(Self::INGEST_VIEWPORT),
+                egui::ViewportCommand::Focus,
+            );
+        }
+        self.ingest_window = true;
+    }
+
+    fn show_ingest_window(&mut self, ctx: &egui::Context, t: &ui::tokens::Theme) {
+        if !self.ingest_window {
+            return;
+        }
+        let id = egui::ViewportId::from_hash_of(Self::INGEST_VIEWPORT);
+        let builder = egui::ViewportBuilder::default()
+            .with_title("Ingest")
+            .with_app_id("dev.mccal.apature")
+            .with_inner_size([1120.0, 800.0])
+            .with_min_inner_size([820.0, 600.0]);
+        ctx.show_viewport_immediate(id, builder, |ctx, class| {
+            let close = ctx.input(|i| i.viewport().close_requested())
+                || (ctx.input(|i| i.key_pressed(egui::Key::Escape))
+                    && ctx.memory(|m| m.focused().is_none()));
+            if close {
+                self.ingest_window = false;
+            }
+            if class == egui::ViewportClass::Embedded {
+                // No native child windows on this backend: fall back to a
+                // floating panel inside the main window.
+                egui::Window::new("Ingest")
+                    .default_size([1080.0, 760.0])
+                    .show(ctx, |ui| ui::ingest::show(self, ui, t));
+            } else {
+                egui::CentralPanel::default()
+                    .frame(
+                        egui::Frame::NONE
+                            .fill(t.photo)
+                            .inner_margin(egui::Margin::same(0)),
+                    )
+                    .show(ctx, |ui| {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| ui::ingest::show(self, ui, t));
+                    });
+            }
+        });
+    }
 
     pub fn ingest_options_changed(&mut self) {
         if self.ingest.opts.headline.is_none() {
@@ -1790,7 +1853,7 @@ impl App {
 
     /// Re-read `/Volumes`; a newly mounted volume with a DCIM folder is a
     /// camera card: say so, and open Ingest on it when the pref is on.
-    fn poll_volumes(&mut self) {
+    fn poll_volumes(&mut self, ctx: &egui::Context) {
         let before: Vec<PathBuf> = self.volumes.iter().map(|(_, p)| p.clone()).collect();
         self.refresh_volumes();
         let new_cards: Vec<(String, PathBuf)> = self
@@ -1804,7 +1867,7 @@ impl App {
             if self.prefs.open_ingest_on_card && self.ingest.running.is_none() {
                 self.ingest.opts.source = path.clone();
                 self.ingest.opts.include_subfolders = true;
-                self.workspace = Workspace::Ingest;
+                self.open_ingest(ctx);
                 self.ingest_options_changed();
             }
         }
@@ -1953,6 +2016,7 @@ impl App {
                 self.prefs.filmstrip_visible = !self.prefs.filmstrip_visible;
                 self.prefs_dirty = true;
             }
+            Command::SetWorkspace(Workspace::Ingest) => self.open_ingest(ctx),
             Command::SetWorkspace(w) => {
                 if w.available().is_ok() && !self.items.is_empty() {
                     if w == Workspace::Preview && self.workspace != Workspace::Preview {
@@ -2179,6 +2243,7 @@ impl App {
                 if let Some(d) = dest {
                     self.ingest.running = None;
                     self.ingest.plan = None;
+                    self.ingest_window = false;
                     self.open_folder(&d);
                 }
             }
@@ -2522,7 +2587,7 @@ impl eframe::App for App {
         }
         if self.volumes_checked.elapsed().as_secs_f32() >= 2.0 {
             self.volumes_checked = Instant::now();
-            self.poll_volumes();
+            self.poll_volumes(ctx);
         }
         ctx.request_repaint_after(std::time::Duration::from_secs(2));
         if let Some(c) = self.dispatch_later.take() {
@@ -2588,6 +2653,7 @@ impl eframe::App for App {
                     Workspace::Export => ui::export::show(self, ui, &t),
                 }
             });
+        self.show_ingest_window(ctx, &t);
         let r = ctx.content_rect();
         ctx.layer_painter(egui::LayerId::background()).line_segment(
             [

@@ -37,7 +37,8 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         Workspace::Ingest,
                         Workspace::Export,
                     ] {
-                        let selected = app.workspace == w;
+                        let selected =
+                            app.workspace == w || (w == Workspace::Ingest && app.ingest_window);
                         match w.available() {
                             Ok(()) => {
                                 if ui
