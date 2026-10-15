@@ -16,15 +16,17 @@ pub enum Page {
     Classes,
     Metadata,
     Ingest,
+    Accessibility,
     Cache,
     Shortcuts,
 }
 
-const PAGES: [(Page, &str); 6] = [
+const PAGES: [(Page, &str); 7] = [
     (Page::General, "General"),
     (Page::Classes, "Color classes"),
     (Page::Metadata, "Metadata"),
     (Page::Ingest, "Ingest"),
+    (Page::Accessibility, "Accessibility"),
     (Page::Cache, "Cache"),
     (Page::Shortcuts, "Shortcuts"),
 ];
@@ -176,6 +178,17 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         heading(ui, &t, "Ingest defaults");
                         let mut o = app.prefs.ingest.clone().unwrap_or_else(crate::prefs::default_ingest_options);
                         let mut changed = false;
+                        if ui.checkbox(&mut app.prefs.seq_continue, "Keep {seqn} counting across ingests with the same headline").changed() {
+                            app.prefs_dirty = true;
+                        }
+                        if !app.prefs.seq_counters.is_empty() {
+                            hint(ui, &t, &format!("{} headline counter(s) remembered.", app.prefs.seq_counters.len()));
+                            if ui.small_button("Forget all counters").clicked() {
+                                app.prefs.seq_counters.clear();
+                                app.prefs_dirty = true;
+                            }
+                        }
+                        ui.add_space(S3);
                         ui.label(RichText::new("Folder template").size(12.0).color(t.text2));
                         changed |= ui.add(egui::TextEdit::singleline(&mut o.folder_template).desired_width(f32::INFINITY)).changed();
                         ui.label(RichText::new("Rename template").size(12.0).color(t.text2));
@@ -196,6 +209,34 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                             app.ingest.opts = o;
                             app.prefs_dirty = true;
                         }
+                    }
+                    Page::Accessibility => {
+                        heading(ui, &t, "Accessibility");
+                        ui.label(RichText::new("Text and control size").size(12.0).color(t.text2));
+                        let mut pct = (app.prefs.ui_scale * 100.0).round();
+                        if ui.add(egui::Slider::new(&mut pct, 80.0..=180.0).step_by(5.0).suffix(" %")).changed() {
+                            app.prefs.ui_scale = pct / 100.0;
+                            app.prefs_dirty = true;
+                        }
+                        hint(ui, &t, "Scales every panel, label and control. ⌘+ and ⌘− do the same while the app is open; 100 % is the default.");
+                        ui.add_space(S3);
+                        ui.label(RichText::new("Motion").size(12.0).color(t.text2));
+                        ui.horizontal(|ui| {
+                            for (m, label) in [(crate::prefs::Motion::System, "Follow macOS Reduce Motion"), (crate::prefs::Motion::Reduce, "Reduce"), (crate::prefs::Motion::Full, "Full")] {
+                                if ui.selectable_label(app.prefs.motion == m, label).clicked() {
+                                    app.prefs.motion = m;
+                                    app.prefs_dirty = true;
+                                }
+                            }
+                        });
+                        hint(ui, &t, "Reduce turns fades, slides and the ingest stagger into instant changes. Nothing in Apature loops or autoplays either way.");
+                        ui.add_space(S3);
+                        if ui.checkbox(&mut app.prefs.high_contrast, "Higher contrast text and borders").changed() {
+                            app.prefs_dirty = true;
+                        }
+                        hint(ui, &t, "Lifts the quiet grey labels and strengthens panel borders in both appearances.");
+                        ui.add_space(S3);
+                        hint(ui, &t, "Keyboard: every workspace is reachable with ⌘⇧1–5, the sheet with arrows, marks with 0–5 and the class keys. Screen reader labels are still being filled in (see docs/ACCESSIBILITY.md).");
                     }
                     Page::Cache => {
                         heading(ui, &t, "Thumbnail cache");

@@ -20,6 +20,24 @@
 - [ ] ingest UI on top of `apature-ingest`: card detection, two destinations, rename template, report
 - [ ] write IPTC into JPEG exports (sidecar stays the source for RAW)
 
+## Requested 2026-10-15 (owner): Photo Mechanic parity, in order of value
+After the first real-card ingest (Ryan's birthday, 134 NEF, verified) the owner
+confirmed this order. Readability, no overlapping UI, polish and accessibility
+settings apply to every item.
+1. [x] Persistent `{seqn}` counter per headline (2026-10-15): continues across
+   ingests, "Start over at 1" on the sheet, Settings › Ingest switch.
+2. [ ] Preserve the card's folder structure (option); copy WAV voice memos.
+3. [ ] Open the contact sheet while the ingest is still running (Ingest is its
+   own window since 2026-10-15, so the main window is free for it).
+4. [ ] Lossless rotate (orientation tag) and a crop stored in XMP, applied on export.
+5. [ ] Keywords panel, GPS, sRGB conversion on export.
+6. [ ] FTP / SFTP delivery after export.
+7. [ ] Live Ingest (watched folder) → the camera-FTP idea.
+Apature-only: verified eject (refuse until every hash is clean; per-file
+ledger), assignment-aware defaults, collision and other-day warnings before
+the copy. Cross-cutting: easy to read, nothing overlapping, polished, and
+Settings › Accessibility (text size, motion, contrast; 2026-10-15).
+
 ## Requested 2026-10-14 (owner)
 - [x] Drag and drop a folder or file onto the window to open it (2026-10-14)
 - [x] **Tabs** (2026-10-14): in-app tab strip, per-tab view/selection/filter/undo, ⌘T/⌘W/⌘⇧]/⌘⇧[, restored at launch.

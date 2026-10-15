@@ -162,14 +162,32 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                             let mut h = app.ingest.opts.headline.clone().unwrap_or_default();
                             if ui.add(egui::TextEdit::singleline(&mut h).desired_width(f32::INFINITY)).changed() {
                                 app.ingest.opts.headline = if h.trim().is_empty() { None } else { Some(h) };
+                                if app.prefs.seq_continue {
+                                    app.ingest.opts.seq_start = app.seq_start_for_headline();
+                                }
                                 opts_changed = true;
                             }
                         });
                     labeled(ui, t, "Seq. start", |ui| {
+                        ui.horizontal(|ui| {
                             if ui.add(egui::DragValue::new(&mut app.ingest.opts.seq_start).range(1..=99999)).changed() {
                                 opts_changed = true;
                             }
+                            if app.prefs.seq_continue {
+                                let remembered = app.seq_start_for_headline();
+                                if remembered > 1 {
+                                    ui.label(RichText::new(format!("continues from the last ingest with this headline ({remembered})")).size(11.0).color(t.muted));
+                                    if ui.small_button("Start over at 1").on_hover_text("Forget this headline's counter").clicked() {
+                                        let key = crate::prefs::seq_key(app.ingest.opts.headline.as_deref());
+                                        app.prefs.seq_counters.remove(&key);
+                                        app.prefs_dirty = true;
+                                        app.ingest.opts.seq_start = 1;
+                                        opts_changed = true;
+                                    }
+                                }
+                            }
                         });
+                    });
                     // Live example: what the first photo would be called with these
                     // templates. Stem/ext from the plan's first entry when there is one,
                     // date from the chosen day, else the card's first day, else today.

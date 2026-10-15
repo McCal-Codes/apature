@@ -24,6 +24,8 @@ pub struct Launch {
     pub folder: Option<PathBuf>,
     pub theme: Option<egui::Theme>,
     pub screenshot: Option<PathBuf>,
+    /// Window size at launch (for layout checks at small sizes).
+    pub size: Option<(f32, f32)>,
     pub screenshot_frame: u64,
     /// Hidden: select everything and open the filter popup, for screenshots.
     pub demo: bool,
@@ -73,6 +75,12 @@ fn parse_args() -> Launch {
                 }
             }
             "--screenshot" => l.screenshot = args.next().map(PathBuf::from),
+            "--size" => {
+                l.size = args.next().and_then(|v| {
+                    let (w, h) = v.split_once('x')?;
+                    Some((w.parse().ok()?, h.parse().ok()?))
+                })
+            }
             "--demo" => l.demo = true,
             "--caption" => l.caption = true,
             "--ingest" => l.ingest = true,
@@ -131,8 +139,9 @@ fn icon() -> Option<egui::IconData> {
 fn main() -> eframe::Result {
     env_logger::init();
     let launch = parse_args();
+    let (w, h) = launch.size.unwrap_or((1400.0, 900.0));
     let mut viewport = egui::ViewportBuilder::default()
-        .with_inner_size([1400.0, 900.0])
+        .with_inner_size([w, h])
         .with_min_inner_size([760.0, 480.0])
         .with_title("Apature")
         .with_app_id("dev.mccal.apature");
