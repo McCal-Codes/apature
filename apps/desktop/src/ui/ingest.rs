@@ -83,7 +83,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     }
                     // Days found on the card (from the last plan): pick one to ingest only that shoot.
                     let days: Vec<((i32, u32, u32), usize)> = app.ingest.plan.as_ref().map(|p| p.days.clone()).unwrap_or_default();
-                    if days.len() > 1 || app.ingest.opts.day.is_some() {
+                    if days.len() > 1 || (app.ingest.opts.day.is_some() && !days.is_empty()) {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(RichText::new("DAYS").monospace().size(9.5).color(t.muted));
                             let total: usize = days.iter().map(|(_, n)| n).sum();
