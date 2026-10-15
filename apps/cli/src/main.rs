@@ -152,6 +152,9 @@ enum Cmd {
         /// Only print the plan.
         #[arg(long)]
         dry_run: bool,
+        /// Add -1, -2… to a file name that is already taken instead of refusing.
+        #[arg(long)]
+        suffix: bool,
     },
     /// Print where the thumbnail cache lives.
     CacheDir,
@@ -225,8 +228,9 @@ fn main() -> Result<()> {
             headline,
             all,
             dry_run,
+            suffix,
         } => ingest(
-            source, primary, secondary, folder, rename, headline, all, dry_run,
+            source, primary, secondary, folder, rename, headline, all, dry_run, suffix,
         ),
         Cmd::Iptc { file } => {
             let item = item_for(&file)?;
@@ -465,8 +469,9 @@ fn ingest(
     headline: Option<String>,
     all: bool,
     dry_run: bool,
+    suffix: bool,
 ) -> Result<()> {
-    use apature_ingest::{build_plan, run, Event, Ledger, Options};
+    use apature_ingest::{build_plan, run, CollisionPolicy, Event, Ledger, Options};
     let ledger_path = directories::ProjectDirs::from("dev", "mccal", "Apature")
         .context("no home directory")?
         .data_dir()
@@ -480,6 +485,11 @@ fn ingest(
         rename_template: rename,
         headline,
         only_new: !all,
+        on_collision: if suffix {
+            CollisionPolicy::Suffix
+        } else {
+            CollisionPolicy::Refuse
+        },
         ..Default::default()
     };
     let plan = build_plan(&opts, &ledger)?;
