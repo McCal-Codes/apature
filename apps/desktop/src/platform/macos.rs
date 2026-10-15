@@ -107,6 +107,17 @@ impl MenuBar {
             &PredefinedMenuItem::copy(None),
             &PredefinedMenuItem::paste(None),
             &PredefinedMenuItem::separator(),
+            &item(
+                Command::CopyMetadata,
+                "Copy Metadata",
+                acc(cmd_alt, Code::KeyC),
+            ),
+            &item(
+                Command::PasteMetadata,
+                "Paste Metadata",
+                acc(cmd_alt, Code::KeyV),
+            ),
+            &PredefinedMenuItem::separator(),
             &item(Command::SelectAll, "Select All", acc(cmd, Code::KeyA)),
             &item(
                 Command::SelectNone,

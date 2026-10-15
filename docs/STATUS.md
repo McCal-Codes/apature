@@ -61,6 +61,29 @@ Events.
 | Motion: sidebar/inspector/filmstrip collapse and reveal eased; tab highlight slides and the new sheet fades in (160 ms); Preview grows out of the focused cell; filter chips, drop overlay and status text fade in (120 ms); ingest progress eases; all durations 0 under Reduce Motion (`App::anim`) | implemented; motion cannot be judged from stills, so **unreviewed by eye**; builds, runs, 60 tests |
 | Caption workspace (⌘⇧3): photo left, fields right, assignment header, Load assignment / Apply pad to N / Insert template, inline `\code\` expansion with autocomplete hint, ⌘⏎ save and next, autosave on navigation, Revert | implemented, verified in a screenshot; writes verified via the CLI path |
 
+## M10 Parity items: copy/paste metadata, eject, auto-suffix (2026-10-15)
+
+**Copy / Paste Metadata** (Edit menu, ⌥⌘C / ⌥⌘V): copies the focused
+photo's marks and IPTC into an internal clipboard; paste applies the
+marks to the selection through the undo stack and writes the IPTC in
+place (sidecar for RAW, embedded for JPEG, both for pairs); the status
+line reports photos and files. Not undoable for IPTC. Implemented, built,
+not yet driven by hand.
+
+**Ingest collision policy** (`CollisionPolicy::Suffix`, Photo Mechanic's
+AutoIncSuffix): when a destination name is taken, the plan walks
+`name`, `stem-1.ext`, `stem-2.ext`… until free at every destination and
+within the plan, and counts them as "renamed with a suffix". Refuse stays
+the default. Tested: unit test, and the CLI ingested the same card twice
+into one folder, refusing without `--suffix` (4 collisions) and producing
+`850_7783-1.NEF` etc. with it, all verified.
+
+**Eject** after ingest: a pref "Eject the card when every file has
+verified" (default off) and an "Eject the card" button on the Progress
+card for sources under /Volumes; runs `diskutil unmount` off the UI
+thread. Implemented; not yet tried on a physical card (the DMG was not
+mounted during this pass).
+
 ## M9 Rename in place and Move to Trash (2026-10-14)
 
 `apature-core::fileops`: a rename plan names every file of each photo
