@@ -18,8 +18,8 @@
 - 2026-10-15 night: template engine gained Photo Mechanic's camera/time/weekday/
   folder/today variables (see template.rs header; 85 tests). One chip style
   (`icons::chip`) across Ingest, Export; export hint no longer clips.
-  Polish pass still open: inspector density, toolbar glyphs, empty states
-  (Fen), Caption fields at narrow widths. Then: sheet-while-ingesting, burst
+  Toolbar workspace glyphs done. Polish pass still open: inspector density,
+  empty states (Fen). Caption at 1000x650 checked: no overlap. Then: sheet-while-ingesting, burst
   stacks, day chips on the sheet, FTP delivery.
 - Owner's operating rules for Claude sessions are in memory
   (`claude-agent-efficiency-rules`): no subagents unless independent, cheaper
