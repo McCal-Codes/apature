@@ -26,7 +26,8 @@ confirmed this order. Readability, no overlapping UI, polish and accessibility
 settings apply to every item.
 1. [x] Persistent `{seqn}` counter per headline (2026-10-15): continues across
    ingests, "Start over at 1" on the sheet, Settings › Ingest switch.
-2. [ ] Preserve the card's folder structure (option); copy WAV voice memos.
+2. [x] Preserve the card's folder structure (option); copy WAV voice memos
+   (2026-10-15): XMP sidecars on the card travel too and follow a `-N` suffix.
 3. [ ] Open the contact sheet while the ingest is still running (Ingest is its
    own window since 2026-10-15, so the main window is free for it).
 4. [ ] Lossless rotate (orientation tag) and a crop stored in XMP, applied on export.

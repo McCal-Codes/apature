@@ -30,11 +30,11 @@ Observed once, unexplained
 ## Order of work, sized for budget
 
 Small (each fits in a slice of a session)
-1. Preserve the card's folder structure (option) + copy WAV/XMP companions. Planner + one checkbox + test on the real card.
+1. ~~Preserve the card's folder structure (option) + copy WAV/XMP companions.~~ Done 2026-10-15 (cloud session); still to do on the Mac: one run against the real card.
 2. Open the contact sheet while the ingest runs: open the destination tab after the first verified file, keep ingesting; the window stays for progress.
-3. CLI timing instrumentation (plan / copy / ledger-save / exit).
+3. ~~CLI timing instrumentation.~~ Done 2026-10-15: `apature ingest` prints a `timing:` line (ledger load, plan, copy+verify+save, total) to stderr. Re-run the 134-NEF card on the Mac to find the missing ~80 s.
 4. Export hint, stale roadmap, performance numbers on the 839-photo day.
-5. CI workflow file.
+5. ~~CI workflow file.~~ Done 2026-10-15: `.github/workflows/ci.yml`, Linux only (fmt, clippy, test) to keep runner minutes cheap.
 
 Medium (half a session each)
 6. Lossless rotate (orientation tag in XMP/EXIF) and crop stored in XMP, applied on export.

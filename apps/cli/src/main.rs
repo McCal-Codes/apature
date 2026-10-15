@@ -158,6 +158,12 @@ enum Cmd {
         /// Only photos captured on this day, e.g. 2026-09-26.
         #[arg(long)]
         day: Option<String>,
+        /// Keep the card's subfolders (DCIM/100NIKON…) under the folder template.
+        #[arg(long)]
+        preserve_folders: bool,
+        /// Leave voice memos (.WAV) and card sidecars (.XMP) behind.
+        #[arg(long)]
+        no_companions: bool,
     },
     /// Print where the thumbnail cache lives.
     CacheDir,
@@ -233,8 +239,21 @@ fn main() -> Result<()> {
             dry_run,
             suffix,
             day,
+            preserve_folders,
+            no_companions,
         } => ingest(
-            source, primary, secondary, folder, rename, headline, all, dry_run, suffix, day,
+            source,
+            primary,
+            secondary,
+            folder,
+            rename,
+            headline,
+            all,
+            dry_run,
+            suffix,
+            day,
+            preserve_folders,
+            !no_companions,
         ),
         Cmd::Iptc { file } => {
             let item = item_for(&file)?;
@@ -475,8 +494,12 @@ fn ingest(
     dry_run: bool,
     suffix: bool,
     day: Option<String>,
+    preserve_folders: bool,
+    copy_companions: bool,
 ) -> Result<()> {
     use apature_ingest::{build_plan, run, CollisionPolicy, Event, Ledger, Options};
+    use std::time::Instant;
+    let t_start = Instant::now();
     let day = match day {
         Some(s) => Some(
             apature_metadata::codes::parse_date(&s.replace('-', ":"))
@@ -503,13 +526,19 @@ fn ingest(
             CollisionPolicy::Refuse
         },
         day,
+        preserve_folders,
+        copy_companions,
         ..Default::default()
     };
+    let t_ledger = t_start.elapsed().as_secs_f64();
+    let t0 = Instant::now();
     let plan = build_plan(&opts, &ledger)?;
+    let t_plan = t0.elapsed().as_secs_f64();
     println!(
-        "plan: {} files in {} photos, {:.1} MB, {} skipped, {} collisions",
+        "plan: {} files in {} photos ({} memos/sidecars), {:.1} MB, {} skipped, {} collisions",
         plan.entries.len(),
         plan.items,
+        plan.companions,
         plan.total_bytes as f64 / 1e6,
         plan.skipped.len(),
         plan.collisions.len()
@@ -521,11 +550,16 @@ fn ingest(
         println!("  {} → {}", e.source.display(), e.primary.display());
     }
     if dry_run {
+        eprintln!(
+            "timing: ledger load {t_ledger:.2} s, plan {t_plan:.2} s, total {:.2} s",
+            t_start.elapsed().as_secs_f64()
+        );
         return Ok(());
     }
     if !plan.can_run() {
         bail!("plan cannot run");
     }
+    let t1 = Instant::now();
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let report = run(&plan, &mut ledger, &cancel, |ev| match ev {
         Event::Verified { destination, .. } => println!("  ✓ {}", destination.display()),
@@ -545,6 +579,13 @@ fn ingest(
         report.files_failed(),
         report.bytes_copied as f64 / 1e6,
         report.elapsed_secs
+    );
+    // Where the wall-clock time goes (the copy figure above includes the
+    // ledger save; the rest is scanning, EXIF and fingerprints in the plan).
+    eprintln!(
+        "timing: ledger load {t_ledger:.2} s, plan {t_plan:.2} s, copy+verify+ledger save {:.2} s, total {:.2} s",
+        t1.elapsed().as_secs_f64(),
+        t_start.elapsed().as_secs_f64()
     );
     Ok(())
 }
