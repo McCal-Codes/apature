@@ -73,6 +73,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if ui.checkbox(&mut app.ingest.opts.only_new, "Only photos not ingested before").changed() {
                         opts_changed = true;
                     }
+                    let mut suffix = app.ingest.opts.on_collision == apature_ingest::CollisionPolicy::Suffix;
+                    if ui.checkbox(&mut suffix, "Add -1, -2… when a name is taken (never overwrite)").changed() {
+                        app.ingest.opts.on_collision = if suffix { apature_ingest::CollisionPolicy::Suffix } else { apature_ingest::CollisionPolicy::Refuse };
+                        opts_changed = true;
+                    }
+                    if ui.checkbox(&mut app.prefs.eject_after_ingest, "Eject the card when every file has verified").changed() {
+                        app.prefs_dirty = true;
+                    }
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("FILES").monospace().size(9.5).color(t.muted));
                         for (f, label) in [(FileFilter::All, "all"), (FileFilter::RawOnly, "RAW only"), (FileFilter::JpegOnly, "JPEG only")] {
@@ -175,6 +183,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if !plan.skipped.is_empty() {
                         summary.push_str(&format!(" · {} skipped", plan.skipped.len()));
                     }
+                    if plan.suffixed > 0 {
+                        summary.push_str(&format!(" · {} renamed with a suffix", plan.suffixed));
+                    }
                     ui.label(RichText::new(summary).size(13.0).color(t.text));
                     if let Some(first) = plan.entries.first() {
                         ui.label(RichText::new(format!("first copy: {}", first.primary.display())).monospace().size(10.5).color(t.text2));
@@ -238,9 +249,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if let Some((files, failed)) = r.pad {
                         ui.label(RichText::new(format!("assignment pad applied → {files} files{}", if failed > 0 { format!(", {failed} failed") } else { String::new() })).size(11.0).color(t.text2));
                     }
-                    if ok && ui.button("Open the ingested folder").clicked() {
-                        cmds.push(Command::IngestOpenResult);
-                    }
+                    ui.horizontal(|ui| {
+                        if ok && ui.button("Open the ingested folder").clicked() {
+                            cmds.push(Command::IngestOpenResult);
+                        }
+                        if ok && app.ingest.opts.source.starts_with("/Volumes") && ui.button("Eject the card").clicked() {
+                            cmds.push(Command::IngestEject);
+                        }
+                    });
                 }
                 ui.add_space(S2);
                 egui::ScrollArea::vertical().max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {

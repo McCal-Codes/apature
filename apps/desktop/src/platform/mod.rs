@@ -85,6 +85,32 @@ impl Platform {
         }
     }
 
+    /// Unmount the volume that holds `path` (macOS: `diskutil unmount`),
+    /// off the UI thread; only volumes under /Volumes qualify. Returns
+    /// the volume root that was asked to unmount, if any.
+    pub fn eject(path: &std::path::Path) -> Option<std::path::PathBuf> {
+        let mut comps = path.components();
+        let root: std::path::PathBuf = match (comps.next(), comps.next(), comps.next()) {
+            (Some(std::path::Component::RootDir), Some(v), Some(name))
+                if v.as_os_str() == "Volumes" =>
+            {
+                std::path::PathBuf::from("/Volumes").join(name.as_os_str())
+            }
+            _ => return None,
+        };
+        #[cfg(target_os = "macos")]
+        {
+            let r = root.clone();
+            std::thread::spawn(move || {
+                let _ = std::process::Command::new("diskutil")
+                    .arg("unmount")
+                    .arg(&r)
+                    .output();
+            });
+        }
+        Some(root)
+    }
+
     pub fn reveal(path: &std::path::Path) {
         #[cfg(target_os = "macos")]
         {

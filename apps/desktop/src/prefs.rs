@@ -75,6 +75,8 @@ pub struct Prefs {
     pub export: ExportPrefs,
     /// Last template used in Rename Photos.
     pub rename_template: String,
+    /// Eject the card after an ingest where every file verified.
+    pub eject_after_ingest: bool,
 }
 
 impl Default for Prefs {
@@ -103,6 +105,7 @@ impl Default for Prefs {
             open_ingest_on_card: true,
             export: ExportPrefs::default(),
             rename_template: String::new(),
+            eject_after_ingest: false,
         }
     }
 }

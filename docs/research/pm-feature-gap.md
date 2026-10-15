@@ -22,11 +22,11 @@ option set); *inferred* = working knowledge; *ours* = Apature today.
 | Incremental | remembers what was ingested on this computer, works retroactively | fingerprint ledger, same idea | parity (our ledger records even when "all" is chosen) |
 | Merge folders into same destination | collapse several sources into one destination | n/a (one source) | with multi-source |
 | Background | ingest runs in the background; a contact sheet opens as soon as some files land | runs on a worker thread; workspace stays on Ingest; folder opens at the end (pref) | **open the sheet early and keep ingesting** |
-| After ingest | unmount source disks; open contact sheet(s), optionally in background | open folder after (pref) | **unmount** |
+| After ingest | unmount source disks; open contact sheet(s), optionally in background | open folder after (pref); eject pref + button (M10) | open in background |
 | Verification | verifies copies; "verify all photos ingested before ejecting" is advice | SHA-256 both sides, per-file report, never deletes | ours is stricter |
 | Erase / reformat | `IngestReformatDisks` exists, off by default | absent by design | keep absent until the triple gate exists |
 | Companion files | WAV voice memos copied with photos (copy options `CopyWavFilesCheckbox`) | not copied | **WAV/XMP companions** |
-| Collisions | `IngestAutoIncSuffix`: auto-increment a suffix instead of failing | refuse the plan | **offer auto-suffix as an option**, default refuse |
+| Collisions | `IngestAutoIncSuffix`: auto-increment a suffix instead of failing | refuse (default) or `-N` suffix option (M10) | parity |
 | Catalog | Auto Catalog (Plus) | later | later |
 
 The owner's own conventions (observed in the presets), now supported verbatim

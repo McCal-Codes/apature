@@ -193,6 +193,8 @@ pub struct App {
     export_jobs: crate::export_job::ExportJobs,
     pub pv: PreviewView,
     pub rename_dialog: Option<RenameDialog>,
+    /// Internal metadata clipboard: marks plus IPTC of one photo.
+    pub meta_clip: Option<(Marks, apature_metadata::Iptc)>,
     /// Items awaiting confirmation to go to the Trash.
     pub trash_dialog: Option<Vec<usize>>,
     ingest_jobs: IngestJobs,
@@ -286,6 +288,7 @@ impl App {
             export: ExportState::default(),
             pv: PreviewView::default(),
             rename_dialog: None,
+            meta_clip: None,
             trash_dialog: None,
             export_jobs: crate::export_job::ExportJobs::new(cc.egui_ctx.clone()),
             ingest_jobs: IngestJobs::new(cc.egui_ctx.clone(), ledger_path),
@@ -857,6 +860,12 @@ impl App {
                     if open_after {
                         self.dispatch_later = Some(Command::IngestOpenResult);
                     }
+                    if ok && self.prefs.eject_after_ingest {
+                        let src = self.ingest.opts.source.clone();
+                        if let Some(root) = Platform::eject(&src) {
+                            self.status = format!("{} · ejecting {}", self.status, root.display());
+                        }
+                    }
                     if self.launch.ingest_run {
                         if let Some(r) = self.ingest.running.as_ref() {
                             if let Some(rep) = &r.done {
@@ -906,6 +915,37 @@ impl App {
         } else {
             self.quit_after_frame = true;
         }
+    }
+
+    /// Paste the internal metadata clipboard onto the selection: marks go
+    /// through the undo stack; IPTC is written in place (not undoable, the
+    /// status says how many files).
+    fn paste_metadata(&mut self) {
+        let Some((m, iptc)) = self.meta_clip.clone() else {
+            self.status = "Nothing copied yet (⌥⌘C copies the focused photo's metadata)".into();
+            return;
+        };
+        let targets = self.selection.targets(self.cursor);
+        self.mark("paste marks", move |x| *x = m);
+        let mut files = 0;
+        let mut failed = 0;
+        for &i in &targets {
+            match items::write_iptc(&self.items[i], &iptc) {
+                Ok(w) => files += w.len(),
+                Err(_) => failed += 1,
+            }
+        }
+        self.inspector_iptc = None;
+        self.status = format!(
+            "Pasted metadata onto {} photo{} ({files} files{})",
+            targets.len(),
+            if targets.len() == 1 { "" } else { "s" },
+            if failed > 0 {
+                format!(", {failed} failed")
+            } else {
+                String::new()
+            }
+        );
     }
 
     fn ingest_start(&mut self) {
@@ -2059,6 +2099,25 @@ impl App {
                 }
             }
             Command::ToggleZoom => self.toggle_zoom(None, self.pv.last_rect),
+            Command::CopyMetadata => {
+                if let Some(it) = self.items.get(self.cursor) {
+                    let iptc = items::read_iptc(it);
+                    let m = self.marks[self.cursor];
+                    self.meta_clip = Some((m, iptc));
+                    self.status = format!("Copied metadata of {}", it.display_name());
+                }
+            }
+            Command::PasteMetadata => self.paste_metadata(),
+            Command::IngestEject => {
+                let src = self.ingest.opts.source.clone();
+                match Platform::eject(&src) {
+                    Some(root) => {
+                        self.status = format!("Ejecting {}", root.display());
+                        self.volumes_checked = Instant::now() - std::time::Duration::from_secs(2);
+                    }
+                    None => self.status = "Not a removable volume".into(),
+                }
+            }
             Command::RenamePhotos => self.open_rename_dialog(),
             Command::RenameApply => self.rename_apply(),
             Command::MoveToTrash => {
@@ -2182,6 +2241,7 @@ impl App {
         ctx.input(|i| {
             let cmd = i.modifiers.command;
             let shift = i.modifiers.shift;
+            let alt = i.modifiers.alt;
             let has_menu = self.platform.has_menu();
             let cols = self.cols.max(1) as isize;
             let in_preview = self.workspace == Workspace::Preview;
@@ -2212,6 +2272,12 @@ impl App {
                 }
                 if pressed(Key::W) {
                     out.push(Command::CloseTab);
+                }
+                if alt && pressed(Key::C) {
+                    out.push(Command::CopyMetadata);
+                }
+                if alt && pressed(Key::V) {
+                    out.push(Command::PasteMetadata);
                 }
                 if pressed(Key::R) && shift {
                     out.push(Command::RenamePhotos);

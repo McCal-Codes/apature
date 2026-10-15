@@ -33,6 +33,18 @@ pub struct Options {
     /// Skip files whose fingerprint is in the ledger.
     pub only_new: bool,
     pub headline: Option<String>,
+    /// What to do when a destination name is taken.
+    pub on_collision: CollisionPolicy,
+}
+
+/// Photo Mechanic's `IngestAutoIncSuffix`: either refuse the plan (the
+/// default, nothing is ever overwritten either way) or add `-1`, `-2`… to
+/// the file name until it is free at every destination.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CollisionPolicy {
+    #[default]
+    Refuse,
+    Suffix,
 }
 
 impl Default for Options {
@@ -48,6 +60,7 @@ impl Default for Options {
             filter: FileFilter::All,
             only_new: true,
             headline: None,
+            on_collision: CollisionPolicy::Refuse,
         }
     }
 }
@@ -80,6 +93,8 @@ pub struct Plan {
     pub entries: Vec<Entry>,
     pub skipped: Vec<Skip>,
     pub collisions: Vec<Collision>,
+    /// Files that got a `-N` suffix because the name was taken.
+    pub suffixed: usize,
     pub total_bytes: u64,
     pub items: usize,
 }
@@ -223,6 +238,40 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
                     format!("{stem}.{}", facts.ext)
                 }
             };
+            // With the suffix policy, walk `name`, `stem-1.ext`, `stem-2.ext`…
+            // until the name is free at every destination and in this plan.
+            let (name, suffixed) = if opts.on_collision == CollisionPolicy::Suffix {
+                let (stem, ext) = match name.rfind('.') {
+                    Some(i) if i > 0 => (name[..i].to_string(), name[i..].to_string()),
+                    _ => (name.clone(), String::new()),
+                };
+                let mut k = 0u32;
+                loop {
+                    let cand = if k == 0 {
+                        name.clone()
+                    } else {
+                        format!("{stem}-{k}{ext}")
+                    };
+                    let p = opts.primary.join(&folder_rel).join(&cand);
+                    let s = opts
+                        .secondary
+                        .as_ref()
+                        .map(|s| s.join(&folder_rel).join(&cand));
+                    let taken = p.exists()
+                        || seen_dest.contains_key(&p)
+                        || s.as_ref()
+                            .is_some_and(|s| s.exists() || seen_dest.contains_key(s));
+                    if !taken || k > 9999 {
+                        break (cand, k > 0);
+                    }
+                    k += 1;
+                }
+            } else {
+                (name, false)
+            };
+            if suffixed {
+                plan.suffixed += 1;
+            }
             let primary = opts.primary.join(&folder_rel).join(&name);
             let secondary = opts
                 .secondary
@@ -329,6 +378,51 @@ mod tests {
             .unwrap()
             .starts_with(t.path().join("Backup")));
         assert_eq!(plan.total_bytes, 3 * "data-DSC_0001.NEF".len() as u64);
+    }
+
+    #[test]
+    fn suffix_policy_renames_instead_of_refusing() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        std::fs::write(src.path().join("DSC_0001.JPG"), b"one").unwrap();
+        std::fs::write(src.path().join("DSC_0002.JPG"), b"two").unwrap();
+        // The first name is taken at the destination; the second is free.
+        std::fs::write(dst.path().join("DSC_0001.JPG"), b"old").unwrap();
+        let ledger = Ledger::default();
+        let opts = Options {
+            source: src.path().to_path_buf(),
+            primary: dst.path().to_path_buf(),
+            folder_template: String::new(),
+            only_new: false,
+            on_collision: CollisionPolicy::Suffix,
+            ..Default::default()
+        };
+        let plan = build_plan(&opts, &ledger).unwrap();
+        assert!(plan.collisions.is_empty(), "{:?}", plan.collisions);
+        assert_eq!(plan.suffixed, 1);
+        let names: Vec<String> = plan
+            .entries
+            .iter()
+            .map(|e| {
+                e.primary
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert!(names.contains(&"DSC_0001-1.JPG".to_string()), "{names:?}");
+        assert!(names.contains(&"DSC_0002.JPG".to_string()), "{names:?}");
+        // Refuse is still the default and still refuses.
+        let plan = build_plan(
+            &Options {
+                on_collision: CollisionPolicy::Refuse,
+                ..opts
+            },
+            &ledger,
+        )
+        .unwrap();
+        assert_eq!(plan.collisions.len(), 1);
     }
 
     #[test]
