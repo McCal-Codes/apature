@@ -55,7 +55,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     ui.horizontal_wrapped(|ui| {
                         for (name, path) in app.volumes.clone() {
                             let on = app.ingest.opts.source == path;
-                            if ui.selectable_label(on, format!("▣ {name}")).clicked() {
+                            let kind = app.volume_kinds.get(&path).copied().unwrap_or(crate::platform::VolumeKind::External);
+                            if super::icons::volume_chip(ui, t, kind, &name, on).clicked() {
                                 app.ingest.opts.source = path;
                                 opts_changed = true;
                             }

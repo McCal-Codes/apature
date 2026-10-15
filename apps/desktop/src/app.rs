@@ -187,6 +187,8 @@ pub struct App {
     pub prefs_dirty: bool,
     prefs_saved_at: Instant,
     pub volumes: Vec<(String, PathBuf)>,
+    /// Icon class per mounted volume, filled once per mount.
+    pub volume_kinds: HashMap<PathBuf, crate::platform::VolumeKind>,
     pub filter_popup_open: bool,
     pub caption_draft: Option<Draft>,
     pub assignment: Option<Assignment>,
@@ -285,6 +287,7 @@ impl App {
             prefs_dirty: false,
             prefs_saved_at: Instant::now(),
             volumes: Vec::new(),
+            volume_kinds: HashMap::new(),
             filter_popup_open: false,
             caption_draft: None,
             assignment: None,
@@ -1276,11 +1279,20 @@ impl App {
                 let p = e.path();
                 let name = e.file_name().to_string_lossy().into_owned();
                 if p.is_dir() && !name.starts_with('.') {
-                    v.push((name, p));
+                    let kind = *self
+                        .volume_kinds
+                        .entry(p.clone())
+                        .or_insert_with(|| Platform::volume_kind(&p));
+                    if kind != crate::platform::VolumeKind::System {
+                        v.push((name, p));
+                    }
                 }
             }
         }
         v.sort();
+        let present: Vec<PathBuf> = v.iter().map(|(_, p)| p.clone()).collect();
+        self.volume_kinds
+            .retain(|p, _| present.contains(p) || p.join("DCIM").is_dir());
         self.volumes = v;
     }
 

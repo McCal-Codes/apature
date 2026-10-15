@@ -123,3 +123,62 @@ impl Platform {
         let _ = path;
     }
 }
+
+/// What a mounted volume is, for the icon and for hiding system volumes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VolumeKind {
+    /// Has a DCIM folder: a memory card or a tethered camera.
+    Camera,
+    /// Removable or external disk (USB, Thunderbolt, SD without DCIM).
+    External,
+    /// The Mac's own disk.
+    Internal,
+    /// Recovery and other system volumes: never an ingest source.
+    System,
+}
+
+impl Platform {
+    /// Classify a volume root. DCIM wins outright (a camera over USB reports
+    /// the same bus as an SSD, so the bus alone cannot tell them apart);
+    /// otherwise macOS `diskutil info -plist` says whether the disk is
+    /// internal. One process per new mount, cached by the caller.
+    pub fn volume_kind(path: &std::path::Path) -> VolumeKind {
+        if path.join("DCIM").is_dir() {
+            return VolumeKind::Camera;
+        }
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        if name == "recovery"
+            || name.starts_with("com.apple")
+            || name == "preboot"
+            || name == "vm"
+            || name == "update"
+        {
+            return VolumeKind::System;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(out) = std::process::Command::new("/usr/sbin/diskutil")
+                .args(["info", "-plist"])
+                .arg(path)
+                .output()
+            {
+                let text = String::from_utf8_lossy(&out.stdout);
+                // <key>Internal</key> <true/> ... without pulling in a plist crate.
+                if let Some(i) = text.find("<key>Internal</key>") {
+                    let tail = &text[i..];
+                    if tail
+                        .trim_start_matches("<key>Internal</key>")
+                        .trim_start()
+                        .starts_with("<true/>")
+                    {
+                        return VolumeKind::Internal;
+                    }
+                }
+            }
+        }
+        VolumeKind::External
+    }
+}
