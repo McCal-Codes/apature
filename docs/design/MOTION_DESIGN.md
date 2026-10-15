@@ -2,7 +2,7 @@
 
 2026-10-14. Synthesis of two research threads (animation craft; ferret
 behaviour) plus the interactive prototype `docs/design/motion/ferret-motion-lab.html`
-(published as a Claude artifact). Tags: **measured/primary** (a study or a
+(published as an artifact). Tags: **measured/primary** (a study or a
 vendor's own document), **reported** (talks, press), **inferred** (ours).
 The implementation section (§5) is filled in from the Rust/egui thread.
 
