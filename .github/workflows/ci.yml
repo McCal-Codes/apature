@@ -1,0 +1,37 @@
+name: CI
+
+# Linux only: Linux runner minutes are the cheapest, and the library crates
+# plus a desktop build cover what a push can break. macOS bundling, signing
+# and the real-card checks stay on the Mac.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_INCREMENTAL: 0
+  # No debug info: the desktop's wgpu/eframe tree is slow to build with it.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: System libraries for the desktop build
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-3-dev
+      - run: cargo fmt --all --check
+      # Clippy type-checks the desktop app too; its tests and full debug
+      # build run on the Mac, where it ships.
+      - run: cargo clippy --workspace --all-targets
+      - run: cargo test --workspace --exclude apature

@@ -200,6 +200,8 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                             changed = true;
                         }
                         changed |= ui.checkbox(&mut o.include_subfolders, "Include subfolders").changed();
+                        changed |= ui.checkbox(&mut o.preserve_folders, "Keep the card's folders").changed();
+                        changed |= ui.checkbox(&mut o.copy_companions, "Copy voice memos and sidecars with their photos").changed();
                         if ui.checkbox(&mut app.prefs.open_ingest_on_card, "When a camera card mounts, open Ingest with it as the source").changed() {
                             app.prefs_dirty = true;
                         }

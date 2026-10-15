@@ -17,6 +17,7 @@ pub enum FileFilter {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Options {
     pub source: PathBuf,
     pub include_subfolders: bool,
@@ -37,6 +38,13 @@ pub struct Options {
     pub on_collision: CollisionPolicy,
     /// Only photos captured on this (year, month, day); None = every day.
     pub day: Option<(i32, u32, u32)>,
+    /// Keep the card's subfolders (e.g. `DCIM/100NIKON`) under the folder
+    /// template, like Photo Mechanic's "Preserve folder structure".
+    pub preserve_folders: bool,
+    /// Copy a photo's companions along with it: the voice memo
+    /// (`DSC_0001.WAV`) and an XMP sidecar already on the card. They take the
+    /// photo's new name and keep their own extension.
+    pub copy_companions: bool,
 }
 
 /// Photo Mechanic's `IngestAutoIncSuffix`: either refuse the plan (the
@@ -64,6 +72,8 @@ impl Default for Options {
             headline: None,
             on_collision: CollisionPolicy::Refuse,
             day: None,
+            preserve_folders: false,
+            copy_companions: true,
         }
     }
 }
@@ -77,6 +87,8 @@ pub struct Entry {
     /// Index of the photo item this file belongs to (pairs share one).
     pub item: usize,
     pub fingerprint: Option<String>,
+    /// A voice memo or sidecar that travels with the photo, not a photo.
+    pub companion: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,6 +110,8 @@ pub struct Plan {
     pub collisions: Vec<Collision>,
     /// Files that got a `-N` suffix because the name was taken.
     pub suffixed: usize,
+    /// Voice memos and sidecars planned alongside the photos.
+    pub companions: usize,
     pub total_bytes: u64,
     pub items: usize,
     /// Capture days present on the source with their photo counts (before
@@ -204,6 +218,40 @@ pub fn example_names(opts: &Options, facts: &Facts) -> Result<(String, String), 
     Ok((folder, name))
 }
 
+/// Files that belong to `item` but are not photos: a voice memo with the
+/// same stem (Nikon and Canon write `DSC_0001.WAV`) and an XMP sidecar that
+/// is already on the card. Either case of extension is found.
+pub fn companions(item: &PhotoItem) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let base = &item.primary.path;
+    for ext in ["WAV", "wav"] {
+        let p = base.with_extension(ext);
+        if p.is_file() && !out.contains(&p) {
+            out.push(p);
+            break;
+        }
+    }
+    let sc = item.sidecar_path();
+    if sc.is_file() {
+        out.push(sc);
+    }
+    out
+}
+
+/// The card subfolder a file sits in, relative to the source, with every
+/// component sanitised. Empty when the file is at the source root.
+fn card_subfolder(source: &Path, file: &Path) -> PathBuf {
+    let mut rel = PathBuf::new();
+    if let Some(parent) = file.parent().and_then(|p| p.strip_prefix(source).ok()) {
+        for c in parent.components() {
+            if let Some(c) = sanitize_component(&c.as_os_str().to_string_lossy()) {
+                rel.push(c);
+            }
+        }
+    }
+    rel
+}
+
 /// Today's civil date (UTC) for the example line when no photo date is known.
 pub fn today() -> (i32, u32, u32) {
     let secs = std::time::SystemTime::now()
@@ -221,6 +269,59 @@ pub fn today() -> (i32, u32, u32) {
     let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
     let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
     ((if m <= 2 { y + 1 } else { y }) as i32, m, d)
+}
+
+/// Add one file to the plan at `folder_rel/name` under each destination,
+/// reporting a collision when the name is taken on disk or in this plan.
+#[allow(clippy::too_many_arguments)]
+fn place(
+    plan: &mut Plan,
+    seen_dest: &mut BTreeMap<PathBuf, PathBuf>,
+    opts: &Options,
+    folder_rel: &Path,
+    name: &str,
+    source: &Path,
+    size: u64,
+    item: usize,
+    fingerprint: Option<String>,
+    companion: bool,
+) {
+    let primary = opts.primary.join(folder_rel).join(name);
+    let secondary = opts
+        .secondary
+        .as_ref()
+        .map(|s| s.join(folder_rel).join(name));
+    for dest in std::iter::once(&primary).chain(secondary.iter()) {
+        if dest.exists() {
+            plan.collisions.push(Collision {
+                destination: dest.clone(),
+                reason: "already exists at the destination".into(),
+            });
+        } else if let Some(other) = seen_dest.get(dest) {
+            plan.collisions.push(Collision {
+                destination: dest.clone(),
+                reason: format!(
+                    "two sources map to it: {} and {}",
+                    other.display(),
+                    source.display()
+                ),
+            });
+        }
+        seen_dest.insert(dest.clone(), source.to_path_buf());
+    }
+    plan.total_bytes += size;
+    plan.entries.push(Entry {
+        source: source.to_path_buf(),
+        size,
+        primary,
+        secondary,
+        item,
+        // Always recorded for a photo so a later "only new" pass knows it,
+        // even when this run copied everything. Companions follow their
+        // photo and are never looked up on their own.
+        fingerprint,
+        companion,
+    });
 }
 
 pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
@@ -281,11 +382,33 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
             }
             rel
         };
+        let folder_rel = if opts.preserve_folders {
+            folder_rel.join(card_subfolder(&opts.source, &variants[0].path))
+        } else {
+            folder_rel
+        };
         let mut added_any = false;
+        // The stem the photo ended up with, so companions follow a suffix.
+        let mut placed_stem: Option<String> = None;
+        let item_companions = if opts.copy_companions {
+            companions(item)
+        } else {
+            Vec::new()
+        };
+        let companion_exts: Vec<String> = item_companions
+            .iter()
+            .map(|c| {
+                c.extension()
+                    .map(|e| e.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+            .collect();
         for v in &variants {
+            // Read once: the ledger check and the entry share it.
+            let fp = fingerprint(&v.path);
             if opts.only_new {
-                match fingerprint(&v.path) {
-                    Ok(fp) if ledger.contains(&fp) => {
+                match &fp {
+                    Ok(fp) if ledger.contains(fp) => {
                         plan.skipped.push(Skip {
                             source: v.path.clone(),
                             reason: "already ingested".into(),
@@ -324,6 +447,8 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
             };
             // With the suffix policy, walk `name`, `stem-1.ext`, `stem-2.ext`…
             // until the name is free at every destination and in this plan.
+            // The first photo file fixes the stem its companions take, so
+            // their names must be free under it too.
             let (name, suffixed) = if opts.on_collision == CollisionPolicy::Suffix {
                 let (stem, ext) = match name.rfind('.') {
                     Some(i) if i > 0 => (name[..i].to_string(), name[i..].to_string()),
@@ -336,15 +461,24 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
                     } else {
                         format!("{stem}-{k}{ext}")
                     };
-                    let p = opts.primary.join(&folder_rel).join(&cand);
-                    let s = opts
-                        .secondary
-                        .as_ref()
-                        .map(|s| s.join(&folder_rel).join(&cand));
-                    let taken = p.exists()
-                        || seen_dest.contains_key(&p)
-                        || s.as_ref()
-                            .is_some_and(|s| s.exists() || seen_dest.contains_key(s));
+                    let cand_stem = if k == 0 {
+                        stem.clone()
+                    } else {
+                        format!("{stem}-{k}")
+                    };
+                    let mut names = vec![cand.clone()];
+                    if placed_stem.is_none() {
+                        names.extend(companion_exts.iter().map(|e| format!("{cand_stem}.{e}")));
+                    }
+                    let is_taken = |n: &String| {
+                        let p = opts.primary.join(&folder_rel).join(n);
+                        let s = opts.secondary.as_ref().map(|s| s.join(&folder_rel).join(n));
+                        p.exists()
+                            || seen_dest.contains_key(&p)
+                            || s.as_ref()
+                                .is_some_and(|s| s.exists() || seen_dest.contains_key(s))
+                    };
+                    let taken = names.iter().any(is_taken);
                     if !taken || k > 9999 {
                         break (cand, k > 0);
                     }
@@ -356,42 +490,50 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
             if suffixed {
                 plan.suffixed += 1;
             }
-            let primary = opts.primary.join(&folder_rel).join(&name);
-            let secondary = opts
-                .secondary
-                .as_ref()
-                .map(|s| s.join(&folder_rel).join(&name));
-            for dest in std::iter::once(&primary).chain(secondary.iter()) {
-                if dest.exists() {
-                    plan.collisions.push(Collision {
-                        destination: dest.clone(),
-                        reason: "already exists at the destination".into(),
-                    });
-                } else if let Some(other) = seen_dest.get(dest) {
-                    plan.collisions.push(Collision {
-                        destination: dest.clone(),
-                        reason: format!(
-                            "two sources map to it: {} and {}",
-                            other.display(),
-                            v.path.display()
-                        ),
-                    });
-                }
-                seen_dest.insert(dest.clone(), v.path.clone());
+            if placed_stem.is_none() {
+                placed_stem = Some(match name.rfind('.') {
+                    Some(i) if i > 0 => name[..i].to_string(),
+                    _ => name.clone(),
+                });
             }
-            // Always record the fingerprint so a later "only new" pass knows this
-            // file, even when this run copied everything.
-            let fp = fingerprint(&v.path).ok();
-            plan.total_bytes += v.size;
-            plan.entries.push(Entry {
-                source: v.path.clone(),
-                size: v.size,
-                primary,
-                secondary,
-                item: i,
-                fingerprint: fp,
-            });
+            let fp = fp.ok();
+            place(
+                &mut plan,
+                &mut seen_dest,
+                opts,
+                &folder_rel,
+                &name,
+                &v.path,
+                v.size,
+                i,
+                fp,
+                false,
+            );
             added_any = true;
+        }
+        if added_any {
+            let stem = placed_stem.unwrap_or_default();
+            for c in item_companions {
+                let ext = c
+                    .extension()
+                    .map(|e| e.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let name = format!("{stem}.{ext}");
+                let size = std::fs::metadata(&c).map(|m| m.len()).unwrap_or(0);
+                place(
+                    &mut plan,
+                    &mut seen_dest,
+                    opts,
+                    &folder_rel,
+                    &name,
+                    &c,
+                    size,
+                    i,
+                    None,
+                    true,
+                );
+                plan.companions += 1;
+            }
         }
         if added_any {
             item_count += 1;
@@ -464,6 +606,141 @@ mod tests {
             .unwrap()
             .starts_with(t.path().join("Backup")));
         assert_eq!(plan.total_bytes, 3 * "data-DSC_0001.NEF".len() as u64);
+    }
+
+    #[test]
+    fn companions_follow_the_photo_and_folders_can_be_preserved() {
+        let t = tempfile::tempdir().unwrap();
+        let src = t.path().join("CARD");
+        let sub = src.join("DCIM").join("100NIKON");
+        fs::create_dir_all(&sub).unwrap();
+        for n in [
+            "DSC_0001.NEF",
+            "DSC_0001.WAV",
+            "DSC_0001.XMP",
+            "DSC_0002.NEF",
+        ] {
+            fs::write(sub.join(n), format!("data-{n}")).unwrap();
+        }
+        // A stray WAV with no photo stays on the card.
+        fs::write(sub.join("MEMO_9.WAV"), b"x").unwrap();
+        let opts = Options {
+            source: src.clone(),
+            primary: t.path().join("Work"),
+            secondary: Some(t.path().join("Backup")),
+            folder_template: "{headline}".into(),
+            rename_template: "{headline}-{seqn}".into(),
+            headline: Some("BDAY".into()),
+            only_new: false,
+            preserve_folders: true,
+            ..Default::default()
+        };
+        let plan = build_plan(&opts, &Ledger::in_memory()).unwrap();
+        assert!(plan.can_run(), "{:?}", plan.collisions);
+        assert_eq!(plan.items, 2);
+        assert_eq!(plan.companions, 2);
+        let rel = |p: &Path| p.strip_prefix(t.path()).unwrap().display().to_string();
+        let names: Vec<String> = plan.entries.iter().map(|e| rel(&e.primary)).collect();
+        assert_eq!(
+            names,
+            vec![
+                "Work/BDAY/DCIM/100NIKON/BDAY-001.NEF",
+                "Work/BDAY/DCIM/100NIKON/BDAY-001.WAV",
+                "Work/BDAY/DCIM/100NIKON/BDAY-001.XMP",
+                "Work/BDAY/DCIM/100NIKON/BDAY-002.NEF",
+            ]
+        );
+        assert!(plan.entries[1].companion && plan.entries[1].fingerprint.is_none());
+        assert_eq!(
+            rel(plan.entries[1].secondary.as_ref().unwrap()),
+            "Backup/BDAY/DCIM/100NIKON/BDAY-001.WAV"
+        );
+        // Off: flat folders, photos only.
+        let plain = build_plan(
+            &Options {
+                preserve_folders: false,
+                copy_companions: false,
+                ..opts.clone()
+            },
+            &Ledger::in_memory(),
+        )
+        .unwrap();
+        assert_eq!(plain.companions, 0);
+        assert_eq!(rel(&plain.entries[0].primary), "Work/BDAY/BDAY-001.NEF");
+        assert_eq!(plain.entries.len(), 2);
+    }
+
+    #[test]
+    fn a_suffixed_photo_takes_its_voice_memo_with_it() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        fs::write(src.path().join("DSC_0001.JPG"), b"one").unwrap();
+        fs::write(src.path().join("DSC_0001.WAV"), b"memo").unwrap();
+        fs::write(dst.path().join("DSC_0001.JPG"), b"old").unwrap();
+        let opts = Options {
+            source: src.path().to_path_buf(),
+            primary: dst.path().to_path_buf(),
+            folder_template: String::new(),
+            only_new: false,
+            on_collision: CollisionPolicy::Suffix,
+            ..Default::default()
+        };
+        let plan = build_plan(&opts, &Ledger::in_memory()).unwrap();
+        let names: Vec<String> = plan
+            .entries
+            .iter()
+            .map(|e| {
+                e.primary
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert_eq!(names, vec!["DSC_0001-1.JPG", "DSC_0001-1.WAV"]);
+    }
+
+    #[test]
+    fn a_taken_memo_name_moves_the_whole_photo_to_a_free_suffix() {
+        // The photo's name is free but its memo's is not: with the suffix
+        // policy both move to -1 instead of the plan being refused.
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        fs::write(src.path().join("DSC_0001.JPG"), b"one").unwrap();
+        fs::write(src.path().join("DSC_0001.WAV"), b"memo").unwrap();
+        fs::write(dst.path().join("DSC_0001.WAV"), b"old memo").unwrap();
+        let opts = Options {
+            source: src.path().to_path_buf(),
+            primary: dst.path().to_path_buf(),
+            folder_template: String::new(),
+            only_new: false,
+            on_collision: CollisionPolicy::Suffix,
+            ..Default::default()
+        };
+        let plan = build_plan(&opts, &Ledger::in_memory()).unwrap();
+        assert!(plan.can_run(), "{:?}", plan.collisions);
+        let names: Vec<String> = plan
+            .entries
+            .iter()
+            .map(|e| {
+                e.primary
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert_eq!(names, vec!["DSC_0001-1.JPG", "DSC_0001-1.WAV"]);
+    }
+
+    #[test]
+    fn options_saved_before_new_fields_still_load() {
+        let old = r#"{"source":"/a","include_subfolders":true,"primary":"/b","secondary":null,
+            "folder_template":"{headline}","rename_template":"","seq_start":1,"filter":"All",
+            "only_new":true,"headline":null,"on_collision":"Refuse","day":null}"#;
+        let o: Options = serde_json::from_str(old).unwrap();
+        assert!(o.copy_companions && !o.preserve_folders);
+        assert_eq!(o.folder_template, "{headline}");
     }
 
     #[test]

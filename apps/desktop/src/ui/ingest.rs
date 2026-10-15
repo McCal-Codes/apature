@@ -74,6 +74,12 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if ui.checkbox(&mut app.ingest.opts.only_new, "Only photos not ingested before").changed() {
                         opts_changed = true;
                     }
+                    if ui.checkbox(&mut app.ingest.opts.preserve_folders, "Keep the card's folders (DCIM/100NIKON…)").changed() {
+                        opts_changed = true;
+                    }
+                    if ui.checkbox(&mut app.ingest.opts.copy_companions, "Copy voice memos and sidecars with their photos").changed() {
+                        opts_changed = true;
+                    }
                     let mut suffix = app.ingest.opts.on_collision == apature_ingest::CollisionPolicy::Suffix;
                     if ui.checkbox(&mut suffix, "Add -1, -2… when a name is taken (never overwrite)").changed() {
                         app.ingest.opts.on_collision = if suffix { apature_ingest::CollisionPolicy::Suffix } else { apature_ingest::CollisionPolicy::Refuse };
@@ -249,6 +255,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     let mut summary = format!("{} files in {} photos · {} · {} destination{}", plan.entries.len(), plan.items, human_bytes(plan.total_bytes), dests, if dests == 1 { "" } else { "s" });
                     if !plan.skipped.is_empty() {
                         summary.push_str(&format!(" · {} skipped", plan.skipped.len()));
+                    }
+                    if plan.companions > 0 {
+                        summary.push_str(&format!(" · {} memo{} and sidecar{}", plan.companions, if plan.companions == 1 { "" } else { "s" }, if plan.companions == 1 { "" } else { "s" }));
                     }
                     if plan.suffixed > 0 {
                         summary.push_str(&format!(" · {} renamed with a suffix", plan.suffixed));
