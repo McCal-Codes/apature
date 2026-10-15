@@ -166,6 +166,28 @@ fn worker_loop(s: Arc<Shared>) {
     }
 }
 
+/// Pixels arrive turned by the file's own orientation (that is what the
+/// thumbnail cache holds). A rotation in the sidecar (`tiff:Orientation`)
+/// replaces it: undo the file's turn, apply the sidecar's.
+fn sidecar_orientation(path: &std::path::Path, file_o: u32, rgb: Rgb) -> Rgb {
+    use apature_metadata::edits;
+    let sidecar = ["xmp", "XMP"]
+        .iter()
+        .map(|e| path.with_extension(e))
+        .find(|p| p.is_file());
+    let Some(o) = sidecar
+        .and_then(|p| edits::read(&p).ok())
+        .and_then(|e| e.orientation)
+        .map(u32::from)
+    else {
+        return rgb;
+    };
+    if o == file_o {
+        return rgb;
+    }
+    apature_preview::rotate(apature_preview::rotate(rgb, edits::inverse(file_o)), o)
+}
+
 fn run(s: &Shared, job: &Job) -> Done {
     let t0 = Instant::now();
     let mut cache_hit = false;
@@ -216,7 +238,10 @@ fn run(s: &Shared, job: &Job) -> Done {
     })();
 
     let (result, exif, full) = match result {
-        Ok((rgb, exif, full)) => (Ok(rgb), exif, full),
+        Ok((rgb, exif, full)) => {
+            let file_o = exif.as_ref().map(|e| e.orientation).unwrap_or(1);
+            (Ok(sidecar_orientation(&job.path, file_o, rgb)), exif, full)
+        }
         Err(e) => (Err(e), None, false),
     };
     Done {

@@ -1841,6 +1841,67 @@ impl App {
         }
     }
 
+    /// Turn the targets a quarter turn by writing `tiff:Orientation` to each
+    /// sidecar; the files themselves are never touched. Turning the other way
+    /// undoes it.
+    fn rotate(&mut self, cw: bool) {
+        use apature_metadata::edits;
+        if self.items.is_empty() {
+            return;
+        }
+        let targets = self.selection.targets(self.cursor);
+        let (mut done, mut failed) = (0usize, 0usize);
+        for &i in &targets {
+            let item = &self.items[i];
+            let file_o = self.exif[i]
+                .as_ref()
+                .map(|e| e.orientation)
+                .or_else(|| {
+                    apature_metadata::exif::read(item.path())
+                        .ok()
+                        .map(|e| e.orientation)
+                })
+                .unwrap_or(1);
+            let sidecar = item.sidecar_path();
+            let result = edits::read(&sidecar).and_then(|e| {
+                let now = e.orientation_or(file_o);
+                let next = if cw {
+                    edits::rotate_cw(now)
+                } else {
+                    edits::rotate_ccw(now)
+                };
+                // Back at the camera's own orientation: drop the override.
+                let value = (next != file_o).then_some(next as u8);
+                edits::write(
+                    &sidecar,
+                    &edits::Change {
+                        orientation: Some(value),
+                        ..Default::default()
+                    },
+                )
+            });
+            match result {
+                Ok(()) => {
+                    done += 1;
+                    // Re-render this photo with the new orientation.
+                    self.thumbs[i] = None;
+                    self.thumb_err[i] = None;
+                    self.previews.remove(&i);
+                    self.preview_lru.retain(|&p| p != i);
+                }
+                Err(e) => {
+                    failed += 1;
+                    log::warn!("rotate {}: {e}", item.display_name());
+                }
+            }
+        }
+        let dir = if cw { "right" } else { "left" };
+        self.status = match (done, failed) {
+            (n, 0) => format!("Rotated {n} photo{} {dir}", if n == 1 { "" } else { "s" }),
+            (n, f) => format!("Rotated {n} {dir}; {f} could not be written (see log)"),
+        };
+    }
+
     fn apply_marks(&mut self, apply: &[(usize, Marks)]) {
         let mut written = 0;
         let mut failed = None;
@@ -2308,6 +2369,7 @@ impl App {
                     .unwrap_or(false);
                 self.mark(if to { "tag" } else { "untag" }, |m| m.tagged = to)
             }
+            Command::Rotate(cw) => self.rotate(cw),
             Command::Escape => {
                 if self.rename_dialog.is_some() || self.trash_dialog.is_some() {
                     self.rename_dialog = None;
@@ -2402,6 +2464,12 @@ impl App {
                 }
                 if pressed(Key::Comma) {
                     out.push(Command::OpenSettings);
+                }
+                if pressed(Key::OpenBracket) {
+                    out.push(Command::Rotate(false));
+                }
+                if pressed(Key::CloseBracket) {
+                    out.push(Command::Rotate(true));
                 }
                 if pressed(Key::A) {
                     out.push(if shift {

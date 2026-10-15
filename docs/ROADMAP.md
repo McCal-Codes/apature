@@ -29,7 +29,11 @@ settings apply to every item.
 2. [ ] Preserve the card's folder structure (option); copy WAV voice memos.
 3. [ ] Open the contact sheet while the ingest is still running (Ingest is its
    own window since 2026-10-15, so the main window is free for it).
-4. [ ] Lossless rotate (orientation tag) and a crop stored in XMP, applied on export.
+4. [~] Lossless rotate (orientation tag) and a crop stored in XMP, applied on export.
+   2026-10-15: rotate done (Image › Rotate Left/Right, ⌘[ ⌘], `tiff:Orientation`
+   in the sidecar, sheet and preview follow it). Crop stored as `crs:Crop*`
+   (Lightroom/Photo Mechanic compatible) and applied on export; set from the
+   CLI today (`apature-cli crop`). Still to do: the on-screen crop tool.
 5. [ ] Keywords panel, GPS, sRGB conversion on export.
 6. [ ] FTP / SFTP delivery after export.
 7. [ ] Live Ingest (watched folder) → the camera-FTP idea.
@@ -89,6 +93,9 @@ the erase/unmount gates designed first.
 - [ ] saved assignment presets (the `generator/` text files become first-class)
 - [ ] folder watching for live ingest
 - [ ] Windows and Linux builds
+- [ ] Installers (requested 2026-10-15): a signed, notarised macOS DMG and a
+      Windows installer (MSI via cargo-wix or an Inno Setup .exe), both built
+      by CI from a version tag and attached to a GitHub release
 
 ## 0.4 — catalogs
 - [ ] SQLite index across drives, metadata search, collections

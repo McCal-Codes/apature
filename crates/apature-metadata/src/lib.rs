@@ -12,11 +12,14 @@
 //!   both, with conflict reporting.
 //! * [`iptc`] reads and writes the editorial IPTC Core fields with the same
 //!   in-place discipline, including `rdf:Alt`/`Seq`/`Bag` structures.
+//! * [`edits`] keeps rotation (`tiff:Orientation`) and crop (`crs:Crop*`)
+//!   in the sidecar, in the fields Lightroom and Photo Mechanic read.
 //! * [`codes`] expands Photo Mechanic-style code replacements with date and
 //!   credit variables; [`stationery`] turns an assignment config into an
 //!   IPTC pad, a caption template and a code table.
 
 pub mod codes;
+pub mod edits;
 pub mod exif;
 pub mod exif_write;
 pub mod iim;

@@ -293,6 +293,17 @@ impl MenuBar {
             ),
             &PredefinedMenuItem::separator(),
             &item(
+                Command::Rotate(false),
+                "Rotate Left",
+                acc(cmd, Code::BracketLeft),
+            ),
+            &item(
+                Command::Rotate(true),
+                "Rotate Right",
+                acc(cmd, Code::BracketRight),
+            ),
+            &PredefinedMenuItem::separator(),
+            &item(
                 Command::ApplyStationery,
                 "Apply Assignment Pad to Selection",
                 None,
