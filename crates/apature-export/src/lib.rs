@@ -4,8 +4,10 @@
 //! Pixels come from the JPEG of a pair or a plain JPEG; a RAW alone uses its
 //! largest embedded preview (never a RAW decode: there is no copyleft-free
 //! demosaic in this workspace and the camera's own rendering is what the
-//! photographer saw). The image is rotated upright, resized so the long side
-//! is `Settings::long_side`, and re-encoded at `Settings::quality`.
+//! photographer saw). The image is cropped and rotated as the sidecar says
+//! (`crs:Crop*`, `tiff:Orientation`; see [`apature_metadata::edits`]), else
+//! rotated upright by its EXIF, resized so the long side is
+//! `Settings::long_side`, and re-encoded at `Settings::quality`.
 //!
 //! Colour: the source's ICC profile is copied (an Adobe RGB JPEG stays
 //! Adobe RGB and tagged); no conversion to sRGB happens for JPEG sources.
@@ -19,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use apature_core::{Kind, PhotoItem};
 use apature_metadata::jpeg_xmp::{header_segments, is_exif_segment};
-use apature_metadata::{exif, exif_write, iim, iptc, Iptc};
+use apature_metadata::{edits, exif, exif_write, iim, iptc, Iptc};
 use apature_preview::{decode_jpeg, find_embedded_jpegs, rotate, Rgb};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -43,6 +45,8 @@ pub struct Settings {
     pub keep_icc: bool,
     pub overwrite: bool,
     pub raw: RawPixels,
+    /// Apply the rotation and crop stored in the sidecar.
+    pub apply_edits: bool,
 }
 
 impl Default for Settings {
@@ -56,6 +60,7 @@ impl Default for Settings {
             keep_icc: true,
             overwrite: false,
             raw: RawPixels::EmbeddedPreview,
+            apply_edits: true,
         }
     }
 }
@@ -85,6 +90,8 @@ pub struct Outcome {
     pub height: u32,
     pub bytes: u64,
     pub exif: ExifSource,
+    /// The sidecar's rotation and/or crop were applied.
+    pub edited: bool,
     pub millis: u128,
 }
 
@@ -178,6 +185,21 @@ fn resize_to(img: Rgb, long_side: u32) -> Rgb {
     Rgb::from_image(out)
 }
 
+fn crop_to(img: Rgb, c: edits::Crop) -> Rgb {
+    let (x, y, w, h) = c.pixels(img.width, img.height);
+    if (x, y, w, h) == (0, 0, img.width, img.height) {
+        return img;
+    }
+    let Some(src) = img.into_image() else {
+        return Rgb {
+            width: 0,
+            height: 0,
+            data: Vec::new(),
+        };
+    };
+    Rgb::from_image(image::imageops::crop_imm(&src, x, y, w, h).to_image())
+}
+
 fn app1(sig: &[u8], body: &[u8]) -> Vec<u8> {
     let len = 2 + sig.len() + body.len();
     let mut v = Vec::with_capacity(len + 2);
@@ -206,8 +228,35 @@ pub fn export(
         PixelSource::EmbeddedPreview
     };
     let mut data = std::fs::read(&src_path).map_err(|e| ExportError::Io(src_path.clone(), e))?;
+    let edits = if settings.apply_edits {
+        edits::read(&item.sidecar_path()).unwrap_or_else(|e| {
+            log::warn!(
+                "{}: sidecar edits unreadable ({e}); exporting unedited",
+                src_path.display()
+            );
+            edits::Edits::default()
+        })
+    } else {
+        edits::Edits::default()
+    };
+    if edits.straightened_crop {
+        log::warn!(
+            "{}: the sidecar's crop has a straighten angle Apature cannot apply; exporting uncropped",
+            src_path.display()
+        );
+    }
+    // A crop keeps only part of the frame, so decode (or render) enough
+    // pixels for the cropped part to still reach the long side.
+    let target = match (settings.long_side, edits.crop) {
+        (0, _) => None,
+        (n, None) => Some(n),
+        (n, Some(c)) => {
+            let keep = (c.right - c.left).min(c.bottom - c.top).max(0.01);
+            Some(((n as f32) / keep).ceil() as u32)
+        }
+    };
     if !is_jpeg && settings.raw == RawPixels::SystemDecode {
-        match system_decode_raw(&src_path, settings.long_side) {
+        match system_decode_raw(&src_path, target.unwrap_or(0)) {
             Ok(rendered) => {
                 data = rendered;
                 is_jpeg = true;
@@ -232,14 +281,28 @@ pub fn export(
     } else {
         exif::read(&src_path).unwrap_or_else(|_| exif::from_bytes(&data).unwrap_or_default())
     };
-    let target = if settings.long_side == 0 {
-        None
-    } else {
-        Some(settings.long_side)
-    };
-    let img =
+    let mut img =
         decode_jpeg(jpeg_bytes, target).map_err(|e| ExportError::Decode(src_path.clone(), e))?;
-    let img = rotate(img, summary.orientation);
+    // The crop is in the stored frame, so it comes before the rotation. A
+    // system RAW render may already be turned (its own tag says how); bring
+    // it back to the RAW's stored frame first so crop and turn mean the same
+    // thing for every pixel source.
+    let file_orientation = if pixels == PixelSource::SystemRawDecode {
+        let raw = exif::read(&src_path).map(|e| e.orientation).unwrap_or(1);
+        if edits.is_edited() {
+            img = rotate(rotate(img, summary.orientation), edits::inverse(raw));
+            raw
+        } else {
+            summary.orientation
+        }
+    } else {
+        summary.orientation
+    };
+    let img = match edits.crop {
+        Some(c) => crop_to(img, c),
+        None => img,
+    };
+    let img = rotate(img, edits.orientation_or(file_orientation));
     let img = resize_to(img, settings.long_side);
     let (width, height) = (img.width, img.height);
     let encoded = apature_preview::decode::encode_jpeg(&img, settings.quality.clamp(1, 100))
@@ -342,6 +405,7 @@ pub fn export(
         height,
         bytes: file.len() as u64,
         exif: exif_source,
+        edited: edits.is_edited(),
         millis: t0.elapsed().as_millis(),
     })
 }
@@ -374,6 +438,135 @@ mod tests {
             headline: Some("100726 SPO BGLF".into()),
             ..Default::default()
         }
+    }
+
+    /// 400×200, left half black, right half white.
+    fn half_and_half(path: &Path) {
+        let mut data = Vec::with_capacity(400 * 200 * 3);
+        for _y in 0..200 {
+            for x in 0..400 {
+                let v = if x < 200 { 0 } else { 255 };
+                data.extend_from_slice(&[v, v, v]);
+            }
+        }
+        let img = Rgb {
+            width: 400,
+            height: 200,
+            data,
+        };
+        std::fs::write(
+            path,
+            apature_preview::decode::encode_jpeg(&img, 95).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn sidecar_rotation_and_crop_shape_the_export() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("DSC_0001.jpg");
+        half_and_half(&src);
+        let item = item_for(&src);
+        // Keep the white right half, then a quarter turn clockwise.
+        edits::write(
+            &item.sidecar_path(),
+            &edits::Change {
+                orientation: Some(Some(6)),
+                crop: Some(Some(edits::Crop {
+                    top: 0.0,
+                    left: 0.5,
+                    bottom: 1.0,
+                    right: 1.0,
+                })),
+            },
+        )
+        .unwrap();
+        let out = dir.path().join("edited.jpg");
+        let o = export(
+            &item,
+            &Iptc::default(),
+            &Settings {
+                long_side: 0,
+                ..Default::default()
+            },
+            &out,
+        )
+        .unwrap();
+        assert!(o.edited);
+        assert_eq!((o.width, o.height), (200, 200), "half of 400×200, turned");
+        let back = decode_jpeg(&std::fs::read(&out).unwrap(), None).unwrap();
+        let mean = back.data.iter().map(|&v| v as u64).sum::<u64>() / back.data.len() as u64;
+        assert!(mean > 240, "only the white half is left, mean {mean}");
+
+        // Rotation alone swaps the sides; the long side still lands on 100.
+        edits::write(
+            &item.sidecar_path(),
+            &edits::Change {
+                crop: Some(None),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let out2 = dir.path().join("turned.jpg");
+        let o2 = export(
+            &item,
+            &Iptc::default(),
+            &Settings {
+                long_side: 100,
+                ..Default::default()
+            },
+            &out2,
+        )
+        .unwrap();
+        assert_eq!((o2.width, o2.height), (50, 100));
+        // Switched off, the sidecar is ignored.
+        let out3 = dir.path().join("plain.jpg");
+        let o3 = export(
+            &item,
+            &Iptc::default(),
+            &Settings {
+                long_side: 100,
+                apply_edits: false,
+                ..Default::default()
+            },
+            &out3,
+        )
+        .unwrap();
+        assert!(!o3.edited);
+        assert_eq!((o3.width, o3.height), (100, 50));
+    }
+
+    #[test]
+    fn a_tight_crop_still_reaches_the_long_side() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("DSC_0002.jpg");
+        half_and_half(&src);
+        let item = item_for(&src);
+        edits::write(
+            &item.sidecar_path(),
+            &edits::Change {
+                crop: Some(Some(edits::Crop {
+                    top: 0.25,
+                    left: 0.25,
+                    bottom: 0.75,
+                    right: 0.75,
+                })),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let out = dir.path().join("tight.jpg");
+        let o = export(
+            &item,
+            &Iptc::default(),
+            &Settings {
+                long_side: 180,
+                ..Default::default()
+            },
+            &out,
+        )
+        .unwrap();
+        assert_eq!((o.width, o.height), (180, 90));
     }
 
     #[test]

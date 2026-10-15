@@ -114,6 +114,8 @@ pub enum Command {
     SetRating(i8),
     SetClass(u8),
     ToggleTag,
+    /// A quarter turn, losslessly, in the sidecar (`true` = clockwise).
+    Rotate(bool),
     Escape,
     Activate,
 }
@@ -158,6 +160,8 @@ impl Command {
             Command::SetRating(r) => format!("image.rating.{r}"),
             Command::SetClass(c) => format!("image.class.{c}"),
             Command::ToggleTag => "image.tag".into(),
+            Command::Rotate(true) => "image.rotate.cw".into(),
+            Command::Rotate(false) => "image.rotate.ccw".into(),
             other => format!("other.{other:?}"),
         }
     }
@@ -201,6 +205,8 @@ impl Command {
             "view.zoom11" => Command::ToggleZoom,
             "view.compare" => Command::ToggleCompare,
             "image.tag" => Command::ToggleTag,
+            "image.rotate.cw" => Command::Rotate(true),
+            "image.rotate.ccw" => Command::Rotate(false),
             _ => {
                 if let Some(k) = id.strip_prefix("view.sort.") {
                     Command::SetSort(

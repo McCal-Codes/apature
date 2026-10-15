@@ -89,6 +89,31 @@ enum Cmd {
     },
     /// Print the IPTC fields of a photo.
     Iptc { file: PathBuf },
+    /// Turn photos a quarter turn, losslessly (tiff:Orientation in the sidecar).
+    Rotate {
+        /// Counter-clockwise instead of clockwise.
+        #[arg(long)]
+        ccw: bool,
+        /// Back to the camera's own orientation.
+        #[arg(long, conflicts_with = "ccw")]
+        reset: bool,
+        files: Vec<PathBuf>,
+    },
+    /// Store a crop in the sidecar (crs:Crop*, fractions of the stored image),
+    /// applied on export.
+    Crop {
+        /// top,left,bottom,right as fractions 0..1, e.g. 0.1,0.1,0.9,0.9
+        #[arg(
+            long,
+            value_delimiter = ',',
+            allow_hyphen_values = true,
+            required_unless_present = "clear"
+        )]
+        rect: Option<Vec<f32>>,
+        #[arg(long, conflicts_with = "rect")]
+        clear: bool,
+        files: Vec<PathBuf>,
+    },
     /// Plan and run a verified ingest (sequential; never deletes the source).
     /// Export delivery JPEGs (resize, re-encode, EXIF + XMP + IPTC-IIM + ICC).
     Export {
@@ -228,6 +253,8 @@ fn main() -> Result<()> {
             dry_run,
         } => cmd_rename(paths, template, seq_start, headline, dry_run),
         Cmd::Trash { paths } => cmd_trash(paths),
+        Cmd::Rotate { ccw, reset, files } => cmd_rotate(ccw, reset, &files),
+        Cmd::Crop { rect, clear, files } => cmd_crop(rect, clear, &files),
         Cmd::Ingest {
             source,
             primary,
@@ -587,6 +614,78 @@ fn ingest(
         t1.elapsed().as_secs_f64(),
         t_start.elapsed().as_secs_f64()
     );
+    Ok(())
+}
+
+fn cmd_rotate(ccw: bool, reset: bool, files: &[PathBuf]) -> Result<()> {
+    use apature_metadata::edits;
+    for f in files {
+        let item = item_for(f)?;
+        let sidecar = item.sidecar_path();
+        let file_o = apature_metadata::exif::read(item.path())
+            .map(|e| e.orientation)
+            .unwrap_or(1);
+        let now = edits::read(&sidecar)?.orientation_or(file_o);
+        let next = if reset {
+            None
+        } else if ccw {
+            Some(edits::rotate_ccw(now) as u8)
+        } else {
+            Some(edits::rotate_cw(now) as u8)
+        };
+        edits::write(
+            &sidecar,
+            &edits::Change {
+                orientation: Some(next),
+                ..Default::default()
+            },
+        )?;
+        println!(
+            "{}: orientation {now} → {}",
+            item.display_name(),
+            next.map(u32::from).unwrap_or(file_o)
+        );
+    }
+    Ok(())
+}
+
+fn cmd_crop(rect: Option<Vec<f32>>, clear: bool, files: &[PathBuf]) -> Result<()> {
+    use apature_metadata::edits::{self, Crop};
+    let crop = match (clear, rect.as_deref()) {
+        (true, _) => None,
+        (false, Some(&[top, left, bottom, right])) => Some(
+            Crop {
+                top,
+                left,
+                bottom,
+                right,
+            }
+            .normalized()
+            .context("--rect wants top<bottom and left<right, each 0..1")?,
+        ),
+        _ => bail!("--rect wants four numbers: top,left,bottom,right"),
+    };
+    for f in files {
+        let item = item_for(f)?;
+        edits::write(
+            &item.sidecar_path(),
+            &edits::Change {
+                crop: Some(crop),
+                ..Default::default()
+            },
+        )?;
+        match crop {
+            Some(c) => println!(
+                "{}: crop top {:.3} left {:.3} bottom {:.3} right {:.3}",
+                item.display_name(),
+                c.top,
+                c.left,
+                c.bottom,
+                c.right
+            ),
+            None => println!("{}: crop cleared", item.display_name()),
+        }
+    }
     Ok(())
 }
 

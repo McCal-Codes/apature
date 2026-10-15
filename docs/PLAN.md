@@ -20,6 +20,7 @@ Product and release
 - VoiceOver: egui's AccessKit integration is not enabled (check `accesskit` feature in eframe); labels for every control, focus order in the Ingest window.
 - CI: no GitHub Actions yet (cargo test + clippy + fmt on push).
 - Release: code signing with a Developer ID, notarisation, a DMG, and an update check. Today's bundle is ad-hoc signed.
+- Installers (owner, 2026-10-15): macOS DMG and a Windows installer, built by CI from a tag. Windows needs the macOS-only bits (volumes, eject, `sips` RAW decode, menu bar) behind platform switches first; a Windows code-signing certificate is a cost to plan for.
 - README for the public repo, licence file check (THIRD_PARTY.md exists), screenshots.
 - Fen: name availability unverified; placeholder not wired into the app (empty state, About, "Show Fen" switch); app icon still the tile, not Fen; artist brief not sent.
 - Test harness: `--settings --screenshot` hangs (viewport screenshot never arrives); the Ingest window has no headless capture either. Fix once, both use the same mechanism.
@@ -46,6 +47,7 @@ Large (a full session each; start them fresh)
 10. Live Ingest: watched folder with file-stability check; the camera-FTP receiver.
 11. VoiceOver pass with AccessKit, full keyboard audit, ACCESSIBILITY_CHECKLIST.md walked line by line.
 12. Release engineering: Developer ID signing, notarisation, DMG, update check.
+13. Installers for macOS and Windows: DMG + Windows MSI/.exe built by a tag-triggered CI job, attached to a GitHub release. Depends on 12 for the Mac side and a Windows build pass for the other.
 
 Rules that apply to all of it: easy to read, nothing overlapping (check with
 `--size 1000x650` screenshots), Reduce Motion honoured, every claim measured.
