@@ -174,13 +174,18 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     }
                     Page::Ingest => {
                         heading(ui, &t, "Ingest defaults");
-                        let mut o = app.prefs.ingest.clone().unwrap_or_default();
+                        let mut o = app.prefs.ingest.clone().unwrap_or_else(crate::prefs::default_ingest_options);
                         let mut changed = false;
                         ui.label(RichText::new("Folder template").size(12.0).color(t.text2));
                         changed |= ui.add(egui::TextEdit::singleline(&mut o.folder_template).desired_width(f32::INFINITY)).changed();
                         ui.label(RichText::new("Rename template").size(12.0).color(t.text2));
                         changed |= ui.add(egui::TextEdit::singleline(&mut o.rename_template).desired_width(f32::INFINITY)).changed();
                         changed |= ui.checkbox(&mut o.only_new, "Only photos not ingested before").changed();
+                        if ui.button("Reset to defaults  ({headline} folder · {headline}{seqn:3}-{month0}{day0}{yr2})").clicked() {
+                            let keep = (o.source.clone(), o.primary.clone(), o.secondary.clone());
+                            o = apature_ingest::Options { source: keep.0, primary: keep.1, secondary: keep.2, ..crate::prefs::default_ingest_options() };
+                            changed = true;
+                        }
                         changed |= ui.checkbox(&mut o.include_subfolders, "Include subfolders").changed();
                         if ui.checkbox(&mut app.prefs.open_ingest_on_card, "When a camera card mounts, open Ingest with it as the source").changed() {
                             app.prefs_dirty = true;

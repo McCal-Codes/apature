@@ -138,8 +138,8 @@ enum Cmd {
         primary: PathBuf,
         #[arg(long)]
         secondary: Option<PathBuf>,
-        /// Folder template under each destination, e.g. "{date}-{headline}".
-        #[arg(long, default_value = "{date}-{headline}")]
+        /// Folder template under each destination, e.g. "{headline}" or "{date}-{headline}".
+        #[arg(long, default_value = "{headline}")]
         folder: String,
         /// File name template, e.g. "{headline}-{seqn}" (empty keeps names).
         #[arg(long, default_value = "")]
