@@ -170,6 +170,34 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                                 opts_changed = true;
                             }
                         });
+                    // Live example: what the first photo would be called with these
+                    // templates. Stem/ext from the plan's first entry when there is one,
+                    // date from the chosen day, else the card's first day, else today.
+                    {
+                        let o = &app.ingest.opts;
+                        let first = app.ingest.plan.as_ref().and_then(|p| p.entries.first());
+                        let stem = first
+                            .and_then(|e| e.source.file_stem().map(|s| s.to_string_lossy().into_owned()))
+                            .unwrap_or_else(|| "DSC_0001".into());
+                        let ext = first
+                            .and_then(|e| e.source.extension().map(|s| s.to_string_lossy().into_owned()))
+                            .unwrap_or_else(|| "NEF".into());
+                        let date = o
+                            .day
+                            .or_else(|| app.ingest.plan.as_ref().and_then(|p| p.days.first().map(|(d, _)| *d)))
+                            .unwrap_or_else(apature_ingest::today);
+                        let facts = apature_ingest::Facts { stem, ext, date: Some(date), time: Some((19, 4, 0)), headline: None };
+                        let line = match apature_ingest::example_names(o, &facts) {
+                            Ok((folder, name)) if folder.is_empty() => name,
+                            Ok((folder, name)) => format!("{folder}/{name}"),
+                            Err(_) => "the templates leave the name empty — add a token or a headline".into(),
+                        };
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(RichText::new("E.G.").monospace().size(9.5).color(t.muted));
+                            ui.add(egui::Label::new(RichText::new(line).monospace().size(10.5).color(t.text2)).wrap());
+                        });
+                        ui.add_space(S1);
+                    }
                     if app.assignment.is_some() {
                         ui.checkbox(&mut app.ingest.apply_pad, "Apply the loaded assignment pad to the copies");
                     }
@@ -258,13 +286,43 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                 ui.painter().rect_filled(rect, CornerRadius::same(3), t.raised);
                 ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(rect.width() * frac, 6.0)), CornerRadius::same(3), t.accent);
                 let failed = r.statuses.iter().filter(|s| **s == FileStatus::Failed).count();
-                ui.label(RichText::new(format!("{done} of {total} files · {failed} failed")).size(12.0).color(t.text2));
+                // Speed = bytes verified per second since the run started (copy +
+                // read-back hash, so it is the real end-to-end rate), with a rough
+                // time left from the bytes still to go.
+                let total_bytes = plan.total_bytes * dests;
+                let mut line = format!("{done} of {total} files · {failed} failed");
+                if r.done.is_none() {
+                    let secs = r.started.elapsed().as_secs_f64();
+                    if r.bytes_done > 0 && secs > 0.5 {
+                        let rate = r.bytes_done as f64 / secs;
+                        let left = total_bytes.saturating_sub(r.bytes_done) as f64 / rate;
+                        let left = if left < 60.0 {
+                            format!("about {} s left", (left.ceil() as u64).max(1))
+                        } else {
+                            format!("about {} min left", (left / 60.0).ceil() as u64)
+                        };
+                        line = format!(
+                            "{line} · {} of {} · {:.0} MB/s · {left}",
+                            human_bytes(r.bytes_done),
+                            human_bytes(total_bytes),
+                            rate / 1e6
+                        );
+                    } else {
+                        line = format!("{line} · {} of {}", human_bytes(r.bytes_done), human_bytes(total_bytes));
+                    }
+                }
+                ui.label(RichText::new(line).size(12.0).color(t.text2));
                 if let Some(rep) = &r.done {
                     let ok = rep.all_verified(plan);
                     let msg = if rep.cancelled {
                         format!("Cancelled after {} files.", rep.outcomes.len())
                     } else if ok {
-                        format!("Every file verified at every destination · {} in {:.0} s", human_bytes(rep.bytes_copied), rep.elapsed_secs)
+                        format!(
+                            "Every file verified at every destination · {} in {:.0} s · {:.0} MB/s",
+                            human_bytes(rep.bytes_copied),
+                            rep.elapsed_secs,
+                            rep.bytes_copied as f64 / rep.elapsed_secs.max(0.001) / 1e6
+                        )
                     } else {
                         format!("{} file{} failed. The card has not been changed; fix the destination and ingest again (only new photos will copy).", rep.files_failed(), if rep.files_failed() == 1 { "" } else { "s" })
                     };

@@ -23,5 +23,9 @@ pub mod template;
 
 pub use copy::{copy_verified, sha256_file, CopyReport, IngestError};
 pub use ledger::Ledger;
-pub use plan::{build_plan, Collision, CollisionPolicy, Entry, FileFilter, Options, Plan, Skip};
+pub use plan::{
+    build_plan, example_names, today, Collision, CollisionPolicy, Entry, FileFilter, Options, Plan,
+    Skip,
+};
 pub use run::{run, Event, FileOutcome, Report};
+pub use template::Facts;
