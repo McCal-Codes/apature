@@ -18,6 +18,10 @@
 - 2026-10-15 night: template engine gained Photo Mechanic's camera/time/weekday/
   folder/today variables (see template.rs header; 85 tests). One chip style
   (`icons::chip`) across Ingest, Export; export hint no longer clips.
+  Number keys pref (1–5 rate by default, PM colour-class mode), Settings chips
+  and bigger window, Caption: More fields fold, Save to N selected, ▾ recent
+  values (PM IPTC Info parity; still missing: variables expanding inside
+  fields, snapshots/presets, Prev/Next without saving).
   Toolbar workspace glyphs done. Polish pass still open: inspector density,
   empty states (Fen). Caption at 1000x650 checked: no overlap. Then: sheet-while-ingesting, burst
   stacks, day chips on the sheet, FTP delivery.
