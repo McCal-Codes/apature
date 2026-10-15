@@ -841,10 +841,13 @@ mod tests {
             color_class: None,
             tagged: None,
         };
+        // Root (containers, some CI) ignores directory permissions; probe
+        // rather than trusting $USER, which is often unset there.
+        let enforced = fs::File::create(dir.path().join("probe")).is_err();
         let result = write_marks(&p, &m);
         fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
-        if std::env::var_os("USER").as_deref() == Some(std::ffi::OsStr::new("root")) {
-            eprintln!("SKIPPED: running as root, permissions are not enforced");
+        if !enforced {
+            eprintln!("SKIPPED: permissions are not enforced for this user");
             return;
         }
         assert!(matches!(result, Err(XmpError::Io(_))), "{result:?}");
