@@ -151,6 +151,19 @@ pub struct Stats {
     pub textures_uploaded: usize,
 }
 
+/// The bare number keys, index = digit.
+const NUM_KEYS: [Key; 9] = [
+    Key::Num0,
+    Key::Num1,
+    Key::Num2,
+    Key::Num3,
+    Key::Num4,
+    Key::Num5,
+    Key::Num6,
+    Key::Num7,
+    Key::Num8,
+];
+
 pub struct App {
     pub folder: Option<PathBuf>,
     pub items: Vec<PhotoItem>,
@@ -2487,19 +2500,17 @@ impl App {
                 if pressed(Key::Minus) {
                     out.push(Command::ZoomOut);
                 }
-                for (n, k) in [
-                    Key::Num0,
-                    Key::Num1,
-                    Key::Num2,
-                    Key::Num3,
-                    Key::Num4,
-                    Key::Num5,
-                ]
-                .iter()
-                .enumerate()
-                {
+                // ⌘ + number: the opposite of what the bare keys do.
+                let cmd_rates = self.prefs.number_keys == crate::prefs::NumberKeys::ColorClass;
+                for (n, k) in NUM_KEYS.iter().enumerate() {
                     if pressed(*k) {
-                        out.push(Command::SetRating(n as i8));
+                        if cmd_rates {
+                            if n <= 5 {
+                                out.push(Command::SetRating(n as i8));
+                            }
+                        } else {
+                            out.push(Command::SetClass(n as u8));
+                        }
                     }
                 }
                 return;
@@ -2530,22 +2541,16 @@ impl App {
                 out.push(Command::Escape);
             }
             if !has_menu {
-                for (n, k) in [
-                    Key::Num0,
-                    Key::Num1,
-                    Key::Num2,
-                    Key::Num3,
-                    Key::Num4,
-                    Key::Num5,
-                    Key::Num6,
-                    Key::Num7,
-                    Key::Num8,
-                ]
-                .iter()
-                .enumerate()
-                {
+                let bare_rates = self.prefs.number_keys == crate::prefs::NumberKeys::Rating;
+                for (n, k) in NUM_KEYS.iter().enumerate() {
                     if pressed(*k) {
-                        out.push(Command::SetClass(n as u8));
+                        if bare_rates {
+                            if n <= 5 {
+                                out.push(Command::SetRating(n as i8));
+                            }
+                        } else {
+                            out.push(Command::SetClass(n as u8));
+                        }
                     }
                 }
                 if pressed(Key::T) {

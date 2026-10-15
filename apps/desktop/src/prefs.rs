@@ -62,6 +62,8 @@ pub struct Prefs {
     pub sort: crate::filter::Sort,
     pub sort_reversed: bool,
     pub advance_after_mark: bool,
+    /// What the bare 1–8 keys set: colour class (Photo Mechanic) or star rating.
+    pub number_keys: NumberKeys,
     pub assignment_file: Option<PathBuf>,
     pub codes_file: Option<PathBuf>,
     pub ingest: Option<apature_ingest::Options>,
@@ -105,6 +107,7 @@ impl Default for Prefs {
             sort: crate::filter::Sort::Name,
             sort_reversed: false,
             advance_after_mark: true,
+            number_keys: NumberKeys::Rating,
             assignment_file: None,
             codes_file: None,
             ingest: None,
@@ -182,4 +185,14 @@ pub enum Motion {
 /// Key for the per-headline sequence counter.
 pub fn seq_key(headline: Option<&str>) -> String {
     headline.unwrap_or("").trim().to_lowercase()
+}
+
+/// What the bare number keys do on the sheet.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NumberKeys {
+    /// 1–5 set the star rating, 0 clears it; ⌘1–⌘8 set the colour class.
+    #[default]
+    Rating,
+    /// 1–8 set the colour class, 0 clears it; ⌘0–⌘5 set the rating (Photo Mechanic).
+    ColorClass,
 }

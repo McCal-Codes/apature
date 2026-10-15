@@ -49,7 +49,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
     let t = *t;
     ctx.show_viewport_immediate(
         egui::ViewportId::from_hash_of("apature-settings"),
-        egui::ViewportBuilder::default().with_title("Apature Settings").with_inner_size([620.0, 520.0]).with_min_inner_size([520.0, 400.0]),
+        egui::ViewportBuilder::default().with_title("Apature Settings").with_inner_size([680.0, 560.0]).with_min_inner_size([560.0, 420.0]),
         |ctx, _class| {
             if ctx.input(|i| i.viewport().close_requested()) {
                 close = true;
@@ -86,7 +86,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         ui.label(RichText::new("Appearance").size(12.0).color(t.text2));
                         ui.horizontal(|ui| {
                             for (a, label) in [(Appearance::System, "System"), (Appearance::Dark, "Apature Dark"), (Appearance::Light, "Apature Light")] {
-                                if ui.selectable_label(app.prefs.appearance == a, label).clicked() {
+                                if super::icons::chip(ui, &t, label, app.prefs.appearance == a).clicked() {
                                     app.prefs.appearance = a;
                                     app.prefs_dirty = true;
                                 }
@@ -225,7 +225,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         ui.label(RichText::new("Motion").size(12.0).color(t.text2));
                         ui.horizontal(|ui| {
                             for (m, label) in [(crate::prefs::Motion::System, "Follow macOS Reduce Motion"), (crate::prefs::Motion::Reduce, "Reduce"), (crate::prefs::Motion::Full, "Full")] {
-                                if ui.selectable_label(app.prefs.motion == m, label).clicked() {
+                                if super::icons::chip(ui, &t, label, app.prefs.motion == m).clicked() {
                                     app.prefs.motion = m;
                                     app.prefs_dirty = true;
                                 }
@@ -238,7 +238,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         }
                         hint(ui, &t, "Lifts the quiet grey labels and strengthens panel borders in both appearances.");
                         ui.add_space(S3);
-                        hint(ui, &t, "Keyboard: every workspace is reachable with ⌘⇧1–5, the sheet with arrows, marks with 0–5 and the class keys. Screen reader labels are still being filled in (see docs/ACCESSIBILITY.md).");
+                        hint(ui, &t, "Keyboard: every workspace is reachable with ⌘⇧1–5, the sheet with arrows, marks with the number keys (see Shortcuts). Screen reader labels are still being filled in (see docs/ACCESSIBILITY.md).");
                     }
                     Page::Cache => {
                         heading(ui, &t, "Thumbnail cache");
@@ -259,9 +259,36 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     }
                     Page::Shortcuts => {
                         heading(ui, &t, "Shortcuts");
-                        hint(ui, &t, "Photo Mechanic profile. Editable profiles arrive later.");
+                        ui.label(RichText::new("Number keys 1–8").size(12.0).color(t.text2));
+                        ui.horizontal_wrapped(|ui| {
+                            for (m, label) in [
+                                (crate::prefs::NumberKeys::Rating, "Stars: 1–5 rate, 0 clears"),
+                                (crate::prefs::NumberKeys::ColorClass, "Colour class: 1–8, 0 clears (Photo Mechanic)"),
+                            ] {
+                                if super::icons::chip(ui, &t, label, app.prefs.number_keys == m).clicked() {
+                                    app.prefs.number_keys = m;
+                                    app.prefs_dirty = true;
+                                }
+                            }
+                        });
+                        hint(ui, &t, match app.prefs.number_keys {
+                            crate::prefs::NumberKeys::Rating => "⌘1–⌘8 set the colour class, ⌘0 clears it.",
+                            crate::prefs::NumberKeys::ColorClass => "⌘0–⌘5 set the rating.",
+                        });
+                        ui.add_space(S3);
+                        hint(ui, &t, "Editable profiles arrive later.");
                         ui.add_space(S2);
+                        let (num_keys, num_row, cmd_keys, cmd_row): (&str, &str, &str, &str) = match app.prefs.number_keys {
+                            crate::prefs::NumberKeys::Rating => ("1–5 · 0", "Rating · clear", "⌘1–⌘8 · ⌘0", "Colour class · clear"),
+                            crate::prefs::NumberKeys::ColorClass => ("1–8 · 0", "Colour class · clear", "⌘0–⌘5", "Rating · clear"),
+                        };
                         egui::Grid::new("keys").num_columns(2).spacing([S4, S2]).striped(true).show(ui, |ui| {
+                            ui.label(RichText::new(num_keys).monospace().size(11.5).color(t.text));
+                            ui.label(RichText::new(num_row).size(12.0).color(t.text2));
+                            ui.end_row();
+                            ui.label(RichText::new(cmd_keys).monospace().size(11.5).color(t.text));
+                            ui.label(RichText::new(cmd_row).size(12.0).color(t.text2));
+                            ui.end_row();
                             for (k, v) in SHORTCUTS {
                                 ui.label(RichText::new(*k).monospace().size(11.5).color(t.text));
                                 ui.label(RichText::new(*v).size(12.0).color(t.text2));
@@ -286,8 +313,6 @@ const SHORTCUTS: &[(&str, &str)] = &[
         "← → ↑ ↓",
         "Move focus (⇧ extends the selection, ⌘ keeps it)",
     ),
-    ("1–8 · 0", "Color class · clear"),
-    ("⌘0–⌘5", "Rating"),
     ("X · T", "Reject · toggle tag"),
     ("⏎ / Space · Esc", "Preview · back"),
     ("⌘A · ⌘⇧A", "Select all · none"),
