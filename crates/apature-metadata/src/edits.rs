@@ -7,14 +7,19 @@
 //!   overrides the orientation in the file; the RAW itself is never touched.
 //! * crop is `crs:HasCrop` with `crs:CropTop/Left/Bottom/Right`, fractions of
 //!   the image as stored (before the orientation is applied), and
-//!   `crs:CropAngle` written as 0 since there is no straighten tool.
+//!   `crs:CropAngle` written as 0 since there is no straighten tool. A crop
+//!   that carries a straighten angle (Lightroom, Camera Raw) is reported as
+//!   [`Edits::straightened_crop`] and not applied, rather than applied
+//!   without its angle and framed differently from the editor that made it.
+//!
+//! Properties are found under the usual prefixes (`tiff:`, `crs:`) and under
+//! whatever other prefix a document binds to the same namespace URI.
 //!
 //! Editing follows the sidecar rules in [`crate::xmp`]: properties are
 //! changed in place, everything else in the document is left alone, and the
 //! file is replaced atomically only after it reads back correctly.
 
 use std::path::Path;
-use std::sync::OnceLock;
 
 use regex::Regex;
 
@@ -74,9 +79,17 @@ impl Crop {
 pub struct Edits {
     pub orientation: Option<u8>,
     pub crop: Option<Crop>,
+    /// The sidecar has a crop with a non-zero `crs:CropAngle`; `crop` is
+    /// `None` because a straightened crop cannot be applied here.
+    pub straightened_crop: bool,
 }
 
 impl Edits {
+    /// True when there is a rotation or a crop to apply.
+    pub fn is_edited(&self) -> bool {
+        self.orientation.is_some() || self.crop.is_some()
+    }
+
     /// The orientation to show and export: the sidecar's when set, else the
     /// file's own.
     pub fn orientation_or(&self, file: u32) -> u32 {
@@ -119,31 +132,47 @@ pub fn swaps_axes(o: u32) -> bool {
     matches!(o, 5..=8)
 }
 
-static RE_ORIENT: OnceLock<Regex> = OnceLock::new();
-static RE_HAS_CROP: OnceLock<Regex> = OnceLock::new();
-static RE_CROP: OnceLock<[Regex; 4]> = OnceLock::new();
-
 const CROP_NAMES: [&str; 4] = ["CropTop", "CropLeft", "CropBottom", "CropRight"];
+
+/// The prefixes a property of `ns` may appear under in `text`: the usual
+/// one, plus any other prefix the document binds to the same URI.
+fn prefixes(text: &str, ns: &str, usual: &str) -> Vec<String> {
+    let mut v = vec![usual.to_string()];
+    if let Some(p) = crate::xmp::declared_prefix(text, ns) {
+        if p != usual {
+            v.push(p);
+        }
+    }
+    v
+}
+
+/// Value of `prefix:name` under any of `prefixes`.
+fn prop(text: &str, prefixes: &[String], name: &str) -> Option<String> {
+    let alt = prefixes
+        .iter()
+        .map(|p| regex::escape(p))
+        .collect::<Vec<_>>()
+        .join("|");
+    value_of(&Regex::new(&prop_pattern(&alt, name)).ok()?, text)
+}
 
 /// Parse rotation and crop out of sidecar text.
 pub fn parse(text: &str) -> Edits {
-    let orientation = value_of(
-        RE_ORIENT.get_or_init(|| Regex::new(&prop_pattern("tiff", "Orientation")).unwrap()),
-        text,
-    )
-    .and_then(|v| v.trim().parse::<u8>().ok())
-    .filter(|o| (1..=8).contains(o));
-    let has_crop = value_of(
-        RE_HAS_CROP.get_or_init(|| Regex::new(&prop_pattern("crs", "HasCrop")).unwrap()),
-        text,
-    )
-    .is_some_and(|v| matches!(v.trim().to_lowercase().as_str(), "true" | "1"));
-    let crop = if has_crop {
-        let res = RE_CROP
-            .get_or_init(|| CROP_NAMES.map(|n| Regex::new(&prop_pattern("crs", n)).unwrap()));
-        let v: Vec<Option<f32>> = res
+    let tiff = prefixes(text, NS_TIFF, "tiff");
+    let crs = prefixes(text, NS_CRS, "crs");
+    let orientation = prop(text, &tiff, "Orientation")
+        .and_then(|v| v.trim().parse::<u8>().ok())
+        .filter(|o| (1..=8).contains(o));
+    let has_crop = prop(text, &crs, "HasCrop")
+        .is_some_and(|v| matches!(v.trim().to_lowercase().as_str(), "true" | "1"));
+    let angle = prop(text, &crs, "CropAngle")
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .unwrap_or(0.0);
+    let straightened_crop = has_crop && angle.abs() > 0.01;
+    let crop = if has_crop && !straightened_crop {
+        let v: Vec<Option<f32>> = CROP_NAMES
             .iter()
-            .map(|r| value_of(r, text).and_then(|v| v.trim().parse::<f32>().ok()))
+            .map(|n| prop(text, &crs, n).and_then(|v| v.trim().parse::<f32>().ok()))
             .collect();
         match v[..] {
             [Some(top), Some(left), Some(bottom), Some(right)] => Crop {
@@ -158,7 +187,11 @@ pub fn parse(text: &str) -> Edits {
     } else {
         None
     };
-    Edits { orientation, crop }
+    Edits {
+        orientation,
+        crop,
+        straightened_crop,
+    }
 }
 
 /// What to change in a sidecar. Each field: `None` leaves it alone,
@@ -176,25 +209,31 @@ pub fn apply(text: &str, change: &Change) -> Result<String, XmpError> {
     } else {
         text.to_string()
     };
+    // Edit a property where it already is, whatever prefix the document
+    // binds its namespace to, so it is never written twice.
+    let tiff = prefixes(&out, NS_TIFF, "tiff");
+    let tiff: Vec<&str> = tiff.iter().map(String::as_str).collect();
+    let crs = prefixes(&out, NS_CRS, "crs");
+    let crs: Vec<&str> = crs.iter().map(String::as_str).collect();
     if let Some(o) = change.orientation {
         let v = o.filter(|o| (1..=8).contains(o)).map(|o| o.to_string());
-        set_prop(&mut out, &["tiff"], NS_TIFF, "Orientation", v.as_deref())?;
+        set_prop(&mut out, &tiff, NS_TIFF, "Orientation", v.as_deref())?;
     }
     if let Some(crop) = change.crop {
         match crop.and_then(Crop::normalized).filter(|c| !c.is_full()) {
             Some(c) => {
-                set_prop(&mut out, &["crs"], NS_CRS, "HasCrop", Some("True"))?;
+                set_prop(&mut out, &crs, NS_CRS, "HasCrop", Some("True"))?;
                 for (name, v) in CROP_NAMES.iter().zip([c.top, c.left, c.bottom, c.right]) {
-                    set_prop(&mut out, &["crs"], NS_CRS, name, Some(&format!("{v:.6}")))?;
+                    set_prop(&mut out, &crs, NS_CRS, name, Some(&format!("{v:.6}")))?;
                 }
-                set_prop(&mut out, &["crs"], NS_CRS, "CropAngle", Some("0"))?;
+                set_prop(&mut out, &crs, NS_CRS, "CropAngle", Some("0"))?;
             }
             None => {
                 // Lightroom reads HasCrop="False" as "no crop"; drop the numbers
                 // so nothing stale is left behind.
-                set_prop(&mut out, &["crs"], NS_CRS, "HasCrop", Some("False"))?;
+                set_prop(&mut out, &crs, NS_CRS, "HasCrop", Some("False"))?;
                 for name in CROP_NAMES {
-                    set_prop(&mut out, &["crs"], NS_CRS, name, None)?;
+                    set_prop(&mut out, &crs, NS_CRS, name, None)?;
                 }
             }
         }
@@ -308,6 +347,59 @@ mod tests {
         assert!(cleared.contains("crs:HasCrop=\"False\""));
         assert!(!cleared.contains("CropTop"));
         assert!(cleared.contains("crs:Exposure2012"));
+    }
+
+    #[test]
+    fn a_straightened_lightroom_crop_is_reported_not_applied() {
+        let t = LR.replace("crs:CropAngle=\"0\"", "crs:CropAngle=\"2.5\"");
+        let e = parse(&t);
+        assert_eq!(e.crop, None);
+        assert!(e.straightened_crop);
+        assert!(!e.is_edited());
+        assert!(!parse(LR).straightened_crop);
+    }
+
+    #[test]
+    fn any_prefix_bound_to_the_namespace_is_read_and_edited_in_place() {
+        let t = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:foo="http://ns.adobe.com/tiff/1.0/"
+    xmlns:cr="http://ns.adobe.com/camera-raw-settings/1.0/"
+    foo:Orientation="6"
+    cr:HasCrop="True" cr:CropTop="0.1" cr:CropLeft="0.1" cr:CropBottom="0.9" cr:CropRight="0.9">
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>"#;
+        let e = parse(t);
+        assert_eq!(e.orientation, Some(6));
+        assert!(e.crop.is_some());
+        let out = apply(
+            t,
+            &Change {
+                orientation: Some(Some(8)),
+                crop: Some(None),
+            },
+        )
+        .unwrap();
+        assert_eq!(out.matches("Orientation=").count(), 1, "{out}");
+        assert!(out.contains("foo:Orientation=\"8\""));
+        assert_eq!(parse(&out).orientation, Some(8));
+        assert_eq!(parse(&out).crop, None);
+        assert!(!out.contains("CropTop"));
+        // write() verifies by reading back, which now succeeds too.
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("a.xmp");
+        std::fs::write(&p, t).unwrap();
+        write(
+            &p,
+            &Change {
+                orientation: Some(Some(3)),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(read(&p).unwrap().orientation, Some(3));
     }
 
     #[test]

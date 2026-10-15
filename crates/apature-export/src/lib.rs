@@ -228,8 +228,35 @@ pub fn export(
         PixelSource::EmbeddedPreview
     };
     let mut data = std::fs::read(&src_path).map_err(|e| ExportError::Io(src_path.clone(), e))?;
+    let edits = if settings.apply_edits {
+        edits::read(&item.sidecar_path()).unwrap_or_else(|e| {
+            log::warn!(
+                "{}: sidecar edits unreadable ({e}); exporting unedited",
+                src_path.display()
+            );
+            edits::Edits::default()
+        })
+    } else {
+        edits::Edits::default()
+    };
+    if edits.straightened_crop {
+        log::warn!(
+            "{}: the sidecar's crop has a straighten angle Apature cannot apply; exporting uncropped",
+            src_path.display()
+        );
+    }
+    // A crop keeps only part of the frame, so decode (or render) enough
+    // pixels for the cropped part to still reach the long side.
+    let target = match (settings.long_side, edits.crop) {
+        (0, _) => None,
+        (n, None) => Some(n),
+        (n, Some(c)) => {
+            let keep = (c.right - c.left).min(c.bottom - c.top).max(0.01);
+            Some(((n as f32) / keep).ceil() as u32)
+        }
+    };
     if !is_jpeg && settings.raw == RawPixels::SystemDecode {
-        match system_decode_raw(&src_path, settings.long_side) {
+        match system_decode_raw(&src_path, target.unwrap_or(0)) {
             Ok(rendered) => {
                 data = rendered;
                 is_jpeg = true;
@@ -254,27 +281,6 @@ pub fn export(
     } else {
         exif::read(&src_path).unwrap_or_else(|_| exif::from_bytes(&data).unwrap_or_default())
     };
-    let edits = if settings.apply_edits {
-        edits::read(&item.sidecar_path()).unwrap_or_else(|e| {
-            log::warn!(
-                "{}: sidecar edits unreadable ({e}); exporting unedited",
-                src_path.display()
-            );
-            edits::Edits::default()
-        })
-    } else {
-        edits::Edits::default()
-    };
-    // A crop keeps only part of the frame, so decode enough pixels for the
-    // cropped part to still reach the long side.
-    let target = match (settings.long_side, edits.crop) {
-        (0, _) => None,
-        (n, None) => Some(n),
-        (n, Some(c)) => {
-            let keep = (c.right - c.left).min(c.bottom - c.top).max(0.01);
-            Some(((n as f32) / keep).ceil() as u32)
-        }
-    };
     let mut img =
         decode_jpeg(jpeg_bytes, target).map_err(|e| ExportError::Decode(src_path.clone(), e))?;
     // The crop is in the stored frame, so it comes before the rotation. A
@@ -283,7 +289,7 @@ pub fn export(
     // thing for every pixel source.
     let file_orientation = if pixels == PixelSource::SystemRawDecode {
         let raw = exif::read(&src_path).map(|e| e.orientation).unwrap_or(1);
-        if edits != edits::Edits::default() {
+        if edits.is_edited() {
             img = rotate(rotate(img, summary.orientation), edits::inverse(raw));
             raw
         } else {
@@ -399,7 +405,7 @@ pub fn export(
         height,
         bytes: file.len() as u64,
         exif: exif_source,
-        edited: edits != edits::Edits::default(),
+        edited: edits.is_edited(),
         millis: t0.elapsed().as_millis(),
     })
 }
