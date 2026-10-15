@@ -369,9 +369,11 @@ impl App {
         if launch.caption && !app.view.is_empty() {
             app.workspace = Workspace::Caption;
         }
-        if let Some(o) = app.prefs.ingest.clone() {
-            app.ingest.opts = o;
-        }
+        app.ingest.opts = app
+            .prefs
+            .ingest
+            .clone()
+            .unwrap_or_else(crate::prefs::default_ingest_options);
         if let Some(s) = launch.ingest_source.clone() {
             app.ingest.opts.source = s;
         }
