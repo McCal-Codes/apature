@@ -107,7 +107,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     labeled(ui, t, "Long side", |ui| {
                         ui.horizontal(|ui| {
                             for (px, label) in [(2048, "2048"), (3000, "3000"), (4096, "4096"), (0, "Full size")] {
-                                if super::icons::chip(ui, t, &label, app.prefs.export.long_side == px).clicked() {
+                                if super::icons::chip(ui, t, label, app.prefs.export.long_side == px).clicked() {
                                     app.prefs.export.long_side = px;
                                     prefs_changed = true;
                                 }

@@ -198,7 +198,6 @@ pub fn facts_for(item: &PhotoItem, variant_path: &Path, headline: Option<&str>) 
         exposure,
         focal_mm,
         today: Some(today()),
-        ..Default::default()
     }
 }
 
