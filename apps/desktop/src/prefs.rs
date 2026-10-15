@@ -114,7 +114,7 @@ impl Default for Prefs {
 /// section prefix, one folder per shoot and files `Headline001-MMDDYY.ext`.
 pub fn default_ingest_options() -> apature_ingest::Options {
     apature_ingest::Options {
-        folder_template: "{headline}".into(),
+        folder_template: "{year4}/{month0} {monthname}/{mnn3} {day0} {headline}".into(),
         rename_template: "{headline}{seqn:3}-{month0}{day0}{yr2}".into(),
         ..Default::default()
     }

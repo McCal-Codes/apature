@@ -81,6 +81,26 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if ui.checkbox(&mut app.prefs.eject_after_ingest, "Eject the card when every file has verified").changed() {
                         app.prefs_dirty = true;
                     }
+                    // Days found on the card (from the last plan): pick one to ingest only that shoot.
+                    let days: Vec<((i32, u32, u32), usize)> = app.ingest.plan.as_ref().map(|p| p.days.clone()).unwrap_or_default();
+                    if days.len() > 1 || app.ingest.opts.day.is_some() {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(RichText::new("DAYS").monospace().size(9.5).color(t.muted));
+                            let total: usize = days.iter().map(|(_, n)| n).sum();
+                            if ui.selectable_label(app.ingest.opts.day.is_none(), format!("all · {total}")).clicked() {
+                                app.ingest.opts.day = None;
+                                opts_changed = true;
+                            }
+                            const MON: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                            for ((y, m, d), n) in days {
+                                let label = format!("{} {d:02} · {n}", MON[(m.clamp(1, 12) - 1) as usize]);
+                                if ui.selectable_label(app.ingest.opts.day == Some((y, m, d)), label).on_hover_text(format!("{y}-{m:02}-{d:02}")).clicked() {
+                                    app.ingest.opts.day = Some((y, m, d));
+                                    opts_changed = true;
+                                }
+                            }
+                        });
+                    }
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("FILES").monospace().size(9.5).color(t.muted));
                         for (f, label) in [(FileFilter::All, "all"), (FileFilter::RawOnly, "RAW only"), (FileFilter::JpegOnly, "JPEG only")] {
@@ -185,6 +205,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     }
                     if plan.suffixed > 0 {
                         summary.push_str(&format!(" · {} renamed with a suffix", plan.suffixed));
+                    }
+                    if plan.other_days > 0 {
+                        summary.push_str(&format!(" · {} from other days left out", plan.other_days));
                     }
                     ui.label(RichText::new(summary).size(13.0).color(t.text));
                     if let Some(first) = plan.entries.first() {
