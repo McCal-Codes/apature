@@ -1,5 +1,6 @@
 //! Execute a plan sequentially with progress events and cancellation.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -78,6 +79,7 @@ pub fn run(
 ) -> Report {
     let t0 = Instant::now();
     let mut report = Report::default();
+    let mut verified_per_item: BTreeMap<usize, usize> = BTreeMap::new();
     for (index, e) in plan.entries.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             report.cancelled = true;
@@ -132,11 +134,23 @@ pub fn run(
             }
         }
         if outcome.fully_verified(wanted) {
+            *verified_per_item.entry(e.item).or_default() += 1;
+        }
+        report.outcomes.push(outcome);
+    }
+    // A photo counts as ingested only when every file of it (variants and
+    // companions) reached every destination; otherwise "only new" offers the
+    // whole photo again next time, so a failed memo is retried.
+    let mut planned_per_item: BTreeMap<usize, usize> = BTreeMap::new();
+    for e in &plan.entries {
+        *planned_per_item.entry(e.item).or_default() += 1;
+    }
+    for e in &plan.entries {
+        if verified_per_item.get(&e.item) == planned_per_item.get(&e.item) {
             if let Some(fp) = &e.fingerprint {
                 ledger.insert(fp.clone());
             }
         }
-        report.outcomes.push(outcome);
     }
     let _ = ledger.save();
     report.elapsed_secs = t0.elapsed().as_secs_f64();
@@ -194,6 +208,43 @@ mod tests {
         let again = build_plan(&opts, &ledger2).unwrap();
         assert!(again.entries.is_empty());
         assert_eq!(again.skipped.len(), 3);
+    }
+
+    #[test]
+    fn a_failed_memo_keeps_its_photo_out_of_the_ledger_so_it_is_retried() {
+        let t = tempfile::tempdir().unwrap();
+        let src = t.path().join("CARD");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("DSC_0001.JPG"), b"photo").unwrap();
+        fs::write(src.join("DSC_0001.WAV"), b"memo").unwrap();
+        let opts = Options {
+            source: src.clone(),
+            primary: t.path().join("P"),
+            folder_template: String::new(),
+            only_new: true,
+            ..Default::default()
+        };
+        let mut ledger = Ledger::in_memory();
+        let plan = build_plan(&opts, &ledger).unwrap();
+        assert_eq!(plan.entries.len(), 2);
+        // The memo's destination is taken by a directory: its copy fails.
+        let memo_dest = plan.entries[1].primary.clone();
+        fs::create_dir_all(&memo_dest).unwrap();
+        let report = run(&plan, &mut ledger, &AtomicBool::new(false), |_| {});
+        assert_eq!(report.files_failed(), 1);
+        assert!(
+            ledger.is_empty(),
+            "the photo is not done while its memo failed"
+        );
+        // Next "only new" plan offers the photo and its memo again.
+        fs::remove_dir(&memo_dest).unwrap();
+        fs::remove_file(&plan.entries[0].primary).unwrap();
+        let again = build_plan(&opts, &ledger).unwrap();
+        assert_eq!(again.entries.len(), 2);
+        let report = run(&again, &mut ledger, &AtomicBool::new(false), |_| {});
+        assert!(report.all_verified(&again));
+        assert_eq!(ledger.len(), 1, "photo recorded once everything verified");
+        assert!(build_plan(&opts, &ledger).unwrap().entries.is_empty());
     }
 
     #[test]
