@@ -41,16 +41,15 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                             app.workspace == w || (w == Workspace::Ingest && app.ingest_window);
                         match w.available() {
                             Ok(()) => {
-                                if ui
-                                    .add(egui::Button::new(w.label()).selected(selected))
+                                if super::icons::workspace_button(ui, t, w, selected, true)
                                     .clicked()
                                 {
                                     cmds.push(Command::SetWorkspace(w));
                                 }
                             }
                             Err(why) => {
-                                ui.add_enabled(false, egui::Button::new(w.label()))
-                                    .on_disabled_hover_text(why);
+                                super::icons::workspace_button(ui, t, w, false, false)
+                                    .on_hover_text(why);
                             }
                         }
                     }

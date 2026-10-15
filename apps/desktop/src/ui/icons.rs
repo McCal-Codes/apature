@@ -198,3 +198,170 @@ pub fn chip(ui: &mut egui::Ui, t: &Theme, label: &str, selected: bool) -> egui::
     );
     resp
 }
+
+/// Workspace glyphs, 14×11 pt, drawn in the stroke style of the drive icons.
+pub fn workspace_glyph(
+    p: &egui::Painter,
+    center: Pos2,
+    w: crate::commands::Workspace,
+    color: egui::Color32,
+) {
+    use crate::commands::Workspace;
+    let s = Stroke::new(1.3, color);
+    let g = Rect::from_center_size(center, Vec2::new(14.0, 11.0));
+    match w {
+        Workspace::Sheet => {
+            // 2×2 grid of cells
+            let cw = (g.width() - 2.0) / 2.0;
+            let ch = (g.height() - 2.0) / 2.0;
+            for (i, j) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)] {
+                let r = Rect::from_min_size(
+                    Pos2::new(g.left() + i * (cw + 2.0), g.top() + j * (ch + 2.0)),
+                    Vec2::new(cw, ch),
+                );
+                p.rect_stroke(r, CornerRadius::same(1), s, StrokeKind::Inside);
+            }
+        }
+        Workspace::Preview => {
+            // Frame with a mountain and a sun
+            p.rect_stroke(g, CornerRadius::same(2), s, StrokeKind::Inside);
+            p.line_segment(
+                [
+                    Pos2::new(g.left() + 2.0, g.bottom() - 2.0),
+                    Pos2::new(g.left() + 6.0, g.center().y),
+                ],
+                s,
+            );
+            p.line_segment(
+                [
+                    Pos2::new(g.left() + 6.0, g.center().y),
+                    Pos2::new(g.right() - 2.0, g.bottom() - 2.0),
+                ],
+                s,
+            );
+            p.circle_filled(Pos2::new(g.right() - 4.0, g.top() + 3.5), 1.2, color);
+        }
+        Workspace::Caption => {
+            // Three text lines, the last one short
+            for (k, frac) in [(0.0, 1.0), (1.0, 1.0), (2.0, 0.55)] {
+                let y = g.top() + 1.5 + k * 4.0;
+                p.line_segment(
+                    [
+                        Pos2::new(g.left(), y),
+                        Pos2::new(g.left() + g.width() * frac, y),
+                    ],
+                    s,
+                );
+            }
+        }
+        Workspace::Ingest => {
+            // Card with an arrow coming out to the right
+            let card = Rect::from_min_size(g.left_top(), Vec2::new(8.0, g.height()));
+            p.rect_stroke(card, CornerRadius::same(1), s, StrokeKind::Inside);
+            let y = g.center().y;
+            p.line_segment(
+                [Pos2::new(card.right() + 1.5, y), Pos2::new(g.right(), y)],
+                s,
+            );
+            p.line_segment(
+                [Pos2::new(g.right() - 3.0, y - 3.0), Pos2::new(g.right(), y)],
+                s,
+            );
+            p.line_segment(
+                [Pos2::new(g.right() - 3.0, y + 3.0), Pos2::new(g.right(), y)],
+                s,
+            );
+        }
+        Workspace::Export => {
+            // Tray with an arrow going up and out
+            p.line_segment(
+                [
+                    Pos2::new(g.left(), g.bottom() - 3.0),
+                    Pos2::new(g.left(), g.bottom()),
+                ],
+                s,
+            );
+            p.line_segment(
+                [
+                    Pos2::new(g.left(), g.bottom()),
+                    Pos2::new(g.right(), g.bottom()),
+                ],
+                s,
+            );
+            p.line_segment(
+                [
+                    Pos2::new(g.right(), g.bottom()),
+                    Pos2::new(g.right(), g.bottom() - 3.0),
+                ],
+                s,
+            );
+            let x = g.center().x;
+            p.line_segment([Pos2::new(x, g.top()), Pos2::new(x, g.bottom() - 3.0)], s);
+            p.line_segment(
+                [Pos2::new(x - 3.0, g.top() + 3.0), Pos2::new(x, g.top())],
+                s,
+            );
+            p.line_segment(
+                [Pos2::new(x + 3.0, g.top() + 3.0), Pos2::new(x, g.top())],
+                s,
+            );
+        }
+    }
+}
+
+/// A workspace tab button: glyph + label, selected state in the accent wash.
+pub fn workspace_button(
+    ui: &mut egui::Ui,
+    t: &Theme,
+    w: crate::commands::Workspace,
+    selected: bool,
+    enabled: bool,
+) -> egui::Response {
+    let font = egui::FontId::proportional(13.0);
+    let galley = ui.fonts_mut(|f| f.layout_no_wrap(w.label().to_string(), font, t.text));
+    let width = 8.0 + 14.0 + 5.0 + galley.size().x + 9.0;
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 25.0), Sense::click());
+    let p = ui.painter();
+    if selected {
+        p.rect_filled(rect, CornerRadius::same(6), t.accent_wash);
+        p.rect_stroke(
+            rect,
+            CornerRadius::same(6),
+            Stroke::new(1.0, t.accent),
+            StrokeKind::Inside,
+        );
+    } else if resp.hovered() && enabled {
+        p.rect_filled(rect, CornerRadius::same(6), t.raised);
+    }
+    let fg = if !enabled {
+        t.muted
+    } else if selected {
+        t.accent
+    } else {
+        t.text2
+    };
+    workspace_glyph(
+        p,
+        Pos2::new(rect.left() + 8.0 + 7.0, rect.center().y),
+        w,
+        fg,
+    );
+    p.galley(
+        Pos2::new(
+            rect.left() + 8.0 + 14.0 + 5.0,
+            rect.center().y - galley.size().y / 2.0,
+        ),
+        galley,
+        if !enabled {
+            t.muted
+        } else if selected {
+            t.text
+        } else {
+            t.text2
+        },
+    );
+    resp.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, w.label())
+    });
+    resp
+}
