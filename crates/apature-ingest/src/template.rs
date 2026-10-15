@@ -145,6 +145,22 @@ pub fn sanitize_component(s: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn default_trib_pattern_without_section() {
+        use super::*;
+        let f = Facts {
+            stem: "DSC_0412".into(),
+            ext: "jpg".into(),
+            date: Some((2026, 9, 12)),
+            time: None,
+            headline: Some("TasteOfSewickley".into()),
+        };
+        assert_eq!(
+            expand("{headline}{seqn:3}-{month0}{day0}{yr2}", &f, 1),
+            "TasteOfSewickley001-091226"
+        );
+    }
+
     use super::*;
 
     fn facts() -> Facts {
