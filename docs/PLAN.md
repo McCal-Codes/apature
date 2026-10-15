@@ -1,5 +1,25 @@
 # Plan for the next sessions (written 2026-10-15, budget-aware)
 
+## Handoff 2026-10-15 evening (for the next model; Fable budget nearly spent)
+- Cloud PRs #1 (ingest companions, preserve folders, CLI timing, CI) and #2
+  (rotate + crop in the sidecar, applied on export) are MERGED into main and
+  build clean on the Mac: 84 tests, clippy 0.
+- Fixed on the Mac: `sidecar_path` now resolves the real on-disk case (the
+  cloud test failed on APFS because `.xmp` and `.XMP` both probe true).
+- Verified on the Mac: companions + preserve-folders CLI ingest on a scratch
+  card (WAV landed as Party001.WAV under DCIM/100NIKON); `timing:` line prints;
+  `apature-cli rotate` writes tiff:Orientation=6 and the sheet thumbnail turns;
+  persistent {seqn} continued at 109 after the owner's Oct 08 "Dragons Den"
+  ingest; Ingest at 1000x650 had the Seq. start row clipped (fixed: wraps).
+- NOT verified: real-card ingest with both new checkboxes (card was ejected);
+  the 46 s vs 125 s gap on the real card (timing line is in, just run it);
+  Lightroom/PM reading our rotate; the on-screen crop tool does not exist yet
+  (CLI `crop --rect` only); Ingest window headless capture.
+- Owner's operating rules for Claude sessions are in memory
+  (`claude-agent-efficiency-rules`): no subagents unless independent, cheaper
+  models for routine work, no repeated research, concise reports.
+
+
 State: M1–M10 done, first real shoot (Ryan's birthday, 134 NEF) ingested in the
 app and verified. Ingest is its own window. Persistent `{seqn}`, Accessibility
 settings, drive icons, day chips, live example name, MB/s all shipped today.
