@@ -15,6 +15,12 @@
   the 46 s vs 125 s gap on the real card (timing line is in, just run it);
   Lightroom/PM reading our rotate; the on-screen crop tool does not exist yet
   (CLI `crop --rect` only); Ingest window headless capture.
+- 2026-10-15 night: template engine gained Photo Mechanic's camera/time/weekday/
+  folder/today variables (see template.rs header; 85 tests). One chip style
+  (`icons::chip`) across Ingest, Export; export hint no longer clips.
+  Polish pass still open: inspector density, toolbar glyphs, empty states
+  (Fen), Caption fields at narrow widths. Then: sheet-while-ingesting, burst
+  stacks, day chips on the sheet, FTP delivery.
 - Owner's operating rules for Claude sessions are in memory
   (`claude-agent-efficiency-rules`): no subagents unless independent, cheaper
   models for routine work, no repeated research, concise reports.
