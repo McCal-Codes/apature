@@ -75,12 +75,6 @@ impl PhotoItem {
     pub fn sidecar_path(&self) -> PathBuf {
         let lower = self.primary.path.with_extension("xmp");
         let upper = self.primary.path.with_extension("XMP");
-        if lower.is_file() {
-            return lower;
-        }
-        if upper.is_file() {
-            return upper;
-        }
         let ext_is_upper = self
             .primary
             .path
@@ -88,16 +82,44 @@ impl PhotoItem {
             .and_then(|e| e.to_str())
             .map(|e| e.chars().any(|c| c.is_ascii_uppercase()))
             .unwrap_or(false);
-        if ext_is_upper {
-            upper
+        let (preferred, other) = if ext_is_upper {
+            (upper, lower)
         } else {
-            lower
+            (lower, upper)
+        };
+        if preferred.is_file() || other.is_file() {
+            // On a case-insensitive volume (APFS default, ExFAT cards) both
+            // probes succeed whatever the real name is, so answer with the
+            // entry the directory actually holds.
+            if let Some(real) = existing_with_case(&preferred) {
+                return real;
+            }
+            return if preferred.is_file() {
+                preferred
+            } else {
+                other
+            };
         }
+        preferred
     }
 
     pub fn variants(&self) -> impl Iterator<Item = &Variant> {
         std::iter::once(&self.primary).chain(self.secondary.iter())
     }
+}
+
+/// The directory entry whose name equals `p`'s file name ignoring ASCII case,
+/// with its real spelling; None when there is none.
+fn existing_with_case(p: &Path) -> Option<PathBuf> {
+    let parent = p.parent()?;
+    let want = p.file_name()?.to_str()?;
+    for e in std::fs::read_dir(parent).ok()?.flatten() {
+        let name = e.file_name();
+        if name.to_str().is_some_and(|s| s.eq_ignore_ascii_case(want)) {
+            return Some(parent.join(name));
+        }
+    }
+    None
 }
 
 #[cfg(test)]
