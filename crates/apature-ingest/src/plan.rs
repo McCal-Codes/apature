@@ -159,6 +159,66 @@ pub fn facts_for(item: &PhotoItem, variant_path: &Path, headline: Option<&str>) 
 
 /// Build the plan. Fast enough to run on every option change for a card
 /// (one EXIF read per item, one 64 KiB fingerprint per file when `only_new`).
+/// What one photo would be called under `opts`: the folder (relative to the
+/// destination, "" when the folder template is empty) and the file name.
+/// Uses exactly the expansion and sanitising the planner uses, so the Ingest
+/// sheet can show a live example while the templates are typed. `facts`
+/// should carry a plausible stem/ext/date; the headline comes from `opts`.
+pub fn example_names(opts: &Options, facts: &Facts) -> Result<(String, String), PlanError> {
+    let facts = Facts {
+        headline: opts.headline.clone(),
+        ..facts.clone()
+    };
+    let seq = opts.seq_start;
+    let folder = if opts.folder_template.trim().is_empty() {
+        String::new()
+    } else {
+        let mut parts = Vec::new();
+        for part in expand(&opts.folder_template, &facts, seq).split('/') {
+            let Some(c) = sanitize_component(part) else {
+                return Err(PlanError::BadFolder(PathBuf::from(&facts.stem)));
+            };
+            parts.push(c);
+        }
+        parts.join("/")
+    };
+    let name = if opts.rename_template.trim().is_empty() {
+        if facts.ext.is_empty() {
+            facts.stem.clone()
+        } else {
+            format!("{}.{}", facts.stem, facts.ext)
+        }
+    } else {
+        let stem = sanitize_component(&expand(&opts.rename_template, &facts, seq))
+            .ok_or_else(|| PlanError::BadName(PathBuf::from(&facts.stem)))?;
+        if facts.ext.is_empty() {
+            stem
+        } else {
+            format!("{stem}.{}", facts.ext)
+        }
+    };
+    Ok((folder, name))
+}
+
+/// Today's civil date (UTC) for the example line when no photo date is known.
+pub fn today() -> (i32, u32, u32) {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    // Howard Hinnant's days-to-civil.
+    let z = secs.div_euclid(86_400) + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    ((if m <= 2 { y + 1 } else { y }) as i32, m, d)
+}
+
 pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
     if opts.primary.starts_with(&opts.source) || opts.source.starts_with(&opts.primary) {
         return Err(PlanError::Nested);
@@ -399,6 +459,39 @@ mod tests {
             .unwrap()
             .starts_with(t.path().join("Backup")));
         assert_eq!(plan.total_bytes, 3 * "data-DSC_0001.NEF".len() as u64);
+    }
+
+    #[test]
+    fn example_names_match_the_planner_convention() {
+        let opts = Options {
+            folder_template: "{year4}/{month0} {monthname}/{mnn3} {day0} {headline}".into(),
+            rename_template: "{headline}{seqn:3}-{month0}{day0}{yr2}".into(),
+            headline: Some("RyansBday".into()),
+            ..Default::default()
+        };
+        let facts = Facts {
+            stem: "CAL_0735".into(),
+            ext: "NEF".into(),
+            date: Some((2026, 9, 26)),
+            time: Some((19, 4, 0)),
+            headline: None,
+        };
+        let (folder, name) = example_names(&opts, &facts).unwrap();
+        assert_eq!(folder, "2026/09 September/Sep 26 RyansBday");
+        assert_eq!(name, "RyansBday001-092626.NEF");
+        // Empty rename template keeps the original name; a template that
+        // expands to nothing is an error, not a blank file name.
+        let keep = Options {
+            rename_template: String::new(),
+            ..opts.clone()
+        };
+        assert_eq!(example_names(&keep, &facts).unwrap().1, "CAL_0735.NEF");
+        let bad = Options {
+            rename_template: "{headline}".into(),
+            headline: None,
+            ..opts
+        };
+        assert!(example_names(&bad, &facts).is_err());
     }
 
     #[test]
