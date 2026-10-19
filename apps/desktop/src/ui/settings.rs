@@ -17,16 +17,18 @@ pub enum Page {
     Metadata,
     Ingest,
     Accessibility,
+    Delivery,
     Cache,
     Shortcuts,
 }
 
-const PAGES: [(Page, &str); 7] = [
+const PAGES: [(Page, &str); 8] = [
     (Page::General, "General"),
     (Page::Classes, "Color classes"),
     (Page::Metadata, "Metadata"),
     (Page::Ingest, "Ingest"),
     (Page::Accessibility, "Accessibility"),
+    (Page::Delivery, "Delivery"),
     (Page::Cache, "Cache"),
     (Page::Shortcuts, "Shortcuts"),
 ];
@@ -239,6 +241,112 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         hint(ui, &t, "Lifts the quiet grey labels and strengthens panel borders in both appearances.");
                         ui.add_space(S3);
                         hint(ui, &t, "Keyboard: every workspace is reachable with ⌘⇧1–5, the sheet with arrows, marks with the number keys (see Shortcuts). Screen reader labels are still being filled in (see docs/ACCESSIBILITY.md).");
+                    }
+                    Page::Delivery => {
+                        heading(ui, &t, "Delivery");
+                        hint(ui, &t, "Where finished exports go. Passwords are kept in the macOS Keychain, never in the prefs file. Each file lands as a hidden .part name and is renamed when complete.");
+                        ui.add_space(S2);
+                        let mut remove: Option<usize> = None;
+                        let mut rename: Option<(String, String)> = None;
+                        let n = app.prefs.delivery.len();
+                        for i in 0..n {
+                            let (old_name, title) = {
+                                let d = &app.prefs.delivery[i];
+                                (d.name.clone(), format!("{}  ·  {:?} {}:{}", d.name, d.kind, d.host, d.port))
+                            };
+                            egui::CollapsingHeader::new(RichText::new(title).size(12.5).color(t.text)).id_salt(("deliv", i)).default_open(n == 1).show(ui, |ui| {
+                                let d = &mut app.prefs.delivery[i];
+                                egui::Grid::new(("deliv_grid", i)).num_columns(2).spacing([S3, S2]).show(ui, |ui| {
+                                    ui.label(RichText::new("Name").size(12.0).color(t.text2));
+                                    let mut nm = d.name.clone();
+                                    if ui.add(egui::TextEdit::singleline(&mut nm).desired_width(260.0)).lost_focus() && nm.trim() != d.name && !nm.trim().is_empty() {
+                                        rename = Some((d.name.clone(), nm.trim().to_string()));
+                                    }
+                                    ui.end_row();
+                                    ui.label(RichText::new("Protocol").size(12.0).color(t.text2));
+                                    ui.horizontal(|ui| {
+                                        for (k, label) in [(apature_deliver::Kind::Ftp, "FTP"), (apature_deliver::Kind::Ftps, "FTPS (TLS)"), (apature_deliver::Kind::Sftp, "SFTP")] {
+                                            if super::icons::chip(ui, &t, label, d.kind == k).clicked() {
+                                                d.kind = k;
+                                                d.port = apature_deliver::Target::default_port(k);
+                                                app.prefs_dirty = true;
+                                            }
+                                        }
+                                    });
+                                    ui.end_row();
+                                    ui.label(RichText::new("Host").size(12.0).color(t.text2));
+                                    if ui.add(egui::TextEdit::singleline(&mut d.host).desired_width(260.0)).changed() { app.prefs_dirty = true; }
+                                    ui.end_row();
+                                    ui.label(RichText::new("Port").size(12.0).color(t.text2));
+                                    if ui.add(egui::DragValue::new(&mut d.port).range(1..=65535)).changed() { app.prefs_dirty = true; }
+                                    ui.end_row();
+                                    ui.label(RichText::new("User").size(12.0).color(t.text2));
+                                    if ui.add(egui::TextEdit::singleline(&mut d.user).desired_width(260.0)).changed() { app.prefs_dirty = true; }
+                                    ui.end_row();
+                                    ui.label(RichText::new("Folder").size(12.0).color(t.text2));
+                                    if ui.add(egui::TextEdit::singleline(&mut d.dir).desired_width(260.0).hint_text("incoming/photos (empty = login folder)")).changed() { app.prefs_dirty = true; }
+                                    ui.end_row();
+                                    if d.kind == apature_deliver::Kind::Sftp {
+                                        ui.label(RichText::new("Key file").size(12.0).color(t.text2));
+                                        ui.horizontal(|ui| {
+                                            let shown = d.key_file.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "password login".into());
+                                            ui.label(RichText::new(shown).monospace().size(10.5).color(t.text2));
+                                            if ui.small_button("Choose…").clicked() {
+                                                if let Some(p) = rfd::FileDialog::new().pick_file() { d.key_file = Some(p); app.prefs_dirty = true; }
+                                            }
+                                            if d.key_file.is_some() && ui.small_button("Use password").clicked() { d.key_file = None; app.prefs_dirty = true; }
+                                        });
+                                        ui.end_row();
+                                    }
+                                    ui.label(RichText::new(if d.key_file.is_some() { "Passphrase" } else { "Password" }).size(12.0).color(t.text2));
+                                    ui.horizontal(|ui| {
+                                        let draft = app.deliver.pw_drafts.entry(old_name.clone()).or_default();
+                                        ui.add(egui::TextEdit::singleline(draft).password(true).desired_width(180.0));
+                                        let has = crate::platform::Platform::secret_get(&old_name).is_some();
+                                        if ui.small_button("Save to Keychain").clicked() {
+                                            match crate::platform::Platform::secret_set(&old_name, draft) {
+                                                Ok(()) => { draft.clear(); app.deliver.test_result = Some(format!("{old_name}: password saved")); }
+                                                Err(e) => app.deliver.test_result = Some(format!("{old_name}: {e}")),
+                                            }
+                                        }
+                                        ui.label(RichText::new(if has { "saved" } else { "none saved" }).size(10.5).color(t.muted));
+                                    });
+                                    ui.end_row();
+                                });
+                                ui.horizontal(|ui| {
+                                    if ui.button("Test connection").clicked() {
+                                        cmds.push(Command::DeliverTest(old_name.clone()));
+                                    }
+                                    if ui.button("Remove").clicked() {
+                                        remove = Some(i);
+                                    }
+                                });
+                            });
+                        }
+                        if let Some((from, to)) = rename {
+                            if let Some(d) = app.prefs.delivery.iter_mut().find(|d| d.name == from) { d.name = to.clone(); }
+                            if let Some(pw) = crate::platform::Platform::secret_get(&from) {
+                                let _ = crate::platform::Platform::secret_set(&to, &pw);
+                                crate::platform::Platform::secret_delete(&from);
+                            }
+                            if app.prefs.send_after_export.as_deref() == Some(from.as_str()) { app.prefs.send_after_export = Some(to); }
+                            app.prefs_dirty = true;
+                        }
+                        if let Some(i) = remove {
+                            let d = app.prefs.delivery.remove(i);
+                            crate::platform::Platform::secret_delete(&d.name);
+                            if app.prefs.send_after_export.as_deref() == Some(d.name.as_str()) { app.prefs.send_after_export = None; }
+                            app.prefs_dirty = true;
+                        }
+                        if ui.button("Add a target").clicked() {
+                            let k = apature_deliver::Kind::Sftp;
+                            app.prefs.delivery.push(apature_deliver::Target { name: format!("Desk {}", app.prefs.delivery.len() + 1), kind: k, host: String::new(), port: apature_deliver::Target::default_port(k), user: String::new(), dir: String::new(), key_file: None });
+                            app.prefs_dirty = true;
+                        }
+                        if let Some(r) = &app.deliver.test_result {
+                            ui.add_space(S2);
+                            ui.label(RichText::new(r).size(12.0).color(if r.contains("connected") || r.contains("saved") { t.text } else { t.reject }));
+                        }
                     }
                     Page::Cache => {
                         heading(ui, &t, "Thumbnail cache");

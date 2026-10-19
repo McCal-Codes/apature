@@ -21,6 +21,7 @@ use apature_metadata::codes::{self, CodeTable, Vars};
 use apature_metadata::stationery::Assignment;
 
 use crate::commands::{Command, Workspace};
+use crate::deliver_job::{DeliverJobs, Msg as DMsg, Status as DStatus};
 use crate::filter::{self, Filter};
 use crate::ingest_job::{FileStatus, IngestJobs, Msg, Running};
 use crate::platform::Platform;
@@ -131,6 +132,19 @@ pub struct RenameDialog {
 
 /// Export workspace state; settings live in `Prefs::export`.
 #[derive(Default)]
+pub struct DeliverState {
+    pub running: Option<crate::deliver_job::Running>,
+    /// Outputs of the last finished export, ready to send.
+    pub last_outputs: Vec<PathBuf>,
+    /// Result line for the Settings test button.
+    pub test_result: Option<String>,
+    /// Password drafts per target name (Settings), never saved to prefs.
+    pub pw_drafts: HashMap<String, String>,
+    /// Target picked on the Export sheet for a one-off send.
+    pub pick: Option<String>,
+}
+
+#[derive(Default)]
 pub struct ExportState {
     /// Export everything in the view rather than the selection.
     pub scope_all: bool,
@@ -211,7 +225,9 @@ pub struct App {
     pub codes: CodeTable,
     pub ingest: IngestState,
     pub export: ExportState,
+    pub deliver: DeliverState,
     export_jobs: crate::export_job::ExportJobs,
+    deliver_jobs: DeliverJobs,
     pub pv: PreviewView,
     pub rename_dialog: Option<RenameDialog>,
     /// Internal metadata clipboard: marks plus IPTC of one photo.
@@ -311,11 +327,13 @@ impl App {
             codes: CodeTable::default(),
             ingest: IngestState::default(),
             export: ExportState::default(),
+            deliver: DeliverState::default(),
             pv: PreviewView::default(),
             rename_dialog: None,
             meta_clip: None,
             trash_dialog: None,
             export_jobs: crate::export_job::ExportJobs::new(cc.egui_ctx.clone()),
+            deliver_jobs: DeliverJobs::new(cc.egui_ctx.clone()),
             ingest_jobs: IngestJobs::new(cc.egui_ctx.clone(), ledger_path),
             drag_hover: 0,
             inspector_iptc: None,
@@ -737,11 +755,18 @@ impl App {
                         r.finished = true;
                         r.done_since = Some(Instant::now());
                         let errors: Vec<String> = r.errors.iter().flatten().cloned().collect();
-                        Some((r.ok, r.failed, r.dest.clone(), errors))
+                        let outs: Vec<PathBuf> = r.outs.iter().flatten().cloned().collect();
+                        Some((r.ok, r.failed, r.dest.clone(), errors, outs))
                     }
                 }
             };
-            if let Some((ok, failed, dest, errors)) = finished {
+            if let Some((ok, failed, dest, errors, outs)) = finished {
+                self.deliver.last_outputs = outs;
+                if failed == 0 && !self.deliver.last_outputs.is_empty() {
+                    if let Some(name) = self.prefs.send_after_export.clone() {
+                        self.start_delivery(&name);
+                    }
+                }
                 self.status = if failed == 0 {
                     format!(
                         "Export complete: {ok} JPEG{}",
@@ -1323,6 +1348,90 @@ impl App {
                 targets.len()
             ),
         };
+    }
+
+    /// Send the last export's files to the named target on a worker thread.
+    fn start_delivery(&mut self, name: &str) {
+        if self
+            .deliver
+            .running
+            .as_ref()
+            .is_some_and(|r| r.done.is_none())
+        {
+            self.status = "A delivery is already running".into();
+            return;
+        }
+        let Some(t) = self.prefs.delivery.iter().find(|t| t.name == name).cloned() else {
+            self.status = format!("No delivery target named {name}");
+            return;
+        };
+        if self.deliver.last_outputs.is_empty() {
+            self.status = "Nothing to send: export first".into();
+            return;
+        }
+        let Some(secret) = Platform::secret_get(&t.name) else {
+            self.status = format!("No password saved for {}: Settings › Delivery", t.name);
+            return;
+        };
+        let files = self.deliver.last_outputs.clone();
+        log::info!(
+            "delivery start: {} files → {} ({})",
+            files.len(),
+            t.name,
+            t.host
+        );
+        self.status = format!("Sending {} files to {}…", files.len(), t.name);
+        self.deliver.running = Some(self.deliver_jobs.start(t, secret, files));
+    }
+
+    fn drain_deliver(&mut self) {
+        while let Some(msg) = self.deliver_jobs.try_recv() {
+            let Some(r) = self.deliver.running.as_mut() else {
+                continue;
+            };
+            match msg {
+                DMsg::Event(apature_deliver::Event::Started { index }) => {
+                    if let Some(s) = r.statuses.get_mut(index) {
+                        *s = DStatus::Sending;
+                    }
+                }
+                DMsg::Event(apature_deliver::Event::Sent { index, bytes }) => {
+                    r.bytes += bytes;
+                    if let Some(s) = r.statuses.get_mut(index) {
+                        *s = DStatus::Sent;
+                    }
+                }
+                DMsg::Event(apature_deliver::Event::Failed { index, error }) => {
+                    if let Some(s) = r.statuses.get_mut(index) {
+                        *s = DStatus::Failed;
+                    }
+                    if let Some(e) = r.errors.get_mut(index) {
+                        *e = Some(error);
+                    }
+                }
+                DMsg::Event(apature_deliver::Event::Finished) => {}
+                DMsg::Done(result) => {
+                    self.status = match &result {
+                        Ok(rep) if rep.failed.is_empty() => format!(
+                            "Sent {} files to {} · {:.0} MB in {:.0} s",
+                            rep.sent,
+                            r.target,
+                            rep.bytes as f64 / 1e6,
+                            rep.elapsed_secs
+                        ),
+                        Ok(rep) => format!(
+                            "Sent {} of {} to {}; {} failed",
+                            rep.sent,
+                            r.files.len(),
+                            r.target,
+                            rep.failed.len()
+                        ),
+                        Err(e) => format!("Delivery to {} failed: {e}", r.target),
+                    };
+                    r.done = Some(result);
+                }
+            }
+        }
     }
 
     fn apply_stationery(&mut self) {
@@ -2397,6 +2506,29 @@ impl App {
             }
             Command::SaveCaptionToSelection => self.save_caption_to_selection(),
             Command::RefreshFolder => self.refresh_folder(),
+            Command::DeliverLast => {
+                let name = self
+                    .deliver
+                    .pick
+                    .clone()
+                    .or_else(|| self.prefs.send_after_export.clone())
+                    .or_else(|| self.prefs.delivery.first().map(|t| t.name.clone()));
+                match name {
+                    Some(n) => self.start_delivery(&n),
+                    None => self.status = "No delivery target yet: Settings › Delivery".into(),
+                }
+            }
+            Command::DeliverTest(name) => {
+                let Some(t) = self.prefs.delivery.iter().find(|t| t.name == name).cloned() else {
+                    return;
+                };
+                let secret = Platform::secret_get(&t.name).unwrap_or_default();
+                self.deliver.test_result =
+                    Some(match apature_deliver::test_connection(&t, &secret) {
+                        Ok(()) => format!("{}: connected and logged in", t.name),
+                        Err(e) => format!("{}: {e}", t.name),
+                    });
+            }
             Command::SaveCaptionAndNext => {
                 self.save_caption(true);
                 self.move_focus(1, Mods::default());
@@ -2893,6 +3025,7 @@ impl eframe::App for App {
         self.drain_results(ctx);
         self.drain_ingest();
         self.drain_export();
+        self.drain_deliver();
         self.handle_drops(ctx);
         for c in self.platform.drain_menu() {
             self.dispatch(ctx, c);

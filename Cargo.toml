@@ -8,6 +8,7 @@ members = [
     "crates/apature-export",
     "apps/cli",
     "apps/desktop",
+    "crates/apature-deliver",
 ]
 
 [workspace.package]
@@ -23,6 +24,7 @@ apature-preview = { path = "crates/apature-preview" }
 apature-metadata = { path = "crates/apature-metadata" }
 apature-ingest = { path = "crates/apature-ingest" }
 apature-export = { path = "crates/apature-export" }
+apature-deliver = { path = "crates/apature-deliver" }
 
 anyhow = "1"
 thiserror = "2"

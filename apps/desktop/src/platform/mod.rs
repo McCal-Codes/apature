@@ -182,3 +182,52 @@ impl Platform {
         VolumeKind::External
     }
 }
+
+/// Keychain service name for delivery passwords (account = target name).
+const SECRET_SERVICE: &str = "dev.mccal.Apature.delivery";
+
+impl Platform {
+    /// Read a delivery password from the macOS Keychain. Elsewhere: none.
+    pub fn secret_get(account: &str) -> Option<String> {
+        #[cfg(target_os = "macos")]
+        {
+            security_framework::passwords::get_generic_password(SECRET_SERVICE, account)
+                .ok()
+                .and_then(|b| String::from_utf8(b).ok())
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = account;
+            None
+        }
+    }
+
+    /// Store (or replace) a delivery password in the macOS Keychain.
+    pub fn secret_set(account: &str, secret: &str) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            security_framework::passwords::set_generic_password(
+                SECRET_SERVICE,
+                account,
+                secret.as_bytes(),
+            )
+            .map_err(|e| e.to_string())
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (account, secret);
+            Err("no keychain on this platform".into())
+        }
+    }
+
+    pub fn secret_delete(account: &str) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = security_framework::passwords::delete_generic_password(SECRET_SERVICE, account);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = account;
+        }
+    }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "apature-deliver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Send exported photos to a desk: FTP, FTPS and SFTP"
+
+[dependencies]
+thiserror.workspace = true
+log.workspace = true
+serde.workspace = true
+suppaftp = { version = "6", features = ["native-tls"] }
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
+
+[dev-dependencies]
+tempfile.workspace = true

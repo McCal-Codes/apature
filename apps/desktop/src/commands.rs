@@ -108,6 +108,10 @@ pub enum Command {
     ToggleFilmstrip,
     /// Rescan the open folder, keeping the cursor and selection by path.
     RefreshFolder,
+    /// Send the files from the last export to the chosen target.
+    DeliverLast,
+    /// Connect and log in to a target without sending (Settings > Delivery).
+    DeliverTest(String),
     SetWorkspace(Workspace),
     ZoomIn,
     ZoomOut,
@@ -135,6 +139,8 @@ impl Command {
             Command::ToggleInspector => "view.inspector".into(),
             Command::ToggleFilmstrip => "view.filmstrip".into(),
             Command::RefreshFolder => "view.refresh".into(),
+            Command::DeliverLast => "file.deliver".into(),
+            Command::DeliverTest(n) => format!("delivery.test.{n}"),
             Command::SetWorkspace(w) => format!("view.workspace.{}", w.label().to_lowercase()),
             Command::SelectAll => "edit.selectall".into(),
             Command::SelectNone => "edit.selectnone".into(),
@@ -181,6 +187,7 @@ impl Command {
             "view.inspector" => Command::ToggleInspector,
             "view.filmstrip" => Command::ToggleFilmstrip,
             "view.refresh" => Command::RefreshFolder,
+            "file.deliver" => Command::DeliverLast,
             "view.workspace.sheet" => Command::SetWorkspace(Workspace::Sheet),
             "view.workspace.preview" => Command::SetWorkspace(Workspace::Preview),
             "view.workspace.caption" => Command::SetWorkspace(Workspace::Caption),

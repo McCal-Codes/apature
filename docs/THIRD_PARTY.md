@@ -43,3 +43,8 @@ this file (see `docs/DECISIONS.md`, ADR-002).
 A `THIRD_PARTY_NOTICES` file containing the licence texts of every package
 above, including the font licences. Not yet generated; blocked on choosing a
 tool (`cargo-about` is the usual answer). Tracked in `docs/STATUS.md`.
+
+## Delivery (added 2026-10-19)
+- suppaftp 6 (Apache-2.0 / MIT) — FTP and FTPS client.
+- ssh2 0.9 (MIT / Apache-2.0), libssh2 (BSD-3-Clause) and OpenSSL (Apache-2.0, vendored) — SFTP.
+- security-framework 3 (MIT / Apache-2.0) — macOS Keychain for delivery passwords.

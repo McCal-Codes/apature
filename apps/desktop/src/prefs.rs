@@ -90,6 +90,10 @@ pub struct Prefs {
     /// Accessibility: stronger text and borders.
     pub high_contrast: bool,
     pub export: ExportPrefs,
+    /// Delivery targets (FTP, FTPS, SFTP). Passwords live in the Keychain.
+    pub delivery: Vec<apature_deliver::Target>,
+    /// Send every finished export to this target (by name) automatically.
+    pub send_after_export: Option<String>,
     /// Last template used in Rename Photos.
     pub rename_template: String,
     /// Eject the card after an ingest where every file verified.
@@ -128,6 +132,8 @@ impl Default for Prefs {
             motion: Motion::System,
             high_contrast: false,
             export: ExportPrefs::default(),
+            delivery: Vec::new(),
+            send_after_export: None,
             rename_template: String::new(),
             eject_after_ingest: false,
         }

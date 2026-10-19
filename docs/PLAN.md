@@ -28,6 +28,7 @@
   empty states (Fen). Caption at 1000x650 checked: no overlap. Then: sheet-while-ingesting, burst
   stacks, day chips on the sheet, FTP delivery.
 - 2026-10-19: apature.log (Application Support) added; audit of gaps in chat → top three: delivery, real-card backup/cancel/timing run, log (done).
+- 2026-10-19 evening: FTP/FTPS/SFTP delivery shipped (see item 9). Untested: FTPS, SFTP, Settings › Delivery page rendering (headless settings capture hangs), real desk.
 - Owner's operating rules for Claude sessions are in memory
   (`claude-agent-efficiency-rules`): no subagents unless independent, cheaper
   models for routine work, no repeated research, concise reports.
@@ -78,7 +79,7 @@ Medium (half a session each)
 8. Fen wiring: empty state, About, toasts, "Show Fen" setting, Fen app icon; name check.
 
 Large (a full session each; start them fresh)
-9. Delivery after export (owner, 2026-10-19): FTP/SFTP **and** cloud drives with a
+9. Delivery after export (owner, 2026-10-19): ~~FTP/SFTP~~ done 2026-10-19 (apature-deliver crate; Settings › Delivery; Export 'Then send to'; CLI deliver; FTP verified end to end against a local server, FTPS and SFTP compiled but untested against a real host) **and** cloud drives with a
    proper sign-in: Google Drive (OAuth 2.0 + PKCE, loopback redirect, Drive v3
    resumable upload) and OneDrive / SharePoint (Microsoft identity platform,
    MSAL-style PKCE, Graph `createUploadSession`). Refresh tokens in the macOS

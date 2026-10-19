@@ -7,6 +7,7 @@
 
 mod app;
 mod commands;
+mod deliver_job;
 mod export_job;
 mod filter;
 mod ingest_job;

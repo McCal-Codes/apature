@@ -156,6 +156,25 @@ enum Cmd {
     },
     /// Move photos (all variants and sidecars) to the Trash.
     Trash { paths: Vec<PathBuf> },
+    /// Send files to a desk over FTP, FTPS or SFTP. Password from --password
+    /// or the APATURE_PASSWORD environment variable.
+    Deliver {
+        files: Vec<PathBuf>,
+        #[arg(long)]
+        host: String,
+        #[arg(long)]
+        user: String,
+        #[arg(long, default_value = "sftp")]
+        protocol: String,
+        #[arg(long)]
+        port: Option<u16>,
+        #[arg(long, default_value = "")]
+        dir: String,
+        #[arg(long)]
+        key_file: Option<PathBuf>,
+        #[arg(long)]
+        password: Option<String>,
+    },
     Ingest {
         #[arg(long)]
         source: PathBuf,
@@ -245,6 +264,56 @@ fn main() -> Result<()> {
         } => cmd_export(
             paths, out, long, quality, rename, assignment, no_iim, no_exif, decode_raw, overwrite,
         ),
+        Cmd::Deliver {
+            files,
+            host,
+            user,
+            protocol,
+            port,
+            dir,
+            key_file,
+            password,
+        } => {
+            use apature_deliver::{send, Event, Kind, Target};
+            let kind = match protocol.to_lowercase().as_str() {
+                "ftp" => Kind::Ftp,
+                "ftps" => Kind::Ftps,
+                "sftp" => Kind::Sftp,
+                other => anyhow::bail!("--protocol must be ftp, ftps or sftp, not {other}"),
+            };
+            let target = Target {
+                name: host.clone(),
+                kind,
+                host,
+                port: port.unwrap_or(Target::default_port(kind)),
+                user,
+                dir,
+                key_file,
+            };
+            let secret = password
+                .or_else(|| std::env::var("APATURE_PASSWORD").ok())
+                .unwrap_or_default();
+            let rep = send(&target, &secret, &files, |e| match e {
+                Event::Sent { index, bytes } => {
+                    println!("  ✓ {} ({bytes} bytes)", files[index].display())
+                }
+                Event::Failed { index, error } => {
+                    println!("  ✕ {} — {error}", files[index].display())
+                }
+                _ => {}
+            })?;
+            println!(
+                "sent {} of {} files, {:.1} MB in {:.1} s",
+                rep.sent,
+                files.len(),
+                rep.bytes as f64 / 1e6,
+                rep.elapsed_secs
+            );
+            if !rep.failed.is_empty() {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
         Cmd::Rename {
             paths,
             template,

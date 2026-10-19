@@ -138,6 +138,45 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if ui.checkbox(&mut app.prefs.export.decode_raw, "Decode RAW-only photos with the macOS RAW engine (slower, sRGB)").changed() {
                         prefs_changed = true;
                     }
+                    ui.add_space(S3);
+                    ui.label(RichText::new("THEN SEND TO").monospace().size(9.5).color(t.muted));
+                    if app.prefs.delivery.is_empty() {
+                        ui.label(RichText::new("No delivery targets yet · Settings › Delivery").size(11.0).color(t.muted));
+                    } else {
+                        ui.horizontal_wrapped(|ui| {
+                            if super::icons::chip(ui, t, "nowhere", app.prefs.send_after_export.is_none()).clicked() {
+                                app.prefs.send_after_export = None;
+                                prefs_changed = true;
+                            }
+                            let names: Vec<String> = app.prefs.delivery.iter().map(|d| d.name.clone()).collect();
+                            for n in names {
+                                if super::icons::chip(ui, t, &n, app.prefs.send_after_export.as_deref() == Some(n.as_str())).clicked() {
+                                    app.prefs.send_after_export = Some(n.clone());
+                                    prefs_changed = true;
+                                }
+                            }
+                        });
+                        let n_out = app.deliver.last_outputs.len();
+                        let busy = app.deliver.running.as_ref().is_some_and(|r| r.done.is_none());
+                        if n_out > 0 && !busy && ui.button(format!("Send the last export ({n_out} files)")).on_hover_text("Uses the target chosen above, or the first one").clicked() {
+                            app.deliver.pick = app.prefs.send_after_export.clone();
+                            cmds.push(Command::DeliverLast);
+                        }
+                        if let Some(r) = &app.deliver.running {
+                            let sent = r.statuses.iter().filter(|s| **s == super::super::deliver_job::Status::Sent).count();
+                            let failed = r.statuses.iter().filter(|s| **s == super::super::deliver_job::Status::Failed).count();
+                            let secs = r.started.elapsed().as_secs_f64().max(0.001);
+                            let line = if r.done.is_some() {
+                                format!("{sent} of {} sent to {} · {failed} failed", r.files.len(), r.target)
+                            } else {
+                                format!("Sending to {} · {sent} of {} · {:.0} MB/s", r.target, r.files.len(), r.bytes as f64 / secs / 1e6)
+                            };
+                            ui.label(RichText::new(line).size(12.0).color(if failed > 0 { t.reject } else { t.text2 }));
+                            for e in r.errors.iter().flatten().take(3) {
+                                ui.label(RichText::new(e).size(10.5).color(t.reject));
+                            }
+                        }
+                    }
                     ui.add(egui::Label::new(RichText::new("Pairs export their JPEG. A RAW alone uses its embedded full-size preview unless decoding is on. A JPEG's own ICC profile is kept.").size(10.5).color(t.muted)).wrap());
                 });
             });

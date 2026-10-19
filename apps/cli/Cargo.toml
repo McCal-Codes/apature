@@ -15,6 +15,7 @@ apature-preview.workspace = true
 apature-metadata.workspace = true
 apature-ingest.workspace = true
 apature-export.workspace = true
+apature-deliver.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 rayon.workspace = true
