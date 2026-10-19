@@ -22,6 +22,8 @@
   and bigger window, Caption: More fields fold, Save to N selected, ▾ recent
   values (PM IPTC Info parity; still missing: variables expanding inside
   fields, snapshots/presets, Prev/Next without saving).
+  Sheet-while-ingesting done 2026-10-19 (tab opens at first verified file,
+  refresh every 25 + at end, ⌘R). Not yet seen on a real card.
   Toolbar workspace glyphs done. Polish pass still open: inspector density,
   empty states (Fen). Caption at 1000x650 checked: no overlap. Then: sheet-while-ingesting, burst
   stacks, day chips on the sheet, FTP delivery.
@@ -62,7 +64,7 @@ Observed once, unexplained
 
 Small (each fits in a slice of a session)
 1. ~~Preserve the card's folder structure (option) + copy WAV/XMP companions.~~ Done 2026-10-15 (cloud session); still to do on the Mac: one run against the real card.
-2. Open the contact sheet while the ingest runs: open the destination tab after the first verified file, keep ingesting; the window stays for progress.
+2. ~~Open the contact sheet while the ingest runs~~ done 2026-10-19.
 3. ~~CLI timing instrumentation.~~ Done 2026-10-15: `apature ingest` prints a `timing:` line (ledger load, plan, copy+verify+save, total) to stderr. Re-run the 134-NEF card on the Mac to find the missing ~80 s.
 4. Export hint, stale roadmap, performance numbers on the 839-photo day.
 5. ~~CI workflow file.~~ Done 2026-10-15: `.github/workflows/ci.yml`, Linux only (fmt, clippy, test) to keep runner minutes cheap.
