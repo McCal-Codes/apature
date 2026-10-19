@@ -48,3 +48,4 @@ tool (`cargo-about` is the usual answer). Tracked in `docs/STATUS.md`.
 - suppaftp 6 (Apache-2.0 / MIT) — FTP and FTPS client.
 - ssh2 0.9 (MIT / Apache-2.0), libssh2 (BSD-3-Clause) and OpenSSL (Apache-2.0, vendored) — SFTP.
 - security-framework 3 (MIT / Apache-2.0) — macOS Keychain for delivery passwords.
+- cjxl (libjxl, BSD-3-Clause) — optional external tool for JPEG XL export; not bundled, found via Homebrew/PATH/APATURE_CJXL.

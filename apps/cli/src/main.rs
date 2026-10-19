@@ -139,6 +139,9 @@ enum Cmd {
         /// Render RAW files with the macOS RAW engine instead of the embedded preview.
         #[arg(long)]
         decode_raw: bool,
+        /// Write JPEG XL (.jxl) via cjxl: a lossless transcode of the JPEG.
+        #[arg(long)]
+        jxl: bool,
         #[arg(long)]
         overwrite: bool,
     },
@@ -260,9 +263,11 @@ fn main() -> Result<()> {
             no_iim,
             no_exif,
             decode_raw,
+            jxl,
             overwrite,
         } => cmd_export(
-            paths, out, long, quality, rename, assignment, no_iim, no_exif, decode_raw, overwrite,
+            paths, out, long, quality, rename, assignment, no_iim, no_exif, decode_raw, jxl,
+            overwrite,
         ),
         Cmd::Deliver {
             files,
@@ -956,6 +961,7 @@ fn cmd_export(
     no_iim: bool,
     no_exif: bool,
     decode_raw: bool,
+    jxl: bool,
     overwrite: bool,
 ) -> Result<()> {
     use apature_ingest::plan::facts_for;
@@ -980,6 +986,11 @@ fn cmd_export(
             apature_export::RawPixels::SystemDecode
         } else {
             apature_export::RawPixels::EmbeddedPreview
+        },
+        format: if jxl {
+            apature_export::Format::JpegXl
+        } else {
+            apature_export::Format::Jpeg
         },
         ..Default::default()
     };

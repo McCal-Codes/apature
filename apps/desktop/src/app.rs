@@ -712,6 +712,11 @@ impl App {
             } else {
                 apature_export::RawPixels::EmbeddedPreview
             },
+            format: if self.prefs.export.jxl {
+                apature_export::Format::JpegXl
+            } else {
+                apature_export::Format::Jpeg
+            },
             ..Default::default()
         };
         if self.launch.export_run {

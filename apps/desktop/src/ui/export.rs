@@ -138,6 +138,26 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if ui.checkbox(&mut app.prefs.export.decode_raw, "Decode RAW-only photos with the macOS RAW engine (slower, sRGB)").changed() {
                         prefs_changed = true;
                     }
+                    ui.add_space(S2);
+                    ui.label(RichText::new("FORMAT").monospace().size(9.5).color(t.muted));
+                    let cjxl = apature_export::cjxl_path();
+                    ui.horizontal(|ui| {
+                        if super::icons::chip(ui, t, "JPEG", !app.prefs.export.jxl).clicked() {
+                            app.prefs.export.jxl = false;
+                            prefs_changed = true;
+                        }
+                        let r = super::icons::chip(ui, t, "JPEG XL", app.prefs.export.jxl);
+                        if r.clicked() && cjxl.is_some() {
+                            app.prefs.export.jxl = true;
+                            prefs_changed = true;
+                        }
+                        if cjxl.is_none() {
+                            ui.label(RichText::new("needs cjxl · brew install jpeg-xl").size(11.0).color(t.muted));
+                        }
+                    });
+                    if app.prefs.export.jxl {
+                        ui.label(RichText::new("The finished JPEG is transcoded losslessly to .jxl, metadata kept, about a fifth smaller. Desks must accept JPEG XL.").size(11.0).color(t.muted));
+                    }
                     ui.add_space(S3);
                     ui.label(RichText::new("THEN SEND TO").monospace().size(9.5).color(t.muted));
                     if app.prefs.delivery.is_empty() {

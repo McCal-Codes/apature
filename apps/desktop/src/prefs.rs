@@ -31,6 +31,8 @@ pub struct ExportPrefs {
     pub open_after: bool,
     /// Render RAW-only photos with the system RAW engine (macOS) instead of the preview.
     pub decode_raw: bool,
+    /// Write JPEG XL instead of JPEG (lossless transcode of the JPEG via cjxl).
+    pub jxl: bool,
 }
 
 impl Default for ExportPrefs {
@@ -44,6 +46,7 @@ impl Default for ExportPrefs {
             write_iim: true,
             open_after: true,
             decode_raw: false,
+            jxl: false,
         }
     }
 }

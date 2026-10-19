@@ -47,6 +47,72 @@ pub struct Settings {
     pub raw: RawPixels,
     /// Apply the rotation and crop stored in the sidecar.
     pub apply_edits: bool,
+    /// Container: JPEG, or JPEG XL (the finished JPEG is transcoded losslessly
+    /// by `cjxl`, metadata included; needs libjxl's `cjxl` on the Mac).
+    pub format: Format,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Format {
+    #[default]
+    Jpeg,
+    JpegXl,
+}
+
+impl Format {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Format::Jpeg => "jpg",
+            Format::JpegXl => "jxl",
+        }
+    }
+}
+
+/// Where `cjxl` lives, if anywhere: `APATURE_CJXL`, Homebrew, /usr/local, PATH.
+pub fn cjxl_path() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("APATURE_CJXL") {
+        let p = PathBuf::from(p);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    for p in [
+        "/opt/homebrew/bin/cjxl",
+        "/usr/local/bin/cjxl",
+        "/usr/bin/cjxl",
+    ] {
+        if Path::new(p).is_file() {
+            return Some(PathBuf::from(p));
+        }
+    }
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|d| d.join("cjxl"))
+            .find(|p| p.is_file())
+    })
+}
+
+/// Transcode a finished JPEG to JPEG XL losslessly (`cjxl --lossless_jpeg=1`),
+/// which keeps the JPEG's EXIF, XMP and ICC and makes the file about a fifth
+/// smaller; the JPEG can be reconstructed bit for bit with `djxl`.
+fn transcode_jxl(jpeg: &Path, jxl: &Path) -> Result<(), String> {
+    let cjxl = cjxl_path().ok_or_else(|| {
+        "JPEG XL needs cjxl (brew install jpeg-xl) or APATURE_CJXL set".to_string()
+    })?;
+    let out = std::process::Command::new(cjxl)
+        .arg(jpeg)
+        .arg(jxl)
+        .arg("--lossless_jpeg=1")
+        .arg("--quiet")
+        .output()
+        .map_err(|e| format!("cjxl: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "cjxl failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(())
 }
 
 impl Default for Settings {
@@ -61,6 +127,7 @@ impl Default for Settings {
             overwrite: false,
             raw: RawPixels::EmbeddedPreview,
             apply_edits: true,
+            format: Format::Jpeg,
         }
     }
 }
@@ -382,7 +449,15 @@ pub fn export(
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent).map_err(|e| ExportError::Io(parent.to_path_buf(), e))?;
     }
-    let tmp = out.with_extension("apature-export.tmp");
+    // JPEG XL: the finished JPEG goes to a temp file and cjxl writes the
+    // final .jxl next to it; the JPEG temp is removed either way.
+    let out_path: PathBuf = if settings.format == Format::JpegXl {
+        out.with_extension("jxl")
+    } else {
+        out.to_path_buf()
+    };
+    let out = out_path.as_path();
+    let tmp = out.with_extension("apature-export.tmp.jpg");
     let write = || -> std::io::Result<()> {
         use std::io::Write;
         let mut f = std::fs::File::create(&tmp)?;
@@ -391,19 +466,29 @@ pub fn export(
         if out.exists() && !settings.overwrite {
             return Err(std::io::Error::other("destination appeared during export"));
         }
-        std::fs::rename(&tmp, out)
+        if settings.format == Format::JpegXl {
+            let part = out.with_extension("jxl.part");
+            transcode_jxl(&tmp, &part).map_err(std::io::Error::other)?;
+            let _ = std::fs::remove_file(&tmp);
+            std::fs::rename(&part, out)
+        } else {
+            std::fs::rename(&tmp, out)
+        }
     };
     if let Err(e) = write() {
         let _ = std::fs::remove_file(&tmp);
         return Err(ExportError::Io(out.to_path_buf(), e));
     }
+    let bytes_written = std::fs::metadata(out)
+        .map(|m| m.len())
+        .unwrap_or(file.len() as u64);
     Ok(Outcome {
         source: src_path,
         pixels,
         out: out.to_path_buf(),
         width,
         height,
-        bytes: file.len() as u64,
+        bytes: bytes_written,
         exif: exif_source,
         edited: edits.is_edited(),
         millis: t0.elapsed().as_millis(),
