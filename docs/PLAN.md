@@ -27,6 +27,7 @@
   Toolbar workspace glyphs done. Polish pass still open: inspector density,
   empty states (Fen). Caption at 1000x650 checked: no overlap. Then: sheet-while-ingesting, burst
   stacks, day chips on the sheet, FTP delivery.
+- 2026-10-19: apature.log (Application Support) added; audit of gaps in chat → top three: delivery, real-card backup/cancel/timing run, log (done).
 - Owner's operating rules for Claude sessions are in memory
   (`claude-agent-efficiency-rules`): no subagents unless independent, cheaper
   models for routine work, no repeated research, concise reports.
@@ -77,7 +78,15 @@ Medium (half a session each)
 8. Fen wiring: empty state, About, toasts, "Show Fen" setting, Fen app icon; name check.
 
 Large (a full session each; start them fresh)
-9. FTP / SFTP delivery after export (keychain-stored credentials, retry, per-outlet target).
+9. Delivery after export (owner, 2026-10-19): FTP/SFTP **and** cloud drives with a
+   proper sign-in: Google Drive (OAuth 2.0 + PKCE, loopback redirect, Drive v3
+   resumable upload) and OneDrive / SharePoint (Microsoft identity platform,
+   MSAL-style PKCE, Graph `createUploadSession`). Refresh tokens in the macOS
+   Keychain (`security-framework`), never in prefs. One `Destination` enum
+   {Ftp, Sftp, GoogleDrive, OneDrive} with per-outlet presets, a "Send to desk"
+   command, retry and a per-file sent ledger. Needs app registrations (Google
+   Cloud OAuth client, Entra app) that Caleb creates; the client IDs ship in
+   the app, secrets are never needed with PKCE. Full milestone; start fresh.
 10. Live Ingest: watched folder with file-stability check; the camera-FTP receiver.
 11. VoiceOver pass with AccessKit, full keyboard audit, ACCESSIBILITY_CHECKLIST.md walked line by line.
 12. Release engineering: Developer ID signing, notarisation, DMG, update check.
