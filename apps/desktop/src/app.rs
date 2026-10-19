@@ -939,6 +939,7 @@ impl App {
                                 destination,
                                 error,
                             } => {
+                                log::warn!("ingest failed: {} — {error}", destination.display());
                                 if let Some(s) = r.statuses.get_mut(index) {
                                     *s = FileStatus::Failed;
                                 }
@@ -951,6 +952,14 @@ impl App {
                     }
                 }
                 Msg::Report(rep) => {
+                    log::info!(
+                        "ingest report: {} ok, {} failed, {} bytes, {:.1} s, cancelled={}",
+                        rep.files_ok(),
+                        rep.files_failed(),
+                        rep.bytes_copied,
+                        rep.elapsed_secs,
+                        rep.cancelled
+                    );
                     let ok = self
                         .ingest
                         .plan
@@ -1592,6 +1601,7 @@ impl App {
 
     /// Load `dir` into the active (empty or replaced) tab fields.
     fn load_folder(&mut self, dir: &Path) {
+        log::info!("open folder {}", dir.display());
         let t0 = Instant::now();
         match apature_core::scan(dir, &ScanOptions::default()) {
             Ok(items) => {

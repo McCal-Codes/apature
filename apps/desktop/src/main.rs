@@ -137,7 +137,7 @@ fn icon() -> Option<egui::IconData> {
 }
 
 fn main() -> eframe::Result {
-    env_logger::init();
+    init_logging();
     let launch = parse_args();
     let (w, h) = launch.size.unwrap_or((1400.0, 900.0));
     let mut viewport = egui::ViewportBuilder::default()
@@ -157,4 +157,52 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| Ok(Box::new(app::App::new(cc, launch)))),
     )
+}
+
+/// Log to stderr and to `apature.log` in Application Support (info and up;
+/// `RUST_LOG` raises it). The file rotates once past 5 MB to `apature.log.1`,
+/// so a crash mid-ingest leaves a record of what verified.
+fn init_logging() {
+    use std::io::Write;
+    let file = directories::ProjectDirs::from("dev", "mccal", "Apature").map(|d| {
+        let dir = d.data_dir().to_path_buf();
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("apature.log");
+        if std::fs::metadata(&path)
+            .map(|m| m.len() > 5_000_000)
+            .unwrap_or(false)
+        {
+            let _ = std::fs::rename(&path, dir.join("apature.log.1"));
+        }
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+    });
+    struct Tee(Option<std::fs::File>);
+    impl Write for Tee {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            let _ = std::io::stderr().write_all(b);
+            if let Some(f) = self.0.as_mut() {
+                let _ = f.write_all(b);
+            }
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            if let Some(f) = self.0.as_mut() {
+                f.flush()?;
+            }
+            Ok(())
+        }
+    }
+    let tee = Tee(file.and_then(|r| r.ok()));
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_secs()
+        .target(env_logger::Target::Pipe(Box::new(tee)))
+        .init();
+    log::info!(
+        "Apature {} build {} starting",
+        env!("CARGO_PKG_VERSION"),
+        option_env!("APATURE_BUILD").unwrap_or("dev")
+    );
 }
