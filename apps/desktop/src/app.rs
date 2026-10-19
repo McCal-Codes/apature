@@ -190,6 +190,9 @@ pub struct App {
     /// The Ingest window (a separate native window, like Photo Mechanic's
     /// ingest dialog) is open. Headless runs keep Ingest inline instead.
     pub ingest_window: bool,
+    /// Verified count reported by the last ingest event, consumed after the drain
+    /// (the event loop holds a borrow on `ingest.running`).
+    ingest_sheet_pending: Option<usize>,
     pub cols: usize,
     pub last_visible_rows: Range<usize>,
     pub scroll_to_cursor: bool,
@@ -290,6 +293,7 @@ impl App {
             undo: UndoStack::default(),
             workspace: Workspace::Sheet,
             ingest_window: false,
+            ingest_sheet_pending: None,
             cols: 1,
             last_visible_rows: 0..0,
             scroll_to_cursor: false,
@@ -915,6 +919,8 @@ impl App {
                             }
                             apature_ingest::Event::Verified { index, .. } => {
                                 r.verified_count += 1;
+                                let verified_now = r.verified_count;
+                                self.ingest_sheet_pending = Some(verified_now);
                                 r.bytes_done += self
                                     .ingest
                                     .plan
@@ -965,6 +971,7 @@ impl App {
                         self.dispatch_later = Some(Command::IngestOpenResult);
                     }
                     if ok {
+                        self.ingest_sheet_progress(usize::MAX, true);
                         // Persistent sequence: remember where this headline's
                         // counter stops, so the next ingest continues it.
                         if let Some(next) = self.ingest.plan.as_ref().map(|p| p.next_seq) {
@@ -1019,6 +1026,9 @@ impl App {
                     }
                 }
             }
+        }
+        if let Some(n) = self.ingest_sheet_pending.take() {
+            self.ingest_sheet_progress(n, false);
         }
     }
 
@@ -1379,6 +1389,72 @@ impl App {
         self.volume_kinds
             .retain(|p, _| present.contains(p) || p.join("DCIM").is_dir());
         self.volumes = v;
+    }
+
+    /// Rescan the open folder and keep the cursor and selection on the same
+    /// files (by path), so new arrivals from an ingest slot in without
+    /// disturbing a cull in progress.
+    pub fn refresh_folder(&mut self) {
+        let Some(dir) = self.folder.clone() else {
+            return;
+        };
+        self.save_caption(false);
+        let cursor_path = self.items.get(self.cursor).map(|i| i.path().to_path_buf());
+        let selected: Vec<PathBuf> = self
+            .selection
+            .targets(self.cursor)
+            .iter()
+            .filter_map(|&i| self.items.get(i).map(|it| it.path().to_path_buf()))
+            .collect();
+        let was_multi = self.selection.len() > 1;
+        self.load_folder(&dir);
+        let find = |p: &PathBuf| self.items.iter().position(|it| it.path() == p.as_path());
+        if let Some(i) = cursor_path.as_ref().and_then(find) {
+            self.cursor = i;
+        }
+        if was_multi {
+            let idx: Vec<usize> = selected.iter().filter_map(find).collect();
+            self.selection.all(&idx);
+        } else if let Some(i) = cursor_path.as_ref().and_then(find) {
+            self.selection.only(i);
+        }
+        self.scroll_to_cursor = true;
+    }
+
+    /// The folder the running (or last planned) ingest writes into.
+    fn ingest_dest_dir(&self) -> Option<PathBuf> {
+        self.ingest
+            .plan
+            .as_ref()
+            .and_then(|p| p.entries.first())
+            .and_then(|e| e.primary.parent().map(|d| d.to_path_buf()))
+    }
+
+    /// Sheet while ingesting: after the first verified file the destination
+    /// opens as a tab (culling can start); it is refreshed every 25 files and
+    /// at the end, cursor and selection kept.
+    fn ingest_sheet_progress(&mut self, verified: usize, finished: bool) {
+        if !self.prefs.open_after_ingest {
+            return;
+        }
+        let Some(dest) = self.ingest_dest_dir() else {
+            return;
+        };
+        let open = self.tabs.iter().position(|t| t.folder == dest);
+        if verified == 1 && open.is_none() {
+            // Open behind the Ingest window; the main window stays wherever it was.
+            self.open_folder(&dest);
+            self.status = "Ingesting · the sheet fills in as files verify (⌘R refreshes)".into();
+            return;
+        }
+        if finished || verified.is_multiple_of(25) {
+            if self.folder.as_deref() == Some(dest.as_path()) {
+                self.refresh_folder();
+            } else if let Some(i) = open {
+                // Parked tab: drop its state so it rescans when shown.
+                self.tabs[i].state = None;
+            }
+        }
     }
 
     /// Open `dir` in a new tab, or switch to it if it is already open.
@@ -2310,6 +2386,7 @@ impl App {
                 self.save_caption(true);
             }
             Command::SaveCaptionToSelection => self.save_caption_to_selection(),
+            Command::RefreshFolder => self.refresh_folder(),
             Command::SaveCaptionAndNext => {
                 self.save_caption(true);
                 self.move_focus(1, Mods::default());
@@ -2439,7 +2516,12 @@ impl App {
                     self.ingest.running = None;
                     self.ingest.plan = None;
                     self.ingest_window = false;
+                    let already = self.tabs.iter().position(|t| t.folder == d);
                     self.open_folder(&d);
+                    if already.is_some() {
+                        // The tab was opened mid-ingest: make sure it shows every file.
+                        self.refresh_folder();
+                    }
                 }
             }
             Command::SetRating(r) => self.mark(if r < 0 { "reject" } else { "rate" }, |m| {
@@ -2566,6 +2648,9 @@ impl App {
                 }
                 if pressed(Key::Z) {
                     out.push(if shift { Command::Redo } else { Command::Undo });
+                }
+                if pressed(Key::R) && !shift {
+                    out.push(Command::RefreshFolder);
                 }
                 if pressed(Key::Equals) || pressed(Key::Plus) {
                     out.push(Command::ZoomIn);

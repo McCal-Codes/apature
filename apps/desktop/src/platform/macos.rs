@@ -186,6 +186,11 @@ impl MenuBar {
             &sidebar,
             &inspector,
             &filmstrip,
+            &item(
+                Command::RefreshFolder,
+                "Refresh Folder",
+                acc(Modifiers::META, Code::KeyR),
+            ),
             &PredefinedMenuItem::separator(),
             &sort,
             &item(
