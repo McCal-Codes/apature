@@ -60,6 +60,8 @@ Product and release
 Observed once, unexplained
 - The first Ingest window opened via File › Ingest disappeared and the main window was minimised. Watch for it; if it repeats, log viewport events.
 
+- Design system artifact (2026-10-19): https://claude.ai/artifact/KKoM7Em7u3hrLtBHt3ouCu, extracted from tokens.rs/icons.rs. Font decided: IBM Plex Sans + IBM Plex Mono. TODO: embed the Plex files in the desktop crate (egui font definitions), add licence to THIRD_PARTY.md, list them under fonts/ in the design system.
+
 ## Order of work, sized for budget
 
 Small (each fits in a slice of a session)
