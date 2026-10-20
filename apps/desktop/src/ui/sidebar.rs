@@ -27,6 +27,7 @@ fn row_glyph(
     let (rect, resp) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), ROW_H), Sense::click());
     let p = ui.painter();
+    super::icons::focus_ring(p, rect, t, &resp);
     if selected {
         p.rect_filled(rect, egui::CornerRadius::same(6), t.accent_wash);
     } else if resp.hovered() {

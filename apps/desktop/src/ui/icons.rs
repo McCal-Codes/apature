@@ -22,6 +22,7 @@ pub fn button(
 ) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(30.0, 24.0), Sense::click());
     let p = ui.painter();
+    focus_ring(p, rect, t, &resp);
     if selected {
         p.rect_filled(rect, CornerRadius::same(6), t.accent_wash);
         p.rect_stroke(
@@ -124,6 +125,7 @@ pub fn volume_chip(
     let w = 8.0 + 16.0 + 6.0 + galley.size().x + 10.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
     let p = ui.painter();
+    focus_ring(p, rect, t, &resp);
     if selected {
         p.rect_filled(rect, CornerRadius::same(6), t.accent_wash);
         p.rect_stroke(
@@ -173,6 +175,7 @@ pub fn chip(ui: &mut egui::Ui, t: &Theme, label: &str, selected: bool) -> egui::
     let w = 10.0 + galley.size().x + 10.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
     let p = ui.painter();
+    focus_ring(p, rect, t, &resp);
     if selected {
         p.rect_filled(rect, CornerRadius::same(6), t.accent_wash);
         p.rect_stroke(
@@ -322,6 +325,7 @@ pub fn workspace_button(
     let width = 8.0 + 14.0 + 5.0 + galley.size().x + 9.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 25.0), Sense::click());
     let p = ui.painter();
+    focus_ring(p, rect, t, &resp);
     if selected {
         p.rect_filled(rect, CornerRadius::same(6), t.accent_wash);
         p.rect_stroke(
@@ -364,4 +368,17 @@ pub fn workspace_button(
         egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, w.label())
     });
     resp
+}
+
+/// Keyboard focus ring for painter-drawn controls: a 2 px accent outline,
+/// drawn under the control's own strokes so selection still reads.
+pub fn focus_ring(p: &egui::Painter, rect: Rect, t: &Theme, resp: &egui::Response) {
+    if resp.has_focus() {
+        p.rect_stroke(
+            rect.expand(2.0),
+            CornerRadius::same(8),
+            Stroke::new(2.0, t.accent),
+            StrokeKind::Outside,
+        );
+    }
 }
