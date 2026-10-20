@@ -112,6 +112,11 @@ pub struct PreviewView {
     pub compare: Option<Vec<usize>>,
     /// The crop tool, when open (Preview, K).
     pub crop: Option<CropEdit>,
+    /// Loupe under the pointer (L) in fit mode.
+    pub loupe: bool,
+    /// One magnification for 1:1 and the loupe: 1.0 = one image pixel per
+    /// screen pixel, up to 4.0. ⌘-scroll or ⌘= / ⌘- change it.
+    pub zoom: f32,
 }
 
 /// Crop ratios as width/height of the *displayed* frame; None = free.
@@ -177,6 +182,8 @@ impl Default for PreviewView {
             mode: ZoomMode::Fit,
             center: egui::Vec2::splat(0.5),
             crop: None,
+            loupe: false,
+            zoom: 1.0,
             zoom_since: None,
             zoom_from: None,
             last_rect: None,
@@ -3329,6 +3336,14 @@ impl App {
                 }
                 if pressed(Key::B) && !shift && in_preview {
                     out.push(Command::CyclePreviewBoost);
+                }
+                if in_preview && pressed(Key::L) && !shift {
+                    self.pv.loupe = !self.pv.loupe;
+                    self.status = if self.pv.loupe {
+                        format!("Loupe on · {:.0}% · scroll to change", self.pv.zoom * 100.0)
+                    } else {
+                        "Loupe off".into()
+                    };
                 }
                 if in_preview && pressed(Key::K) && !shift {
                     out.push(Command::CropToggle);

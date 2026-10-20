@@ -105,6 +105,12 @@ fn draw_pane(
         ZoomMode::Fit => fit_px,
         ZoomMode::OneToOne => FULL_CAP.min(max_tex),
     };
+    // The loupe shows real pixels, so it wants the full texture in fit mode too.
+    let want = if app.pv.loupe {
+        FULL_CAP.min(max_tex)
+    } else {
+        want
+    };
     app.request_preview(idx, want, 0);
 
     let focused = idx == app.cursor;
@@ -135,7 +141,7 @@ fn draw_pane(
 
         // 1:1 — one texture pixel per physical pixel, panned by `center`.
         let one = {
-            let size_pts = size / ppp;
+            let size_pts = size / ppp * app.pv.zoom;
             let c = app.pv.center;
             let mut r =
                 Rect::from_center_size(rect.center() - (c - Vec2::splat(0.5)) * size_pts, size_pts);
@@ -208,6 +214,9 @@ fn draw_pane(
             (ZoomMode::Fit, Some(px)) => format!("fit · {px} px preview"),
             (ZoomMode::Fit, None) => "fit · thumbnail, full preview loading".into(),
             (ZoomMode::OneToOne, Some(_)) if is_full && compare => "1:1".into(),
+            (ZoomMode::OneToOne, Some(px)) if is_full && app.pv.zoom != 1.0 => {
+                format!("{:.0}% · {px} px", app.pv.zoom * 100.0)
+            }
             (ZoomMode::OneToOne, Some(px)) if is_full => format!("1:1 · {px} px"),
             (ZoomMode::OneToOne, Some(_)) if compare => "1:1 · loading…".into(),
             (ZoomMode::OneToOne, Some(px)) => format!("1:1 of {px} px · full resolution loading…"),
@@ -220,9 +229,76 @@ fn draw_pane(
             crop_tool(app, ui, &p, &resp, shown, t);
         }
 
+        // ---- loupe ----
+        if app.pv.loupe && !cropping && (focused || !compare) && app.pv.mode == ZoomMode::Fit {
+            if let Some(pos) = resp.hover_pos() {
+                if shown.contains(pos) {
+                    let f = Vec2::new(
+                        (pos.x - shown.min.x) / shown.width(),
+                        (pos.y - shown.min.y) / shown.height(),
+                    );
+                    let side = 260.0_f32;
+                    let full_pts = size / ppp * app.pv.zoom;
+                    let half = Vec2::new(side / full_pts.x, side / full_pts.y) * 0.5;
+                    let uv = Rect::from_min_max(
+                        Pos2::new((f.x - half.x).max(0.0), (f.y - half.y).max(0.0)),
+                        Pos2::new((f.x + half.x).min(1.0), (f.y + half.y).min(1.0)),
+                    );
+                    let w = uv.width() * full_pts.x;
+                    let h = uv.height() * full_pts.y;
+                    let mut at = Rect::from_center_size(
+                        pos + Vec2::new(side * 0.6, -side * 0.6),
+                        Vec2::new(w, h),
+                    );
+                    if at.max.x > rect.max.x {
+                        at = at.translate(Vec2::new(-side * 1.2, 0.0));
+                    }
+                    if at.min.y < rect.min.y {
+                        at = at.translate(Vec2::new(0.0, side * 1.2));
+                    }
+                    p.rect_filled(
+                        at.expand(2.0),
+                        CornerRadius::same(4),
+                        Color32::from_black_alpha(200),
+                    );
+                    p.image(tex.id(), at, uv, Color32::WHITE);
+                    p.rect_stroke(
+                        at,
+                        CornerRadius::same(3),
+                        Stroke::new(1.0, t.accent),
+                        StrokeKind::Outside,
+                    );
+                    let tag = if is_full {
+                        format!("{:.0}%", app.pv.zoom * 100.0)
+                    } else {
+                        "loading full…".into()
+                    };
+                    p.text(
+                        at.left_bottom() + Vec2::new(4.0, 2.0),
+                        Align2::LEFT_TOP,
+                        tag,
+                        FontId::monospace(10.0),
+                        t.text,
+                    );
+                    ui.ctx().request_repaint();
+                }
+            }
+        }
+
         // ---- interaction ----
-        let size_pts = size / ppp;
-        if !cropping && app.pv.mode == ZoomMode::OneToOne && (focused || !compare) {
+        let size_pts = size / ppp * app.pv.zoom;
+        // ⌘-scroll changes the shared magnification (1:1 and loupe).
+        if resp.hovered() && ui.input(|i| i.modifiers.command) {
+            let scroll = ui.input(|i| i.raw_scroll_delta.y);
+            if scroll != 0.0 {
+                app.pv.zoom = (app.pv.zoom * (1.0 + scroll * 0.01)).clamp(1.0, 4.0);
+            }
+        }
+        if !cropping
+            && app.pv.mode == ZoomMode::OneToOne
+            && (focused || !compare)
+            && !ui.input(|i| i.modifiers.command)
+        {
             if resp.dragged() {
                 let d = resp.drag_delta();
                 app.pv.center -= Vec2::new(d.x / size_pts.x, d.y / size_pts.y);
