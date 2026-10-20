@@ -177,13 +177,6 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                             cmds.push(Command::OpenFolder(path));
                         }
                     }
-                    ui.add_space(S3);
-                    super::eyebrow(ui, t, "Collections");
-                    ui.label(
-                        RichText::new("Named contact sheets arrive in M3")
-                            .size(11.0)
-                            .color(t.muted),
-                    );
                 });
         });
     let Some(resp) = resp else {

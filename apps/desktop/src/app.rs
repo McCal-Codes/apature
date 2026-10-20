@@ -470,6 +470,16 @@ impl App {
         }
         ui::tokens::install_fonts(&cc.egui_ctx);
         let (prefs, prefs_outcome) = Prefs::load_report();
+        // Recent and favourite folders that no longer exist drop off the
+        // sidebar (scratch folders, a renamed shoot); a folder on an unplugged
+        // drive stays, since /Volumes/<name> comes back.
+        let mut prefs = prefs;
+        prefs
+            .recent
+            .retain(|p| p.exists() || p.starts_with("/Volumes"));
+        prefs
+            .favorites
+            .retain(|p| p.exists() || p.starts_with("/Volumes"));
         let platform = Platform::new();
         let mut app = App {
             folder: None,

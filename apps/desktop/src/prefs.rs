@@ -104,6 +104,8 @@ pub struct Prefs {
     pub motion: Motion,
     /// Accessibility: stronger text and borders.
     pub high_contrast: bool,
+    /// Show scan, frame and thumbnail timings at the right of the status bar.
+    pub show_perf_stats: bool,
     pub export: ExportPrefs,
     /// Export presets per outlet: size, quality, naming, format and the
     /// delivery target in one chip.
@@ -154,6 +156,7 @@ impl Default for Prefs {
             ui_scale: 1.0,
             motion: Motion::System,
             high_contrast: false,
+            show_perf_stats: false,
             export: ExportPrefs::default(),
             export_presets: Vec::new(),
             export_preset: None,

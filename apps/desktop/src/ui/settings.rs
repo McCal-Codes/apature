@@ -29,7 +29,7 @@ const PAGES: [(Page, &str); 8] = [
     (Page::Ingest, "Ingest"),
     (Page::Accessibility, "Accessibility"),
     (Page::Delivery, "Delivery"),
-    (Page::Cache, "Cache"),
+    (Page::Cache, "Cache & diagnostics"),
     (Page::Shortcuts, "Shortcuts"),
 ];
 
@@ -495,7 +495,13 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                 }
             }
             Page::Cache => {
-                heading(ui, t, "Thumbnail cache");
+                heading(ui, t, "Cache & diagnostics");
+                section(ui, t, "Diagnostics");
+                if ui.checkbox(&mut app.prefs.show_perf_stats, "Show timings in the status bar (scan, frame, thumbnails)").changed() {
+                    app.prefs_dirty = true;
+                }
+                hint(ui, t, "Off by default. The same numbers go to apature.log either way.");
+                section(ui, t, "Thumbnail cache");
                 let dir = app.cache_dir();
                 ui.add(egui::Label::new(RichText::new(dir.display().to_string()).monospace().size(10.5).color(t.text2)).truncate());
                 ui.horizontal(|ui| {

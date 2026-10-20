@@ -13,7 +13,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
             // The stats claim the right edge first (only when the window is wide
             // enough to hold both); the status line fills the rest as one
             // truncating label, so the two never overlap.
-            let wide = ui.available_width() >= 1100.0;
+            let wide = ui.available_width() >= 1100.0 && app.prefs.show_perf_stats;
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = S4;
                 if wide {
