@@ -93,6 +93,11 @@ pub struct Prefs {
     /// Accessibility: stronger text and borders.
     pub high_contrast: bool,
     pub export: ExportPrefs,
+    /// Export presets per outlet: size, quality, naming, format and the
+    /// delivery target in one chip.
+    pub export_presets: Vec<ExportPreset>,
+    /// The preset last applied (by name); cleared when the values drift.
+    pub export_preset: Option<String>,
     /// Delivery targets (FTP, FTPS, SFTP). Passwords live in the Keychain.
     pub delivery: Vec<apature_deliver::Target>,
     /// Send every finished export to this target (by name) automatically.
@@ -135,6 +140,8 @@ impl Default for Prefs {
             motion: Motion::System,
             high_contrast: false,
             export: ExportPrefs::default(),
+            export_presets: Vec::new(),
+            export_preset: None,
             delivery: Vec::new(),
             send_after_export: None,
             rename_template: String::new(),
@@ -221,5 +228,42 @@ impl Prefs {
         list.retain(|x| x != v);
         list.insert(0, v.to_string());
         list.truncate(12);
+    }
+}
+
+/// One outlet's export spec. `dest` is kept too, so a preset can point at a
+/// fixed folder (an Eagle outbox) or leave the last folder alone (`None`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportPreset {
+    pub name: String,
+    pub export: ExportPrefs,
+    pub send_to: Option<String>,
+}
+
+impl Prefs {
+    /// True when the current export settings still match the named preset.
+    pub fn export_matches_preset(&self, name: &str) -> bool {
+        self.export_presets
+            .iter()
+            .find(|p| p.name == name)
+            .is_some_and(|p| {
+                let mut e = self.export.clone();
+                if p.export.dest.is_none() {
+                    e.dest = None;
+                }
+                e == p.export && self.send_after_export == p.send_to
+            })
+    }
+
+    pub fn apply_export_preset(&mut self, name: &str) {
+        if let Some(p) = self.export_presets.iter().find(|p| p.name == name).cloned() {
+            let keep_dest = self.export.dest.clone();
+            self.export = p.export.clone();
+            if self.export.dest.is_none() {
+                self.export.dest = keep_dest;
+            }
+            self.send_after_export = p.send_to.clone();
+            self.export_preset = Some(name.to_string());
+        }
     }
 }

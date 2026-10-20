@@ -52,6 +52,52 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                 // ---- Output ----
                 let ui = &mut cols[0];
                 card(ui, t, t.line, |ui| {
+                    super::eyebrow(ui, t, "Preset");
+                    ui.add_space(S2);
+                    ui.horizontal_wrapped(|ui| {
+                        let names: Vec<String> = app.prefs.export_presets.iter().map(|p| p.name.clone()).collect();
+                        let active = app.prefs.export_preset.clone();
+                        for n in &names {
+                            let on = active.as_deref() == Some(n.as_str());
+                            let matches = on && app.prefs.export_matches_preset(n);
+                            let label = if on && !matches { format!("{n} · edited") } else { n.clone() };
+                            let r = super::icons::chip(ui, t, &label, on);
+                            if r.clicked() {
+                                app.prefs.apply_export_preset(n);
+                                prefs_changed = true;
+                            }
+                            if on && !matches && ui.small_button("Update").on_hover_text("Save the current settings into this preset").clicked() {
+                                let e = app.prefs.export.clone();
+                                let s = app.prefs.send_after_export.clone();
+                                if let Some(p) = app.prefs.export_presets.iter_mut().find(|p| &p.name == n) {
+                                    p.export = e;
+                                    p.send_to = s;
+                                }
+                                prefs_changed = true;
+                            }
+                            if on && ui.small_button("Delete").clicked() {
+                                app.prefs.export_presets.retain(|p| &p.name != n);
+                                app.prefs.export_preset = None;
+                                prefs_changed = true;
+                            }
+                        }
+                        if names.is_empty() {
+                            ui.label(RichText::new("none yet").size(11.0).color(t.muted));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut app.export.preset_draft).desired_width(160.0).hint_text("Butler Eagle"));
+                        let name = app.export.preset_draft.trim().to_string();
+                        if !name.is_empty() && ui.small_button("Save as preset").clicked() {
+                            app.prefs.export_presets.retain(|p| p.name != name);
+                            app.prefs.export_presets.push(crate::prefs::ExportPreset { name: name.clone(), export: app.prefs.export.clone(), send_to: app.prefs.send_after_export.clone() });
+                            app.prefs.export_preset = Some(name);
+                            app.export.preset_draft.clear();
+                            prefs_changed = true;
+                        }
+                    });
+                    ui.label(RichText::new("A preset holds size, quality, naming, metadata, format and the delivery target.").size(11.0).color(t.muted));
+                    ui.add_space(S3);
                     super::eyebrow(ui, t, "Output");
                     ui.add_space(S2);
                     labeled(ui, t, "Photos", |ui| {

@@ -149,6 +149,8 @@ pub struct ExportState {
     /// Export everything in the view rather than the selection.
     pub scope_all: bool,
     pub running: Option<crate::export_job::Running>,
+    /// Name typed for a new preset on the Export sheet.
+    pub preset_draft: String,
     /// Planned (item index, output path) for the current scope and names.
     pub names: Vec<(usize, PathBuf)>,
     names_key: Option<(Vec<usize>, String, PathBuf, Option<String>)>,
