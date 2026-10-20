@@ -170,16 +170,23 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
         );
     }
     if m.tagged {
+        // Big enough to see from across the desk (a top Photo Mechanic request).
         let r = Rect::from_min_size(
-            Pos2::new(img_rect.right() - 22.0, img_rect.top() + 6.0),
-            Vec2::new(16.0, 16.0),
+            Pos2::new(img_rect.right() - 30.0, img_rect.top() + 6.0),
+            Vec2::new(24.0, 24.0),
         );
-        p.rect_filled(r, CornerRadius::same(3), t.tag);
+        p.rect_filled(r, CornerRadius::same(5), t.tag);
+        p.rect_stroke(
+            r,
+            CornerRadius::same(5),
+            Stroke::new(1.0, Color32::WHITE.gamma_multiply(0.6)),
+            StrokeKind::Inside,
+        );
         p.text(
             r.center(),
             Align2::CENTER_CENTER,
             "T",
-            FontId::monospace(10.0),
+            FontId::proportional(14.0),
             Color32::WHITE,
         );
     }

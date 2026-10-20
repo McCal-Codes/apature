@@ -198,6 +198,7 @@ pub fn facts_for(item: &PhotoItem, variant_path: &Path, headline: Option<&str>) 
         exposure,
         focal_mm,
         today: Some(today()),
+        dest: None,
     }
 }
 
@@ -382,7 +383,11 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
         if variants.is_empty() {
             continue;
         }
-        let facts0 = facts_for(item, &variants[0].path, opts.headline.as_deref());
+        let mut facts0 = facts_for(item, &variants[0].path, opts.headline.as_deref());
+        facts0.dest = opts
+            .primary
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned());
         if let Some(d) = facts0.date {
             match plan.days.iter_mut().find(|(k, _)| *k == d) {
                 Some((_, n)) => *n += 1,

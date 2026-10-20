@@ -51,6 +51,8 @@ pub struct Facts {
     pub focal_mm: Option<f64>,
     /// The day the ingest runs (Photo Mechanic's "today" variables).
     pub today: Option<(i32, u32, u32)>,
+    /// Name of the destination root folder (`{dest}`), set by the planner.
+    pub dest: Option<String>,
 }
 
 const DAYS: [&str; 7] = [
@@ -167,6 +169,7 @@ pub fn expand(template: &str, facts: &Facts, seq: u32) -> String {
             "second" | "sec" => Ok(facts.time.map(|(_, _, s)| format!("{s:02}"))),
             "time" => Ok(facts.time.map(|(h, m, s)| format!("{h:02}{m:02}{s:02}"))),
             "folder" | "foldername" => Ok(facts.folder.clone()),
+            "dest" | "destination" => Ok(facts.dest.clone()),
             "camera" | "model" => Ok(facts.camera.clone()),
             "make" => Ok(facts.make.clone()),
             "lens" => Ok(facts.lens.clone()),
@@ -341,6 +344,7 @@ mod tests {
             exposure: Some((1, 250)),
             focal_mm: Some(70.0),
             today: Some((2026, 10, 15)),
+            dest: Some("CMcCartney".into()),
         };
         assert_eq!(
             expand("{datesort}-{dow3}-{dow}", &f, 1),

@@ -75,6 +75,8 @@ pub struct Prefs {
     pub open_tabs: Vec<PathBuf>,
     pub active_tab: usize,
     pub code_delimiter: char,
+    /// Expand \code\ pairs while typing captions (off = type delimiters literally).
+    pub codes_enabled: bool,
     pub open_after_ingest: bool,
     /// When a volume with a DCIM folder mounts, switch to Ingest with it as the source.
     pub open_ingest_on_card: bool,
@@ -131,6 +133,7 @@ impl Default for Prefs {
             open_tabs: Vec::new(),
             active_tab: 0,
             code_delimiter: '\\',
+            codes_enabled: true,
             open_after_ingest: true,
             open_ingest_on_card: true,
             seq_continue: true,

@@ -286,7 +286,7 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 let cap = field(ui, t, "Caption", &mut draft.fields.caption, true);
                 // Expand \code\ pairs as soon as the closing delimiter is typed.
                 let delim = app.prefs.code_delimiter;
-                if draft.fields.caption != before && draft.fields.caption.matches(delim).count() % 2 == 0 && draft.fields.caption.contains(delim) {
+                if app.prefs.codes_enabled && draft.fields.caption != before && draft.fields.caption.matches(delim).count() % 2 == 0 && draft.fields.caption.contains(delim) {
                     let vars = Vars {
                         date: draft.date_created.as_deref().and_then(codes::parse_date).or_else(|| app.exif[draft.idx].as_ref().and_then(|e| e.date_time_original.as_deref()).and_then(codes::parse_date)),
                         credit: if draft.fields.credit.is_empty() { app.assignment.as_ref().and_then(|a| a.credit_line()) } else { Some(draft.fields.credit.clone()) },
@@ -349,8 +349,13 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     });
                 let delim = app.prefs.code_delimiter;
                 if !app.codes.codes.is_empty() {
-                    let list: Vec<String> = app.codes.codes.iter().take(12).map(|(c, _)| format!("{delim}{c}{delim}")).collect();
-                    ui.label(RichText::new(format!("codes: {}", list.join(" "))).monospace().size(10.0).color(t.muted));
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.checkbox(&mut app.prefs.codes_enabled, "Expand codes").on_hover_text("Off: delimiters are typed literally, nothing expands").changed() {
+                            app.prefs_dirty = true;
+                        }
+                        let list: Vec<String> = app.codes.codes.iter().take(12).map(|(c, _)| format!("{delim}{c}{delim}")).collect();
+                        ui.label(RichText::new(list.join(" ")).monospace().size(10.0).color(if app.prefs.codes_enabled { t.muted } else { t.line_strong }));
+                    });
                 }
                 ui.add_space(S2);
                 ui.horizontal(|ui| {

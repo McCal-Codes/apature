@@ -225,6 +225,8 @@ pub struct App {
     pub folder_unplugged: Option<String>,
     /// Notices above the status bar (see ui/toasts.rs); at most four.
     pub toasts: Vec<ui::toasts::Toast>,
+    /// View-only exposure boost for previews, in stops (0, 1, 2); never written anywhere.
+    pub preview_boost: u8,
     pub filter_popup_open: bool,
     pub caption_draft: Option<Draft>,
     pub assignment: Option<Assignment>,
@@ -329,6 +331,7 @@ impl App {
             volume_kinds: HashMap::new(),
             folder_unplugged: None,
             toasts: Vec::new(),
+            preview_boost: 0,
             filter_popup_open: false,
             caption_draft: None,
             assignment: None,
@@ -1981,7 +1984,12 @@ impl App {
             }
             match done.result {
                 Ok(rgb) => {
-                    let tex = upload(ctx, &format!("{:?}{}", done.kind, done.idx), &rgb);
+                    let gain = if done.kind == JobKind::Preview {
+                        self.preview_boost
+                    } else {
+                        0
+                    };
+                    let tex = upload(ctx, &format!("{:?}{}", done.kind, done.idx), &rgb, gain);
                     self.stats.textures_uploaded += 1;
                     match done.kind {
                         JobKind::Thumb => {
@@ -2605,6 +2613,18 @@ impl App {
             }
             Command::SaveCaptionToSelection => self.save_caption_to_selection(),
             Command::RefreshFolder => self.refresh_folder(),
+            Command::CyclePreviewBoost => {
+                self.preview_boost = (self.preview_boost + 1) % 3;
+                // Previews re-upload with the new gain; thumbnails are untouched.
+                self.previews.clear();
+                self.status = match self.preview_boost {
+                    0 => "Preview at camera exposure".into(),
+                    n => format!(
+                        "Preview +{n} stop{} · view only, B cycles",
+                        if n == 1 { "" } else { "s" }
+                    ),
+                };
+            }
             Command::DeliverLast => {
                 let name = self
                     .deliver
@@ -2961,6 +2981,9 @@ impl App {
                 if pressed(Key::F) && shift {
                     out.push(Command::ToggleFilmstrip);
                 }
+                if pressed(Key::B) && !shift && in_preview {
+                    out.push(Command::CyclePreviewBoost);
+                }
                 if pressed(Key::Z) && !shift {
                     out.push(Command::ToggleZoom);
                 }
@@ -3232,7 +3255,19 @@ impl eframe::App for App {
     }
 }
 
-fn upload(ctx: &egui::Context, name: &str, rgb: &Rgb) -> TextureHandle {
-    let img = ColorImage::from_rgb([rgb.width as usize, rgb.height as usize], &rgb.data);
+/// Upload RGB; `gain_stops` brightens for viewing only (culling dark frames),
+/// the file is untouched.
+fn upload(ctx: &egui::Context, name: &str, rgb: &Rgb, gain_stops: u8) -> TextureHandle {
+    let img = if gain_stops == 0 {
+        ColorImage::from_rgb([rgb.width as usize, rgb.height as usize], &rgb.data)
+    } else {
+        let k = 1u16 << gain_stops;
+        let boosted: Vec<u8> = rgb
+            .data
+            .iter()
+            .map(|&v| (v as u16 * k).min(255) as u8)
+            .collect();
+        ColorImage::from_rgb([rgb.width as usize, rgb.height as usize], &boosted)
+    };
     ctx.load_texture(name, img, TextureOptions::LINEAR)
 }
