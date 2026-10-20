@@ -2938,6 +2938,17 @@ impl App {
                     };
                 }
             }
+            Command::ToggleLoupe => {
+                self.pv.loupe = !self.pv.loupe;
+                self.status = if self.pv.loupe {
+                    format!(
+                        "Loupe on · {:.0}% · ⌘-scroll changes magnification",
+                        self.pv.zoom * 100.0
+                    )
+                } else {
+                    "Loupe off".into()
+                };
+            }
             Command::CropCancel => {
                 self.pv.crop = None;
                 self.status = "Crop cancelled".into();
@@ -3338,12 +3349,7 @@ impl App {
                     out.push(Command::CyclePreviewBoost);
                 }
                 if in_preview && pressed(Key::L) && !shift {
-                    self.pv.loupe = !self.pv.loupe;
-                    self.status = if self.pv.loupe {
-                        format!("Loupe on · {:.0}% · scroll to change", self.pv.zoom * 100.0)
-                    } else {
-                        "Loupe off".into()
-                    };
+                    out.push(Command::ToggleLoupe);
                 }
                 if in_preview && pressed(Key::K) && !shift {
                     out.push(Command::CropToggle);

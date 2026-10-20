@@ -113,6 +113,8 @@ pub enum Command {
     /// Crop tool in Preview (K): toggle, apply (⏎), cancel (Esc), clear (⌫),
     /// next ratio (R), next overlay (G).
     CropToggle,
+    /// Loupe under the pointer in Preview (L).
+    ToggleLoupe,
     CropApply,
     CropCancel,
     CropClear,
@@ -153,6 +155,7 @@ impl Command {
             Command::RefreshFolder => "view.refresh".into(),
             Command::CyclePreviewBoost => "view.boost".into(),
             Command::CropToggle => "image.crop".into(),
+            Command::ToggleLoupe => "view.loupe".into(),
             Command::CropApply => "image.crop.apply".into(),
             Command::CropCancel => "image.crop.cancel".into(),
             Command::CropClear => "image.crop.clear".into(),
@@ -209,6 +212,7 @@ impl Command {
             "view.refresh" => Command::RefreshFolder,
             "view.boost" => Command::CyclePreviewBoost,
             "image.crop" => Command::CropToggle,
+            "view.loupe" => Command::ToggleLoupe,
             "image.crop.clear" => Command::CropClear,
             "file.deliver" => Command::DeliverLast,
             "file.deliver.resend" => Command::DeliverResendFailed,
