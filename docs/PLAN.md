@@ -28,6 +28,7 @@
   empty states (Fen). Caption at 1000x650 checked: no overlap. Then: sheet-while-ingesting, burst
   stacks, day chips on the sheet, FTP delivery.
 - 2026-10-19: apature.log (Application Support) added; audit of gaps in chat → top three: delivery, real-card backup/cancel/timing run, log (done).
+- 2026-10-20: inspector density pass; export presets per outlet (prefs.export_presets). Remaining fine-tune: thumbnail priority on big folders, focus rings. Features next: keywords/GPS, crop tool, loupe.
 - 2026-10-20: unplug detection (status + sticky toast + tab banner + ingest warning), toasts module (ui/toasts.rs). Next fine-tuning: inspector density, thumbnail priority on big folders, focus rings, export presets per outlet, then keywords/GPS, crop tool, loupe.
 - 2026-10-19 night: JPEG XL export (owner request): Format::JpegXl in apature-export transcodes the finished JPEG losslessly with cjxl (Homebrew libjxl), EXIF+XMP carried, ~21 % smaller; Export sheet FORMAT chips, CLI --jxl. Not bundled: needs cjxl on the Mac (sips and ImageIO on macOS 27.2 cannot write JXL; jpegxl-rs vendored needs cmake). Later: link libjxl into the app and bundle the dylib.
 - 2026-10-19 evening: FTP/FTPS/SFTP delivery shipped (see item 9). Untested: FTPS, SFTP, Settings › Delivery page rendering (headless settings capture hangs), real desk.
