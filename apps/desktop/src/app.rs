@@ -469,7 +469,7 @@ impl App {
             cc.egui_ctx.set_theme(theme);
         }
         ui::tokens::install_fonts(&cc.egui_ctx);
-        let prefs = Prefs::load();
+        let (prefs, prefs_outcome) = Prefs::load_report();
         let platform = Platform::new();
         let mut app = App {
             folder: None,
@@ -614,6 +614,34 @@ impl App {
         }
         if let Some(d) = launch.ingest_dest.clone() {
             app.ingest.opts.primary = d;
+        }
+        match prefs_outcome {
+            crate::prefs::LoadOutcome::Damaged { error, kept } => {
+                log::error!(
+                    "prefs.json unreadable ({error}); kept as {}",
+                    kept.display()
+                );
+                app.toast(
+                    ui::toasts::Kind::Error,
+                    format!(
+                        "Settings could not be read and were reset. The old file is kept as {}.",
+                        kept.file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
+                    ),
+                );
+            }
+            crate::prefs::LoadOutcome::Migrated { from } => {
+                log::info!("prefs migrated from version {from}; backup kept");
+            }
+            crate::prefs::LoadOutcome::Newer { version } => {
+                log::warn!("prefs.json is version {version}, newer than this build; running read-only on it");
+                app.toast(
+                    ui::toasts::Kind::Warn,
+                    "Settings were saved by a newer Apature. This build reads them but will not change the file.",
+                );
+            }
+            _ => {}
         }
         if launch.ingest {
             app.open_ingest(&cc.egui_ctx);

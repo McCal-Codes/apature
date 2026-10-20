@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// Current saved-format version of prefs.json.
+pub const PREFS_VERSION: u32 = 1;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Appearance {
     #[default]
@@ -51,9 +54,13 @@ impl Default for ExportPrefs {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Prefs {
+    /// Saved-format version (PREFS_VERSION). A missing key is version 0, the
+    /// unversioned files written before 2026-10-20. Bumped only when a field
+    /// is renamed or its meaning changes; new optional fields need no bump.
+    pub version: u32,
     pub sidebar_visible: bool,
     pub sidebar_width: f32,
     pub inspector_visible: bool,
@@ -116,6 +123,7 @@ pub struct Prefs {
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
+            version: PREFS_VERSION,
             sidebar_visible: true,
             sidebar_width: 240.0,
             inspector_visible: true,
@@ -173,15 +181,78 @@ impl Prefs {
             .map(|d| d.config_dir().join("prefs.json"))
     }
 
-    pub fn load() -> Prefs {
-        Self::path()
-            .and_then(|p| fs::read_to_string(p).ok())
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default()
+    /// Load, and say what happened: a damaged file is kept beside the live
+    /// one as `prefs.damaged.json` and the app starts from defaults, visibly;
+    /// a file from an older version is backed up once as
+    /// `prefs.json.bak-v<old>` before the first save rewrites it.
+    pub fn load_report() -> (Prefs, LoadOutcome) {
+        let Some(p) = Self::path() else {
+            return (Prefs::default(), LoadOutcome::Fresh);
+        };
+        let Ok(text) = fs::read_to_string(&p) else {
+            return (Prefs::default(), LoadOutcome::Fresh);
+        };
+        match Self::parse(&text) {
+            Ok((prefs, from)) => {
+                if from < PREFS_VERSION {
+                    let bak = p.with_extension(format!("json.bak-v{from}"));
+                    if !bak.exists() {
+                        let _ = fs::copy(&p, &bak);
+                    }
+                    (prefs, LoadOutcome::Migrated { from })
+                } else if from > PREFS_VERSION {
+                    // Written by a newer Apature: keep it untouched and run
+                    // read-only on it, like a layout from the future.
+                    (prefs, LoadOutcome::Newer { version: from })
+                } else {
+                    (prefs, LoadOutcome::Ok)
+                }
+            }
+            Err(e) => {
+                let damaged = p.with_file_name("prefs.damaged.json");
+                let _ = fs::rename(&p, &damaged);
+                (
+                    Prefs::default(),
+                    LoadOutcome::Damaged {
+                        error: e,
+                        kept: damaged,
+                    },
+                )
+            }
+        }
+    }
+
+    /// Parse the saved text and migrate it forward step by step; returns the
+    /// version the file was written with. Migrations are pure functions of
+    /// the JSON so each step has a test (`load_tests`).
+    fn parse(text: &str) -> Result<(Prefs, u32), String> {
+        let mut v: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        if !v.is_object() {
+            return Err("prefs is not a JSON object".into());
+        }
+        let from = v.get("version").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+        let mut at = from;
+        while at < PREFS_VERSION {
+            migrate_step(&mut v, at);
+            at += 1;
+        }
+        let mut prefs: Prefs = serde_json::from_value(v).map_err(|e| e.to_string())?;
+        if from <= PREFS_VERSION {
+            prefs.version = PREFS_VERSION;
+        }
+        Ok((prefs, from))
     }
 
     pub fn save(&self) {
         let Some(p) = Self::path() else { return };
+        if self.version > PREFS_VERSION {
+            // A newer Apature wrote this file; this build does not rewrite it.
+            log::warn!(
+                "prefs.json is version {} (this build writes {PREFS_VERSION}); not saving",
+                self.version
+            );
+            return;
+        }
         if let Some(dir) = p.parent() {
             let _ = fs::create_dir_all(dir);
         }
@@ -272,5 +343,101 @@ impl Prefs {
             self.send_after_export = p.send_to.clone();
             self.export_preset = Some(name.to_string());
         }
+    }
+}
+
+/// What `Prefs::load_report` found.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LoadOutcome {
+    /// No file yet: defaults.
+    Fresh,
+    Ok,
+    /// Read and migrated from an older format; the old file is kept as a backup.
+    Migrated {
+        from: u32,
+    },
+    /// Written by a newer Apature; loaded as far as this build understands.
+    Newer {
+        version: u32,
+    },
+    /// Could not be read; moved aside and defaults loaded.
+    Damaged {
+        error: String,
+        kept: PathBuf,
+    },
+}
+
+/// One migration step from `from` to `from + 1`, on the raw JSON so unknown
+/// keys survive. Version 0 → 1 only adds the version key: every field name
+/// is unchanged, so the step is a no-op by design and exists as the pattern.
+fn migrate_step(v: &mut serde_json::Value, from: u32) {
+    if let Some(obj) = v.as_object_mut() {
+        if from == 0 {
+            obj.insert("version".into(), serde_json::Value::from(1u32));
+        }
+    }
+}
+
+#[cfg(test)]
+mod load_tests {
+    use super::*;
+
+    #[test]
+    fn version_0_file_loads_and_reports_migration() {
+        // A real pre-versioning file: no version key, a few fields set.
+        let text = r#"{"sidebar_visible":false,"cell":200.0,"code_delimiter":"\\","export":{"long_side":3000}}"#;
+        let (p, from) = Prefs::parse(text).unwrap();
+        assert_eq!(from, 0);
+        assert_eq!(p.version, PREFS_VERSION);
+        assert!(!p.sidebar_visible);
+        assert_eq!(p.cell, 200.0);
+        assert_eq!(p.export.long_side, 3000);
+        assert_eq!(
+            p.export.quality, 90,
+            "fields the old file lacks take defaults"
+        );
+    }
+
+    #[test]
+    fn current_version_round_trips() {
+        let mut p = Prefs {
+            advance_after_mark: false,
+            ..Default::default()
+        };
+        p.delivery.push(apature_deliver::Target {
+            name: "Desk".into(),
+            kind: apature_deliver::Kind::Sftp,
+            host: "h".into(),
+            port: 22,
+            user: "u".into(),
+            dir: "in".into(),
+            key_file: None,
+        });
+        let text = serde_json::to_string(&p).unwrap();
+        let (back, from) = Prefs::parse(&text).unwrap();
+        assert_eq!(from, PREFS_VERSION);
+        assert_eq!(back, p);
+    }
+
+    #[test]
+    fn newer_file_is_read_not_rewritten_in_place() {
+        let text = format!(
+            r#"{{"version":{},"sidebar_visible":false,"future_key":{{"x":1}}}}"#,
+            PREFS_VERSION + 5
+        );
+        let (p, from) = Prefs::parse(&text).unwrap();
+        assert_eq!(from, PREFS_VERSION + 5);
+        assert!(!p.sidebar_visible);
+        assert_eq!(
+            p.version,
+            PREFS_VERSION + 5,
+            "the newer version number is kept so save() can refuse to downgrade"
+        );
+    }
+
+    #[test]
+    fn damaged_text_is_an_error_not_defaults() {
+        assert!(Prefs::parse("{not json").is_err());
+        assert!(Prefs::parse("[1,2,3]").is_err());
     }
 }
