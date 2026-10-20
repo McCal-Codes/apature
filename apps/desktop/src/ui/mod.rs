@@ -6,6 +6,7 @@ pub mod dialogs;
 pub mod export;
 pub mod filmstrip;
 pub mod icons;
+pub mod infobar;
 pub mod ingest;
 pub mod inspector;
 pub mod motion;

@@ -399,6 +399,7 @@ pub struct App {
     pub toasts: Vec<ui::toasts::Toast>,
     /// View-only exposure boost for previews, in stops (0, 1, 2); never written anywhere.
     pub preview_boost: u8,
+    window_title: String,
     /// Keyword being typed on the Caption workspace.
     pub caption_kw_draft: String,
     pub filter_popup_open: bool,
@@ -518,6 +519,7 @@ impl App {
             folder_unplugged: None,
             toasts: Vec::new(),
             preview_boost: 0,
+            window_title: String::new(),
             caption_kw_draft: String::new(),
             filter_popup_open: false,
             caption_draft: None,
@@ -2887,42 +2889,13 @@ impl App {
         parts.join(", ")
     }
 
+    /// Bottom-bar parts: the folder, count and focused photo moved to the
+    /// info strip at the top (ui/infobar.rs); this keeps the marks and the
+    /// transient message.
     pub fn status_parts(&self) -> Vec<String> {
         let mut parts = Vec::new();
-        match &self.folder {
-            None => parts.push("No folder open · ⌘O".into()),
-            Some(f) => {
-                let name = f
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                if self.filter.is_active() {
-                    parts.push(format!(
-                        "{name} · showing {} of {}",
-                        self.view.len(),
-                        self.items.len()
-                    ));
-                } else {
-                    parts.push(format!("{name} · {} photos", self.items.len()));
-                }
-            }
-        }
-        if self.selection.len() > 1 {
-            parts.push(format!("{} selected", self.selection.len()));
-        }
         if let Some(it) = self.items.get(self.cursor) {
-            parts.push(format!(
-                "{}/{} {}",
-                self.cursor_pos() + 1,
-                self.view.len(),
-                it.display_name()
-            ));
-            if let Some(e) = &self.exif[self.cursor] {
-                let ex = e.exposure_line();
-                if !ex.is_empty() {
-                    parts.push(ex);
-                }
-            }
+            let _ = it;
             let m = self.marks[self.cursor];
             let stars = ui::rating_text(m.rating);
             if !stars.is_empty() {
@@ -3826,6 +3799,21 @@ impl eframe::App for App {
         }
         ui::toolbar::show(self, ctx, &t);
         ui::tabs::show(self, ctx, &t);
+        ui::infobar::show(self, ctx, &t);
+        // Window title names the folder, like a document.
+        let title = match &self.folder {
+            Some(f) => format!(
+                "{} — Apature",
+                f.file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ),
+            None => "Apature".into(),
+        };
+        if self.window_title != title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
+        }
         if self.launch.settings && self.launch.screenshot.is_some() {
             ui::settings::show_inline(self, ctx, &t);
             self.maybe_screenshot(ctx);
