@@ -12,6 +12,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Kind {
+    /// A folder on this Mac or a mounted share: a NAS, a desk's SMB share,
+    /// or the Google Drive / OneDrive / Dropbox desktop sync folder. `dir`
+    /// is the folder path; host, port and user are unused.
+    Folder,
     Ftp,
     /// FTP with explicit TLS (AUTH TLS) on the usual port 21.
     Ftps,
@@ -38,6 +42,7 @@ impl Target {
         match kind {
             Kind::Ftp | Kind::Ftps => 21,
             Kind::Sftp => 22,
+            Kind::Folder => 0,
         }
     }
 }
@@ -137,9 +142,45 @@ impl Remote for Sftp {
     }
 }
 
+struct LocalFolder;
+
+impl Remote for LocalFolder {
+    fn put(&mut self, local: &Path, remote: &str) -> Result<u64, String> {
+        let dst = Path::new(remote);
+        if let Some(p) = dst.parent() {
+            std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+        }
+        let n = std::fs::copy(local, dst).map_err(|e| e.to_string())?;
+        std::fs::File::open(dst)
+            .and_then(|f| f.sync_all())
+            .map_err(|e| e.to_string())?;
+        Ok(n)
+    }
+    fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
+        std::fs::rename(from, to).map_err(|e| e.to_string())
+    }
+}
+
 fn connect(target: &Target, secret: &str) -> Result<Box<dyn Remote>, DeliverError> {
     let addr = format!("{}:{}", target.host, target.port);
     match target.kind {
+        Kind::Folder => {
+            let dir = Path::new(target.dir.trim());
+            if target.dir.trim().is_empty() {
+                return Err(DeliverError::Folder(
+                    target.dir.clone(),
+                    "no folder set".into(),
+                ));
+            }
+            std::fs::create_dir_all(dir)
+                .map_err(|e| DeliverError::Folder(target.dir.clone(), e.to_string()))?;
+            // Writable? A read-only share fails here, not mid-send.
+            let probe = dir.join(".apature-write-test");
+            std::fs::write(&probe, b"")
+                .map_err(|e| DeliverError::Folder(target.dir.clone(), e.to_string()))?;
+            let _ = std::fs::remove_file(&probe);
+            Ok(Box::new(LocalFolder))
+        }
         Kind::Ftp | Kind::Ftps => {
             let mut s = suppaftp::NativeTlsFtpStream::connect(&addr)
                 .map_err(|e| DeliverError::Connect(addr.clone(), e.to_string()))?;
@@ -217,7 +258,7 @@ pub fn send(
     // After cwd on FTP the folder is current, so names are relative there;
     // SFTP has no cwd, so names carry the folder.
     let base = match target.kind {
-        Kind::Sftp => target.dir.clone(),
+        Kind::Sftp | Kind::Folder => target.dir.clone(),
         _ => String::new(),
     };
     let mut report = Report::default();

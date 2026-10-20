@@ -163,10 +163,12 @@ enum Cmd {
     /// or the APATURE_PASSWORD environment variable.
     Deliver {
         files: Vec<PathBuf>,
-        #[arg(long)]
+        /// Not needed for --protocol folder.
+        #[arg(long, default_value = "")]
         host: String,
-        #[arg(long)]
+        #[arg(long, default_value = "")]
         user: String,
+        /// ftp, ftps, sftp or folder (a mounted share or cloud sync folder).
         #[arg(long, default_value = "sftp")]
         protocol: String,
         #[arg(long)]
@@ -284,8 +286,12 @@ fn main() -> Result<()> {
                 "ftp" => Kind::Ftp,
                 "ftps" => Kind::Ftps,
                 "sftp" => Kind::Sftp,
-                other => anyhow::bail!("--protocol must be ftp, ftps or sftp, not {other}"),
+                "folder" => Kind::Folder,
+                other => anyhow::bail!("--protocol must be ftp, ftps, sftp or folder, not {other}"),
             };
+            if kind != Kind::Folder && (host.is_empty() || user.is_empty()) {
+                anyhow::bail!("--host and --user are needed for {protocol}");
+            }
             let target = Target {
                 name: host.clone(),
                 kind,

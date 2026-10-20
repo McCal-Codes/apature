@@ -1497,9 +1497,16 @@ impl App {
             self.status = "Nothing to send: export first".into();
             return;
         }
-        let Some(secret) = Platform::secret_get(&t.name) else {
-            self.status = format!("No password saved for {}: Settings › Delivery", t.name);
-            return;
+        let secret = if t.kind == apature_deliver::Kind::Folder {
+            String::new()
+        } else {
+            match Platform::secret_get(&t.name) {
+                Some(s) => s,
+                None => {
+                    self.status = format!("No password saved for {}: Settings › Delivery", t.name);
+                    return;
+                }
+            }
         };
         let files = self.deliver.last_outputs.clone();
         log::info!(

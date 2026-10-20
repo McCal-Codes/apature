@@ -265,7 +265,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                     ui.end_row();
                                     ui.label(RichText::new("Protocol").size(12.0).color(t.text2));
                                     ui.horizontal(|ui| {
-                                        for (k, label) in [(apature_deliver::Kind::Ftp, "FTP"), (apature_deliver::Kind::Ftps, "FTPS (TLS)"), (apature_deliver::Kind::Sftp, "SFTP")] {
+                                        for (k, label) in [(apature_deliver::Kind::Folder, "Folder"), (apature_deliver::Kind::Ftp, "FTP"), (apature_deliver::Kind::Ftps, "FTPS (TLS)"), (apature_deliver::Kind::Sftp, "SFTP")] {
                                             if super::icons::chip(ui, &t, label, d.kind == k).clicked() {
                                                 d.kind = k;
                                                 d.port = apature_deliver::Target::default_port(k);
@@ -274,18 +274,32 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                         }
                                     });
                                     ui.end_row();
-                                    ui.label(RichText::new("Host").size(12.0).color(t.text2));
-                                    if ui.add(egui::TextEdit::singleline(&mut d.host).desired_width(260.0)).changed() { app.prefs_dirty = true; }
-                                    ui.end_row();
-                                    ui.label(RichText::new("Port").size(12.0).color(t.text2));
-                                    if ui.add(egui::DragValue::new(&mut d.port).range(1..=65535)).changed() { app.prefs_dirty = true; }
-                                    ui.end_row();
-                                    ui.label(RichText::new("User").size(12.0).color(t.text2));
-                                    if ui.add(egui::TextEdit::singleline(&mut d.user).desired_width(260.0)).changed() { app.prefs_dirty = true; }
-                                    ui.end_row();
+                                    let is_folder = d.kind == apature_deliver::Kind::Folder;
+                                    if !is_folder {
+                                        ui.label(RichText::new("Host").size(12.0).color(t.text2));
+                                        if ui.add(egui::TextEdit::singleline(&mut d.host).desired_width(260.0).hint_text("ftp.example.com or 192.168.1.20")).changed() { app.prefs_dirty = true; }
+                                        ui.end_row();
+                                        ui.label(RichText::new("Port").size(12.0).color(t.text2));
+                                        if ui.add(egui::DragValue::new(&mut d.port).range(1..=65535)).changed() { app.prefs_dirty = true; }
+                                        ui.end_row();
+                                        ui.label(RichText::new("User").size(12.0).color(t.text2));
+                                        if ui.add(egui::TextEdit::singleline(&mut d.user).desired_width(260.0)).changed() { app.prefs_dirty = true; }
+                                        ui.end_row();
+                                    }
                                     ui.label(RichText::new("Folder").size(12.0).color(t.text2));
-                                    if ui.add(egui::TextEdit::singleline(&mut d.dir).desired_width(260.0).hint_text("incoming/photos (empty = login folder)")).changed() { app.prefs_dirty = true; }
+                                    ui.horizontal(|ui| {
+                                        let hint = if is_folder { "a mounted share, or the Google Drive / OneDrive / Dropbox sync folder" } else { "incoming/photos (empty = login folder)" };
+                                        if ui.add(egui::TextEdit::singleline(&mut d.dir).desired_width(if is_folder { 200.0 } else { 260.0 }).hint_text(hint)).changed() { app.prefs_dirty = true; }
+                                        if is_folder && ui.small_button("Choose…").clicked() {
+                                            if let Some(p) = rfd::FileDialog::new().pick_folder() { d.dir = p.display().to_string(); app.prefs_dirty = true; }
+                                        }
+                                    });
                                     ui.end_row();
+                                    if is_folder {
+                                        ui.label(RichText::new("").size(12.0));
+                                        ui.label(RichText::new("No sign-in needed: the Google Drive or OneDrive desktop app syncs this folder to the cloud.").size(11.0).color(t.muted));
+                                        ui.end_row();
+                                    }
                                     if d.kind == apature_deliver::Kind::Sftp {
                                         ui.label(RichText::new("Key file").size(12.0).color(t.text2));
                                         ui.horizontal(|ui| {
@@ -298,6 +312,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                         });
                                         ui.end_row();
                                     }
+                                    if !is_folder {
                                     ui.label(RichText::new(if d.key_file.is_some() { "Passphrase" } else { "Password" }).size(12.0).color(t.text2));
                                     ui.horizontal(|ui| {
                                         let draft = app.deliver.pw_drafts.entry(old_name.clone()).or_default();
@@ -312,6 +327,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                         ui.label(RichText::new(if has { "saved" } else { "none saved" }).size(10.5).color(t.muted));
                                     });
                                     ui.end_row();
+                                    }
                                 });
                                 ui.horizontal(|ui| {
                                     if ui.button("Test connection").clicked() {
