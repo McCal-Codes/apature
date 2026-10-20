@@ -73,7 +73,7 @@ quick wins (codes switch, big tag badge, B exposure boost, {dest}), delivery
 queue (retry+reconnect, delivered.json ledger + Sent row, resend), Folder
 delivery kind (shares and Google Drive/OneDrive/Dropbox sync folders, no
 sign-in), keywords chips + GPS in Caption, set-GPS-on-ingest. Cloud APIs
-(Drive/Graph with OAuth) still wait on client IDs. Crop tool shipped 2026-10-20 (K in Preview; AF point still to do: needs
+(Drive/Graph with OAuth) still wait on client IDs. Focus rings on painter-drawn controls 2026-10-20. AF point overlay: NEF keeps the AF point in the Nikon maker note (AFInfo2), not in standard EXIF; needs a maker-note parser (half a day) — deferred. Crop tool shipped 2026-10-20 (K in Preview; AF point still to do: needs
 SubjectArea/AFPoint in ExifSummary). Next: loupe with unified zoom, burst stacks.
 
 ## Re-ordered after reading Camera Bits' feature-request board (2026-10-20)
