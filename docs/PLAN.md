@@ -67,6 +67,17 @@ Observed once, unexplained
 
 - Design system artifact (2026-10-19): https://claude.ai/artifact/KKoM7Em7u3hrLtBHt3ouCu, extracted from tokens.rs/icons.rs. Font decided: IBM Plex Sans + IBM Plex Mono. TODO: embed the Plex files in the desktop crate (egui font definitions), add licence to THIRD_PARTY.md, list them under fonts/ in the design system.
 
+## Re-ordered after reading Camera Bits' feature-request board (2026-10-20)
+See docs/research/pm-feature-gap.md §5. Quick wins with real demand first:
+a. Code-replacement on/off switch in Caption; bigger tag badge on thumbnails;
+   honour in-camera ratings on ingest (sort/filter by them); view-only
+   exposure boost in Preview; `{dest}` variable.
+b. Delivery queue: retry, resend, persistent per-file sent status shown next
+   to the caption; then Google Drive / OneDrive.
+c. Keywords + GPS (incl. set GPS on ingest), then crop tool (ratios,
+   golden-section overlay, AF point), loupe with unified zoom.
+d. Burst stacks + sharpness hint as the honest answer to "AI culling".
+
 ## Order of work, sized for budget
 
 Small (each fits in a slice of a session)

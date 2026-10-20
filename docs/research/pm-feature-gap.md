@@ -94,3 +94,36 @@ Items 1–3 complete the daily loop; 4–7 are what make it comfortable.
   (Eagle vs TribLive)?
 * Does the desk need IPTC-IIM (older systems) or is XMP enough?
 * Should the `{seqn}` counter be per assignment (prefix = slug) by default?
+
+## 5. What Photo Mechanic users ask Camera Bits for (read 2026-10-20)
+
+Source: the public Feature Requests board at forums.camerabits.com (three
+pages of thread titles with view counts; thread bodies need a login) plus
+G2 reviews and Adobe-forum threads. Views are the only demand signal
+available; treated as *observed*.
+
+| ask (views) | what it means | Apature |
+|---|---|---|
+| Destination path variable (66k) | folder/rename templates that can use the destination path and more variables | have: full variable engine incl. `{folder}` `{today}`; add `{dest}` cheaply |
+| Unified zoom (22k) | one zoom behaviour across preview/loupe/compare | partial: 1:1 + compare share zoom; loupe missing |
+| AI keywording (13k) · AI culling · AI on ingest | suggested keywords, blur/duplicate detection | none; burst stacks + sharpness hint planned |
+| On/off switch for code replacements (12k) | toggle `\code\` expansion without unloading the file | cheap: a checkbox in Caption |
+| Info tooltips options (7k) | choose which fields the thumbnail tooltip/info board shows | partial: fixed inspector; make rows configurable |
+| FTP wish list 2026 (8k) · resend queue · upload status persistency · FTP status in IPTC window | queue, retry, persistent status, status next to the caption | partial: delivery done; add a queue with retry and a per-file sent ledger |
+| Set GPS on ingest (5k) · GPS taken over on ingest | GPS from a track/phone or a fixed location applied during ingest | none; keywords/GPS slice |
+| Larger, more visible tag marker (5k) | the tag check is too small on thumbnails | cheap: bigger tag badge |
+| Turn autocomplete lists on/off (5k) · keyboard shortcuts for IPTC templates/snapshots | control over autocomplete; snapshots on keys | partial: recent-values menus; add per-field toggle and snapshot keys |
+| Live Ingest from FTP as source (3.6k) | the camera-FTP receiver | planned (Live Ingest) |
+| AVIF / WebP (3k) | more output formats | JPEG XL done; AVIF via libavif later |
+| Prioritize star-rated images on ingest (1.3k) · in-camera rating/crop info | honour camera ratings and crops at ingest | cheap: read XMP Rating from NEF; order plan by it |
+| Golden-section overlay (6k) · extra crop anchors · two constrained ratios · auto roll alignment · AF point in preview | preview/crop tools | crop tool slice: ratios, overlays, AF point from EXIF |
+| Exposure correction for viewing only (1k) | brighten the preview without editing | cheap on the preview (gamma slider) |
+| Ingest from phones · remote editing · SmugMug folders · social | out of scope for now | — |
+
+Takeaways for Apature's order: (1) keep the template engine ahead (it is the
+single most-viewed ask), (2) a delivery queue with retry and persistent
+status is the next delivery step before cloud drives, (3) small wins with
+real demand: code-replacement switch, bigger tag badge, camera ratings on
+ingest, view-only exposure boost, (4) crop tool with ratios/overlays and AF
+point, (5) AI keywording is the most-wanted thing we do not plan; a local
+model later, never cloud by default.
