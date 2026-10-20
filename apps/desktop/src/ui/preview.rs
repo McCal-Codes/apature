@@ -609,13 +609,19 @@ fn crop_tool(
     }
     // Readout: size in percent and the ratio name.
     let [l, tt, r, b] = c.rect;
-    let label = format!(
-        "crop {:.0}% × {:.0}%  ·  {}  ·  R ratio · G guides · ⏎ apply · ⌫ remove · Esc",
+    let short = format!(
+        "crop {:.0}% × {:.0}%  ·  {}",
         (r - l) * 100.0,
         (b - tt) * 100.0,
         crate::app::CROP_RATIOS[c.ratio_i].1
     );
-    let galley = ui.fonts_mut(|f| f.layout_no_wrap(label, egui::FontId::monospace(10.5), t.text));
+    let long = format!("{short}  ·  R ratio · G guides · ⏎ apply · ⌫ remove · Esc");
+    // The key hints only when the frame is wide enough; the status bar has them too.
+    let mut galley =
+        ui.fonts_mut(|f| f.layout_no_wrap(long, egui::FontId::monospace(10.5), t.text));
+    if galley.size().x + 8.0 > crop_px.width() {
+        galley = ui.fonts_mut(|f| f.layout_no_wrap(short, egui::FontId::monospace(10.5), t.text));
+    }
     let pos = Pos2::new(
         crop_px.min.x,
         (crop_px.max.y + 6.0).min(img.max.y - galley.size().y - 2.0),

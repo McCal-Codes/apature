@@ -169,6 +169,40 @@ fn draw_cell(app: &App, ui: &egui::Ui, t: &Theme, rect: Rect, idx: usize) {
             StrokeKind::Inside,
         );
     }
+    if let Some(members) = app.stacks.get(&idx) {
+        let open = app.stacks_open.contains(&idx);
+        let n = members.len() + 1;
+        let label = if open {
+            format!("⌄ {n}")
+        } else {
+            format!("× {n}")
+        };
+        let galley =
+            ui.fonts_mut(|f| f.layout_no_wrap(label, FontId::monospace(10.5), Color32::WHITE));
+        let r = Rect::from_min_size(
+            Pos2::new(img_rect.left() + 6.0, img_rect.bottom() - 24.0),
+            galley.size() + Vec2::new(10.0, 6.0),
+        );
+        p.rect_filled(
+            r,
+            CornerRadius::same(4),
+            if open {
+                t.accent
+            } else {
+                Color32::from_black_alpha(170)
+            },
+        );
+        p.galley(r.min + Vec2::new(5.0, 3.0), galley, Color32::WHITE);
+        if !open {
+            // A stacked-paper hint: two offset edges behind the cell.
+            p.rect_stroke(
+                img_rect.translate(Vec2::new(3.0, -3.0)),
+                CornerRadius::same(2),
+                Stroke::new(1.0, t.line_strong),
+                StrokeKind::Outside,
+            );
+        }
+    }
     if m.tagged {
         // Big enough to see from across the desk (a top Photo Mechanic request).
         let r = Rect::from_min_size(

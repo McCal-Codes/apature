@@ -2,7 +2,7 @@
 //! `ui/`; native integration in `platform/`; decoding in `worker.rs`;
 //! selection, filters and undo are pure modules with their own tests.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -57,6 +57,10 @@ pub struct TabState {
     pub cursor: usize,
     pub selection: Selection,
     pub view: Vec<usize>,
+    /// Burst stacks: head item → members hidden behind it (when collapsed).
+    pub stacks: HashMap<usize, Vec<usize>>,
+    /// Stack heads currently expanded.
+    pub stacks_open: HashSet<usize>,
     pub pos: Vec<Option<usize>>,
     pub filter: Filter,
     pub undo: UndoStack,
@@ -347,6 +351,8 @@ pub struct App {
     pub selection: Selection,
     /// Visible, ordered item indices after filter and sort.
     pub view: Vec<usize>,
+    pub stacks: HashMap<usize, Vec<usize>>,
+    pub stacks_open: HashSet<usize>,
     /// Position of each item in `view`, `None` when filtered out.
     pub pos: Vec<Option<usize>>,
     pub filter: Filter,
@@ -463,6 +469,8 @@ impl App {
             cursor: 0,
             selection: Selection::default(),
             view: Vec::new(),
+            stacks: HashMap::new(),
+            stacks_open: HashSet::new(),
             pos: Vec::new(),
             filter: Filter::default(),
             undo: UndoStack::default(),
@@ -1916,6 +1924,8 @@ impl App {
             cursor: std::mem::take(&mut self.cursor),
             selection: std::mem::take(&mut self.selection),
             view: std::mem::take(&mut self.view),
+            stacks: std::mem::take(&mut self.stacks),
+            stacks_open: std::mem::take(&mut self.stacks_open),
             pos: std::mem::take(&mut self.pos),
             filter: std::mem::take(&mut self.filter),
             undo: std::mem::take(&mut self.undo),
@@ -1941,6 +1951,8 @@ impl App {
         self.cursor = t.cursor;
         self.selection = t.selection;
         self.view = t.view;
+        self.stacks = t.stacks;
+        self.stacks_open = t.stacks_open;
         self.pos = t.pos;
         self.filter = t.filter;
         self.undo = t.undo;
@@ -2192,6 +2204,49 @@ impl App {
             self.prefs.sort,
             self.prefs.sort_reversed,
         );
+        self.stacks.clear();
+        if self.prefs.stack_bursts {
+            // Walk the view in capture order; a frame within a second of the
+            // previous one joins its stack. Sorting by anything else still
+            // stacks by capture time, so the groups never depend on the sort.
+            let secs = |i: usize| -> Option<i64> {
+                let d = self.exif[i].as_ref()?.date_time_original.as_deref()?;
+                let (y, mo, da) = apature_metadata::codes::parse_date(d)?;
+                let h: i64 = d.get(11..13)?.parse().ok()?;
+                let m: i64 = d.get(14..16)?.parse().ok()?;
+                let s: i64 = d.get(17..19)?.parse().ok()?;
+                let days = i64::from(y) * 366 + i64::from(mo) * 31 + i64::from(da);
+                Some(days * 86_400 + h * 3600 + m * 60 + s)
+            };
+            let mut by_time: Vec<(i64, usize)> = self
+                .view
+                .iter()
+                .filter_map(|&i| secs(i).map(|t| (t, i)))
+                .collect();
+            by_time.sort();
+            let mut head: Option<usize> = None;
+            let mut last: Option<i64> = None;
+            for (t, i) in by_time {
+                if last.is_some_and(|l| t - l <= 1) {
+                    if let Some(h) = head {
+                        self.stacks.entry(h).or_default().push(i);
+                    }
+                } else {
+                    head = Some(i);
+                }
+                last = Some(t);
+            }
+            // Hide members of collapsed stacks from the view.
+            let hidden: HashSet<usize> = self
+                .stacks
+                .iter()
+                .filter(|(h, _)| !self.stacks_open.contains(*h))
+                .flat_map(|(_, m)| m.iter().copied())
+                .collect();
+            if !hidden.is_empty() {
+                self.view.retain(|i| !hidden.contains(i));
+            }
+        }
         self.pos = vec![None; self.items.len()];
         for (p, &i) in self.view.iter().enumerate() {
             self.pos[i] = Some(p);
@@ -2938,6 +2993,31 @@ impl App {
                     };
                 }
             }
+            Command::ToggleStack => {
+                // The focused item is a head, or a member of an open stack.
+                let head = if self.stacks.contains_key(&self.cursor) {
+                    Some(self.cursor)
+                } else {
+                    self.stacks
+                        .iter()
+                        .find(|(_, m)| m.contains(&self.cursor))
+                        .map(|(h, _)| *h)
+                };
+                if let Some(h) = head {
+                    if !self.stacks_open.remove(&h) {
+                        self.stacks_open.insert(h);
+                    } else {
+                        self.cursor = h;
+                    }
+                    let n = self.stacks.get(&h).map(|m| m.len() + 1).unwrap_or(1);
+                    self.status = if self.stacks_open.contains(&h) {
+                        format!("Burst of {n} expanded · S collapses")
+                    } else {
+                        format!("Burst of {n} collapsed · S expands")
+                    };
+                    self.rebuild_view();
+                }
+            }
             Command::ToggleLoupe => {
                 self.pv.loupe = !self.pv.loupe;
                 self.status = if self.pv.loupe {
@@ -3347,6 +3427,9 @@ impl App {
                 }
                 if pressed(Key::B) && !shift && in_preview {
                     out.push(Command::CyclePreviewBoost);
+                }
+                if pressed(Key::S) && !shift && self.prefs.stack_bursts {
+                    out.push(Command::ToggleStack);
                 }
                 if in_preview && pressed(Key::L) && !shift {
                     out.push(Command::ToggleLoupe);

@@ -115,6 +115,8 @@ pub enum Command {
     CropToggle,
     /// Loupe under the pointer in Preview (L).
     ToggleLoupe,
+    /// Expand or collapse the focused burst stack (S).
+    ToggleStack,
     CropApply,
     CropCancel,
     CropClear,
@@ -156,6 +158,7 @@ impl Command {
             Command::CyclePreviewBoost => "view.boost".into(),
             Command::CropToggle => "image.crop".into(),
             Command::ToggleLoupe => "view.loupe".into(),
+            Command::ToggleStack => "view.stack".into(),
             Command::CropApply => "image.crop.apply".into(),
             Command::CropCancel => "image.crop.cancel".into(),
             Command::CropClear => "image.crop.clear".into(),
@@ -213,6 +216,7 @@ impl Command {
             "view.boost" => Command::CyclePreviewBoost,
             "image.crop" => Command::CropToggle,
             "view.loupe" => Command::ToggleLoupe,
+            "view.stack" => Command::ToggleStack,
             "image.crop.clear" => Command::CropClear,
             "file.deliver" => Command::DeliverLast,
             "file.deliver.resend" => Command::DeliverResendFailed,

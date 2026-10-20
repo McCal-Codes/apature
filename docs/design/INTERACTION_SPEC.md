@@ -77,3 +77,23 @@ overlay fade and panel animation.
 | focus move in Sheet | 1 frame; thumbnail from cache ≤ 5 ms | bench warm numbers |
 | Preview next/prev | ≤ 50 ms with ±1 prefetched; ≤ 250 ms cold | to measure |
 | open 1 000-file folder | grid visible < 100 ms; all visible thumbs < 1 s warm | to measure |
+
+## Preview tools and stacks (added 2026-10-20)
+
+Rules these follow: one key each, no modifier, discoverable in Settings ›
+Shortcuts and in the status bar when active; nothing loops; Reduce Motion
+changes nothing because none of them animate; every overlay is drawn in the
+theme's accent or white-on-dim so photos stay unaffected; the file is never
+touched (sidecar only).
+
+| key | tool | notes |
+|---|---|---|
+| L | loupe | real pixels under the pointer; magnification shared with 1:1, ⌘-scroll 100–400 % |
+| K | crop | frame with 8 handles; dim outside; thirds or golden guides (G); ratio presets (R); ⏎ apply, ⌫ remove, Esc cancel; readout shortens when the frame is narrow |
+| B | exposure boost | +1/+2 stops on the preview texture only |
+| S | burst stack | frames within one second group behind the first; `× N` badge, accent when open; off by default (Settings › General) |
+| ⌘[ ⌘] | rotate | sidecar orientation; thumbnails and preview follow |
+
+Verified 2026-10-20 by headless screenshots at 1400×900 and 1000×650: crop
+frame and readout, stack badge, no overlaps. The loupe needs a live pointer
+and was reviewed in code only.

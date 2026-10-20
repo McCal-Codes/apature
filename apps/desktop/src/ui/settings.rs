@@ -99,6 +99,10 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         if ui.checkbox(&mut app.prefs.advance_after_mark, "Advance to the next photo after marking one").changed() {
                             app.prefs_dirty = true;
                         }
+                        if ui.checkbox(&mut app.prefs.stack_bursts, "Stack bursts: frames shot within a second sit behind one thumbnail (S expands)").changed() {
+                            app.prefs_dirty = true;
+                            app.rebuild_view();
+                        }
                         if ui.checkbox(&mut app.prefs.open_after_ingest, "Open the ingested folder when an ingest finishes").changed() {
                             app.prefs_dirty = true;
                         }
@@ -439,6 +443,22 @@ const SHORTCUTS: &[(&str, &str)] = &[
     ),
     ("X · T", "Reject · toggle tag"),
     ("⏎ / Space · Esc", "Preview · back"),
+    (
+        "Z · C",
+        "Preview: 1:1 at the pointer · compare the selection",
+    ),
+    (
+        "L · ⌘scroll",
+        "Preview: loupe under the pointer · magnification 100–400 %",
+    ),
+    (
+        "K · R · G",
+        "Preview: crop tool · next ratio · next guides (⏎ apply, ⌫ remove, Esc cancel)",
+    ),
+    ("B", "Preview: brighten +1/+2 stops, view only"),
+    ("⌘[ · ⌘]", "Rotate left · right (sidecar only)"),
+    ("S", "Expand or collapse the focused burst stack"),
+    ("⌘R", "Refresh the folder, keeping cursor and selection"),
     ("⌘A · ⌘⇧A", "Select all · none"),
     ("⌘Z · ⌘⇧Z", "Undo · redo"),
     ("⌘⇧1 … ⌘⇧5", "Sheet · Preview · Caption · Ingest · Export"),

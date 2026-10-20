@@ -65,6 +65,9 @@ pub struct Prefs {
     pub sort: crate::filter::Sort,
     pub sort_reversed: bool,
     pub advance_after_mark: bool,
+    /// Group frames shot within a second of the previous one behind one
+    /// thumbnail (bursts); S expands or collapses the focused stack.
+    pub stack_bursts: bool,
     /// What the bare 1–8 keys set: colour class (Photo Mechanic) or star rating.
     pub number_keys: NumberKeys,
     pub assignment_file: Option<PathBuf>,
@@ -124,6 +127,7 @@ impl Default for Prefs {
             sort: crate::filter::Sort::Name,
             sort_reversed: false,
             advance_after_mark: true,
+            stack_bursts: false,
             number_keys: NumberKeys::Rating,
             assignment_file: None,
             codes_file: None,
