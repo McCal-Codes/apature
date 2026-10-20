@@ -214,9 +214,15 @@ fn draw_pane(
             (ZoomMode::OneToOne, None) => "1:1 · loading…".into(),
         };
 
+        // ---- crop tool ----
+        let cropping = app.pv.crop.is_some() && focused && !compare;
+        if cropping {
+            crop_tool(app, ui, &p, &resp, shown, t);
+        }
+
         // ---- interaction ----
         let size_pts = size / ppp;
-        if app.pv.mode == ZoomMode::OneToOne && (focused || !compare) {
+        if !cropping && app.pv.mode == ZoomMode::OneToOne && (focused || !compare) {
             if resp.dragged() {
                 let d = resp.drag_delta();
                 app.pv.center -= Vec2::new(d.x / size_pts.x, d.y / size_pts.y);
@@ -228,7 +234,7 @@ fn draw_pane(
                 }
             }
         }
-        if resp.double_clicked() {
+        if !cropping && resp.double_clicked() {
             let at = resp
                 .interact_pointer_pos()
                 .map(|pos| {
@@ -323,4 +329,228 @@ fn draw_pane(
         )
     });
     resp.clicked() && compare
+}
+
+/// Draw and drive the crop frame over the shown image. `rect` fractions are
+/// of `img` (the displayed, already turned image).
+fn crop_tool(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    p: &egui::Painter,
+    resp: &egui::Response,
+    img: Rect,
+    t: &Theme,
+) {
+    use crate::app::CropOverlay;
+    let Some(c) = app.pv.crop.as_mut() else {
+        return;
+    };
+    let to_px = |f: [f32; 4]| {
+        Rect::from_min_max(
+            Pos2::new(
+                img.min.x + f[0] * img.width(),
+                img.min.y + f[1] * img.height(),
+            ),
+            Pos2::new(
+                img.min.x + f[2] * img.width(),
+                img.min.y + f[3] * img.height(),
+            ),
+        )
+    };
+    let to_frac = |pos: Pos2| {
+        Vec2::new(
+            ((pos.x - img.min.x) / img.width()).clamp(0.0, 1.0),
+            ((pos.y - img.min.y) / img.height()).clamp(0.0, 1.0),
+        )
+    };
+    let crop_px = to_px(c.rect);
+    const H: f32 = 7.0;
+    // Handle centres: corners 0-3 (tl, tr, bl, br), edges 4-7 (t, b, l, r).
+    let handles = [
+        crop_px.left_top(),
+        crop_px.right_top(),
+        crop_px.left_bottom(),
+        crop_px.right_bottom(),
+        Pos2::new(crop_px.center().x, crop_px.top()),
+        Pos2::new(crop_px.center().x, crop_px.bottom()),
+        Pos2::new(crop_px.left(), crop_px.center().y),
+        Pos2::new(crop_px.right(), crop_px.center().y),
+    ];
+
+    // ---- input ----
+    let pointer = resp.interact_pointer_pos().or_else(|| resp.hover_pos());
+    if resp.drag_started() {
+        if let Some(pos) = pointer {
+            let hit = handles
+                .iter()
+                .position(|h| (pos - *h).length() <= H * 1.8)
+                .map(|i| i as u8);
+            let which = match hit {
+                Some(i) => i,
+                None if crop_px.contains(pos) => 8,
+                None => 9,
+            };
+            let anchor = to_frac(pos);
+            if which == 9 {
+                c.rect = [anchor.x, anchor.y, anchor.x, anchor.y];
+            }
+            c.drag = Some((which, anchor));
+        }
+    }
+    if resp.dragged() {
+        if let (Some((which, anchor)), Some(pos)) = (c.drag, pointer) {
+            let f = to_frac(pos);
+            let [mut l, mut tt, mut r, mut b] = c.rect;
+            match which {
+                0 => {
+                    l = f.x;
+                    tt = f.y;
+                }
+                1 => {
+                    r = f.x;
+                    tt = f.y;
+                }
+                2 => {
+                    l = f.x;
+                    b = f.y;
+                }
+                3 => {
+                    r = f.x;
+                    b = f.y;
+                }
+                4 => tt = f.y,
+                5 => b = f.y,
+                6 => l = f.x,
+                7 => r = f.x,
+                8 => {
+                    let d = resp.drag_delta();
+                    let dx = d.x / img.width();
+                    let dy = d.y / img.height();
+                    let w = r - l;
+                    let h = b - tt;
+                    l = (l + dx).clamp(0.0, 1.0 - w);
+                    tt = (tt + dy).clamp(0.0, 1.0 - h);
+                    r = l + w;
+                    b = tt + h;
+                }
+                _ => {
+                    l = anchor.x.min(f.x);
+                    r = anchor.x.max(f.x);
+                    tt = anchor.y.min(f.y);
+                    b = anchor.y.max(f.y);
+                }
+            }
+            if l > r {
+                std::mem::swap(&mut l, &mut r);
+            }
+            if tt > b {
+                std::mem::swap(&mut tt, &mut b);
+            }
+            // Constrain to the ratio by adjusting height (pixel ratio needs the image aspect).
+            if let Some(ratio) = c.ratio() {
+                if which != 8 {
+                    let aspect = img.width() / img.height();
+                    let w = r - l;
+                    let h = (w * aspect / ratio).min(1.0);
+                    match which {
+                        0 | 1 | 4 => tt = (b - h).max(0.0),
+                        _ => b = (tt + h).min(1.0),
+                    }
+                }
+            }
+            c.rect = [
+                l.clamp(0.0, 1.0),
+                tt.clamp(0.0, 1.0),
+                r.clamp(0.0, 1.0),
+                b.clamp(0.0, 1.0),
+            ];
+        }
+    }
+    if resp.drag_stopped() {
+        c.drag = None;
+        // A tiny accidental rectangle reverts to the whole frame.
+        let [l, tt, r, b] = c.rect;
+        if (r - l) < 0.02 || (b - tt) < 0.02 {
+            c.rect = [0.0, 0.0, 1.0, 1.0];
+        }
+    }
+    let crop_px = to_px(c.rect);
+
+    // ---- drawing ----
+    let dim = Color32::from_black_alpha(140);
+    for r in [
+        Rect::from_min_max(img.min, Pos2::new(img.max.x, crop_px.min.y)),
+        Rect::from_min_max(Pos2::new(img.min.x, crop_px.max.y), img.max),
+        Rect::from_min_max(
+            Pos2::new(img.min.x, crop_px.min.y),
+            Pos2::new(crop_px.min.x, crop_px.max.y),
+        ),
+        Rect::from_min_max(
+            Pos2::new(crop_px.max.x, crop_px.min.y),
+            Pos2::new(img.max.x, crop_px.max.y),
+        ),
+    ] {
+        if r.is_positive() {
+            p.rect_filled(r, 0.0, dim);
+        }
+    }
+    p.rect_stroke(
+        crop_px,
+        0.0,
+        Stroke::new(1.0, Color32::WHITE),
+        StrokeKind::Outside,
+    );
+    let guide = Stroke::new(1.0, Color32::WHITE.gamma_multiply(0.45));
+    let fracs: &[f32] = match c.overlay {
+        CropOverlay::None => &[],
+        CropOverlay::Thirds => &[1.0 / 3.0, 2.0 / 3.0],
+        CropOverlay::Golden => &[0.382, 0.618],
+    };
+    for f in fracs {
+        let x = crop_px.min.x + crop_px.width() * f;
+        let y = crop_px.min.y + crop_px.height() * f;
+        p.line_segment(
+            [Pos2::new(x, crop_px.min.y), Pos2::new(x, crop_px.max.y)],
+            guide,
+        );
+        p.line_segment(
+            [Pos2::new(crop_px.min.x, y), Pos2::new(crop_px.max.x, y)],
+            guide,
+        );
+    }
+    for h in handles {
+        p.rect_filled(
+            Rect::from_center_size(h, Vec2::splat(H)),
+            1.0,
+            Color32::WHITE,
+        );
+        p.rect_stroke(
+            Rect::from_center_size(h, Vec2::splat(H)),
+            1.0,
+            Stroke::new(1.0, Color32::BLACK.gamma_multiply(0.6)),
+            StrokeKind::Outside,
+        );
+    }
+    // Readout: size in percent and the ratio name.
+    let [l, tt, r, b] = c.rect;
+    let label = format!(
+        "crop {:.0}% × {:.0}%  ·  {}  ·  R ratio · G guides · ⏎ apply · ⌫ remove · Esc",
+        (r - l) * 100.0,
+        (b - tt) * 100.0,
+        crate::app::CROP_RATIOS[c.ratio_i].1
+    );
+    let galley = ui.fonts_mut(|f| f.layout_no_wrap(label, egui::FontId::monospace(10.5), t.text));
+    let pos = Pos2::new(
+        crop_px.min.x,
+        (crop_px.max.y + 6.0).min(img.max.y - galley.size().y - 2.0),
+    );
+    p.rect_filled(
+        Rect::from_min_size(pos, galley.size() + Vec2::new(8.0, 4.0)),
+        3.0,
+        Color32::from_black_alpha(160),
+    );
+    p.galley(pos + Vec2::new(4.0, 2.0), galley, t.text);
+    if ui.input(|i| i.pointer.any_down()) {
+        ui.ctx().request_repaint();
+    }
 }

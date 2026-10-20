@@ -110,6 +110,14 @@ pub enum Command {
     RefreshFolder,
     /// Preview-only brightness: 0, +1, +2 stops (B key).
     CyclePreviewBoost,
+    /// Crop tool in Preview (K): toggle, apply (⏎), cancel (Esc), clear (⌫),
+    /// next ratio (R), next overlay (G).
+    CropToggle,
+    CropApply,
+    CropCancel,
+    CropClear,
+    CropNextRatio,
+    CropNextOverlay,
     /// Send the files from the last export to the chosen target.
     DeliverLast,
     /// Connect and log in to a target without sending (Settings > Delivery).
@@ -144,6 +152,12 @@ impl Command {
             Command::ToggleFilmstrip => "view.filmstrip".into(),
             Command::RefreshFolder => "view.refresh".into(),
             Command::CyclePreviewBoost => "view.boost".into(),
+            Command::CropToggle => "image.crop".into(),
+            Command::CropApply => "image.crop.apply".into(),
+            Command::CropCancel => "image.crop.cancel".into(),
+            Command::CropClear => "image.crop.clear".into(),
+            Command::CropNextRatio => "image.crop.ratio".into(),
+            Command::CropNextOverlay => "image.crop.overlay".into(),
             Command::DeliverLast => "file.deliver".into(),
             Command::DeliverTest(n) => format!("delivery.test.{n}"),
             Command::DeliverResendFailed => "file.deliver.resend".into(),
@@ -194,6 +208,8 @@ impl Command {
             "view.filmstrip" => Command::ToggleFilmstrip,
             "view.refresh" => Command::RefreshFolder,
             "view.boost" => Command::CyclePreviewBoost,
+            "image.crop" => Command::CropToggle,
+            "image.crop.clear" => Command::CropClear,
             "file.deliver" => Command::DeliverLast,
             "file.deliver.resend" => Command::DeliverResendFailed,
             "view.workspace.sheet" => Command::SetWorkspace(Workspace::Sheet),

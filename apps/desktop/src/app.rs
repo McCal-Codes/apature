@@ -13,6 +13,7 @@ use crate::ui::tokens::S4;
 use rayon::prelude::*;
 
 use apature_core::{ColorClass, ColorClassScheme, Marks, PhotoItem, Rating, ScanOptions};
+use apature_metadata::edits;
 use apature_metadata::items;
 use apature_metadata::ExifSummary;
 use apature_preview::{Rgb, ThumbCache};
@@ -109,6 +110,65 @@ pub struct PreviewView {
     pub last_rect: Option<egui::Rect>,
     /// Item indices shown side by side, when comparing.
     pub compare: Option<Vec<usize>>,
+    /// The crop tool, when open (Preview, K).
+    pub crop: Option<CropEdit>,
+}
+
+/// Crop ratios as width/height of the *displayed* frame; None = free.
+pub const CROP_RATIOS: [(Option<f32>, &str); 7] = [
+    (None, "free"),
+    (Some(3.0 / 2.0), "3:2"),
+    (Some(2.0 / 3.0), "2:3"),
+    (Some(4.0 / 3.0), "4:3"),
+    (Some(16.0 / 9.0), "16:9"),
+    (Some(1.0), "1:1"),
+    (Some(5.0 / 4.0), "5:4"),
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CropOverlay {
+    None,
+    Thirds,
+    Golden,
+}
+
+#[derive(Clone, Debug)]
+pub struct CropEdit {
+    /// Fractions of the displayed (already turned) image: l, t, r, b.
+    pub rect: [f32; 4],
+    pub ratio_i: usize,
+    pub overlay: CropOverlay,
+    /// Active drag: handle index 0..8 (corners 0-3, edges 4-7, 8 = move),
+    /// or 9 = drawing a new rectangle from `anchor`.
+    pub drag: Option<(u8, egui::Vec2)>,
+}
+
+impl CropEdit {
+    pub fn ratio(&self) -> Option<f32> {
+        CROP_RATIOS[self.ratio_i].0
+    }
+}
+
+/// Stored (unturned) crop fractions ↔ displayed fractions for the four
+/// orientations the camera and our rotate write (1, 3, 6, 8).
+pub fn crop_display_to_stored(r: [f32; 4], o: u32) -> [f32; 4] {
+    let [l, t, rr, b] = r;
+    match o {
+        3 => [1.0 - rr, 1.0 - b, 1.0 - l, 1.0 - t],
+        6 => [t, 1.0 - rr, b, 1.0 - l],
+        8 => [1.0 - b, l, 1.0 - t, rr],
+        _ => r,
+    }
+}
+
+pub fn crop_stored_to_display(s: [f32; 4], o: u32) -> [f32; 4] {
+    let [l, t, rr, b] = s;
+    match o {
+        3 => [1.0 - rr, 1.0 - b, 1.0 - l, 1.0 - t],
+        6 => [1.0 - b, l, 1.0 - t, rr],
+        8 => [t, 1.0 - rr, b, 1.0 - l],
+        _ => s,
+    }
 }
 
 impl Default for PreviewView {
@@ -116,6 +176,7 @@ impl Default for PreviewView {
         PreviewView {
             mode: ZoomMode::Fit,
             center: egui::Vec2::splat(0.5),
+            crop: None,
             zoom_since: None,
             zoom_from: None,
             last_rect: None,
@@ -528,6 +589,9 @@ impl App {
         }
         if launch.preview && !app.view.is_empty() {
             app.enter_preview();
+            if launch.crop {
+                app.dispatch_later = Some(Command::CropToggle);
+            }
             app.preview_since = None;
             if launch.compare {
                 let picks: Vec<usize> = app.view.iter().take(3).copied().collect();
@@ -1615,6 +1679,45 @@ impl App {
                     let msg = self.status.clone();
                     self.toast(kind, msg);
                 }
+            }
+        }
+    }
+
+    /// The orientation the photo is shown at: the sidecar override, else the file's.
+    pub fn effective_orientation(&self, idx: usize) -> u32 {
+        let file_o = self.exif[idx]
+            .as_ref()
+            .map(|e| e.orientation)
+            .unwrap_or(1)
+            .max(1);
+        edits::read(&self.items[idx].sidecar_path())
+            .map(|e| e.orientation_or(file_o))
+            .unwrap_or(file_o)
+    }
+
+    /// Store (or remove) the crop in the sidecar; previews re-render.
+    fn write_crop(&mut self, idx: usize, crop: Option<edits::Crop>) {
+        let sidecar = self.items[idx].sidecar_path();
+        let change = edits::Change {
+            crop: Some(crop),
+            ..Default::default()
+        };
+        match edits::write(&sidecar, &change) {
+            Ok(()) => {
+                self.inspector_iptc = None;
+                self.status = match crop {
+                    Some(c) => format!(
+                        "Crop saved: {:.0}% × {:.0}% of the frame · applied on export",
+                        (c.right - c.left) * 100.0,
+                        (c.bottom - c.top) * 100.0
+                    ),
+                    None => "Crop removed".into(),
+                };
+                log::info!("crop {} → {:?}", self.items[idx].display_name(), crop);
+            }
+            Err(e) => {
+                self.status = format!("Could not save crop: {e}");
+                self.toast(ui::toasts::Kind::Error, self.status.clone());
             }
         }
     }
@@ -2767,6 +2870,91 @@ impl App {
                     }
                 }
             }
+            Command::CropToggle => {
+                if self.pv.crop.is_some() {
+                    self.pv.crop = None;
+                    self.status = "Crop cancelled".into();
+                } else if self.workspace == Workspace::Preview && self.cursor < self.items.len() {
+                    let idx = self.cursor;
+                    let o = self.effective_orientation(idx);
+                    let existing = edits::read(&self.items[idx].sidecar_path())
+                        .ok()
+                        .and_then(|e| e.crop)
+                        .filter(|c| !c.is_full())
+                        .map(|c| crop_stored_to_display([c.left, c.top, c.right, c.bottom], o));
+                    self.pv.crop = Some(CropEdit {
+                        rect: existing.unwrap_or([0.1, 0.1, 0.9, 0.9]),
+                        ratio_i: 0,
+                        overlay: CropOverlay::Thirds,
+                        drag: None,
+                    });
+                    self.pv.mode = ZoomMode::Fit;
+                    self.status = "Crop: drag the frame or its handles · R ratio · G guides · ⏎ apply · ⌫ remove · Esc cancel".into();
+                }
+            }
+            Command::CropNextRatio => {
+                if let Some(c) = self.pv.crop.as_mut() {
+                    c.ratio_i = (c.ratio_i + 1) % CROP_RATIOS.len();
+                    if let Some(r) = c.ratio() {
+                        // Re-fit the current rectangle to the ratio around its centre.
+                        let [l, t, rr, b] = c.rect;
+                        let (cx, cy) = ((l + rr) / 2.0, (t + b) / 2.0);
+                        let img = self
+                            .pv
+                            .last_rect
+                            .map(|r| r.size())
+                            .unwrap_or(egui::vec2(3.0, 2.0));
+                        let mut w = rr - l;
+                        let mut h = w * img.x / img.y / r;
+                        if h > 1.0 {
+                            h = 1.0;
+                            w = h * img.y / img.x * r;
+                        }
+                        let mut rect = [cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0];
+                        let dx = (-rect[0]).max(0.0) - (rect[2] - 1.0).max(0.0);
+                        let dy = (-rect[1]).max(0.0) - (rect[3] - 1.0).max(0.0);
+                        rect[0] += dx;
+                        rect[2] += dx;
+                        rect[1] += dy;
+                        rect[3] += dy;
+                        c.rect = rect;
+                    }
+                    self.status = format!("Crop ratio: {}", CROP_RATIOS[c.ratio_i].1);
+                }
+            }
+            Command::CropNextOverlay => {
+                if let Some(c) = self.pv.crop.as_mut() {
+                    c.overlay = match c.overlay {
+                        CropOverlay::None => CropOverlay::Thirds,
+                        CropOverlay::Thirds => CropOverlay::Golden,
+                        CropOverlay::Golden => CropOverlay::None,
+                    };
+                }
+            }
+            Command::CropCancel => {
+                self.pv.crop = None;
+                self.status = "Crop cancelled".into();
+            }
+            Command::CropClear => {
+                if self.pv.crop.take().is_some() && self.cursor < self.items.len() {
+                    self.write_crop(self.cursor, None);
+                }
+            }
+            Command::CropApply => {
+                if let Some(c) = self.pv.crop.take() {
+                    if self.cursor < self.items.len() {
+                        let o = self.effective_orientation(self.cursor);
+                        let [l, t, r, b] = crop_display_to_stored(c.rect, o);
+                        let crop = edits::Crop {
+                            top: t,
+                            left: l,
+                            bottom: b,
+                            right: r,
+                        };
+                        self.write_crop(self.cursor, Some(crop));
+                    }
+                }
+            }
             Command::CyclePreviewBoost => {
                 self.preview_boost = (self.preview_boost + 1) % 3;
                 // Previews re-upload with the new gain; thumbnails are untouched.
@@ -2954,7 +3142,9 @@ impl App {
             }
             Command::Rotate(cw) => self.rotate(cw),
             Command::Escape => {
-                if self.rename_dialog.is_some() || self.trash_dialog.is_some() {
+                if self.pv.crop.is_some() {
+                    self.dispatch_later = Some(Command::CropCancel);
+                } else if self.rename_dialog.is_some() || self.trash_dialog.is_some() {
                     self.rename_dialog = None;
                     self.trash_dialog = None;
                 } else if self.filter_popup_open {
@@ -2973,7 +3163,9 @@ impl App {
                 }
             }
             Command::Activate => {
-                if self.workspace == Workspace::Sheet && !self.items.is_empty() {
+                if self.pv.crop.is_some() {
+                    self.dispatch_later = Some(Command::CropApply);
+                } else if self.workspace == Workspace::Sheet && !self.items.is_empty() {
                     self.enter_preview();
                 } else if self.workspace == Workspace::Preview {
                     self.workspace = Workspace::Sheet;
@@ -3137,6 +3329,20 @@ impl App {
                 }
                 if pressed(Key::B) && !shift && in_preview {
                     out.push(Command::CyclePreviewBoost);
+                }
+                if in_preview && pressed(Key::K) && !shift {
+                    out.push(Command::CropToggle);
+                }
+                if in_preview && self.pv.crop.is_some() {
+                    if pressed(Key::R) && !shift {
+                        out.push(Command::CropNextRatio);
+                    }
+                    if pressed(Key::G) && !shift {
+                        out.push(Command::CropNextOverlay);
+                    }
+                    if pressed(Key::Backspace) || pressed(Key::Delete) {
+                        out.push(Command::CropClear);
+                    }
                 }
                 if pressed(Key::Z) && !shift {
                     out.push(Command::ToggleZoom);
@@ -3424,4 +3630,36 @@ fn upload(ctx: &egui::Context, name: &str, rgb: &Rgb, gain_stops: u8) -> Texture
         ColorImage::from_rgb([rgb.width as usize, rgb.height as usize], &boosted)
     };
     ctx.load_texture(name, img, TextureOptions::LINEAR)
+}
+
+#[cfg(test)]
+mod crop_tests {
+    use super::*;
+
+    #[test]
+    fn crop_mapping_round_trips_for_every_orientation() {
+        let d = [0.1, 0.2, 0.7, 0.9];
+        for o in [1, 3, 6, 8] {
+            let s = crop_display_to_stored(d, o);
+            let back = crop_stored_to_display(s, o);
+            for k in 0..4 {
+                assert!((back[k] - d[k]).abs() < 1e-6, "o={o} k={k}");
+            }
+            assert!(
+                s[0] < s[2] && s[1] < s[3],
+                "o={o} stored rect must stay ordered"
+            );
+        }
+        // A frame turned right (6): the displayed top edge is the stored left edge.
+        let s = crop_display_to_stored([0.0, 0.0, 1.0, 0.5], 6);
+        assert!((s[0] - 0.0).abs() < 1e-6 && (s[2] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn latlon_parses_common_forms() {
+        assert_eq!(parse_latlon("40.4461, -79.8955"), Some((40.4461, -79.8955)));
+        assert_eq!(parse_latlon("40.4461 -79.8955"), Some((40.4461, -79.8955)));
+        assert_eq!(parse_latlon("91, 0"), None);
+        assert_eq!(parse_latlon("abc"), None);
+    }
 }
