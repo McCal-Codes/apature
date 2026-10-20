@@ -67,6 +67,13 @@ Observed once, unexplained
 
 - Design system artifact (2026-10-19): https://claude.ai/artifact/KKoM7Em7u3hrLtBHt3ouCu, extracted from tokens.rs/icons.rs. Font decided: IBM Plex Sans + IBM Plex Mono. TODO: embed the Plex files in the desktop crate (egui font definitions), add licence to THIRD_PARTY.md, list them under fonts/ in the design system.
 
+## Status 2026-10-20 (night)
+Live Ingest shipped (polling + 2-poll size stability; Live chip on the Ingest
+sheet; verified with dropped NEFs). CI: Linux fixed, macOS desktop job added.
+Focus rings. Left for Caleb: client IDs, FTP details, Developer ID, notary,
+real-card run. Left for Claude: AF point (maker note), Plex embed, VoiceOver,
+thumbnail priority, Fen, caption slice two, release engineering.
+
 ## Status 2026-10-20 (evening)
 Done today: unplug detection, toasts, inspector pass, export presets, PM-board
 quick wins (codes switch, big tag badge, B exposure boost, {dest}), delivery
