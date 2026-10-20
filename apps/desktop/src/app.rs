@@ -219,6 +219,8 @@ pub struct App {
     pub volumes: Vec<(String, PathBuf)>,
     /// Icon class per mounted volume, filled once per mount.
     pub volume_kinds: HashMap<PathBuf, crate::platform::VolumeKind>,
+    /// The open folder's volume vanished (name), until it comes back or the tab closes.
+    pub folder_unplugged: Option<String>,
     pub filter_popup_open: bool,
     pub caption_draft: Option<Draft>,
     pub assignment: Option<Assignment>,
@@ -321,6 +323,7 @@ impl App {
             prefs_saved_at: Instant::now(),
             volumes: Vec::new(),
             volume_kinds: HashMap::new(),
+            folder_unplugged: None,
             filter_popup_open: false,
             caption_draft: None,
             assignment: None,
@@ -1716,6 +1719,7 @@ impl App {
     /// Load `dir` into the active (empty or replaced) tab fields.
     fn load_folder(&mut self, dir: &Path) {
         log::info!("open folder {}", dir.display());
+        self.folder_unplugged = None;
         let t0 = Instant::now();
         match apature_core::scan(dir, &ScanOptions::default()) {
             Ok(items) => {
@@ -2248,8 +2252,52 @@ impl App {
     /// Re-read `/Volumes`; a newly mounted volume with a DCIM folder is a
     /// camera card: say so, and open Ingest on it when the pref is on.
     fn poll_volumes(&mut self, ctx: &egui::Context) {
-        let before: Vec<PathBuf> = self.volumes.iter().map(|(_, p)| p.clone()).collect();
+        let before: Vec<(String, PathBuf)> = self.volumes.clone();
         self.refresh_volumes();
+        // Anything that vanished: say so, and mark a tab whose folder went with it.
+        let now: Vec<PathBuf> = self.volumes.iter().map(|(_, p)| p.clone()).collect();
+        for (name, path) in before.iter().filter(|(_, p)| !now.contains(p)) {
+            let was_card = self.volume_kinds.get(path)
+                == Some(&crate::platform::VolumeKind::Camera)
+                || path.join("DCIM").is_dir();
+            let what = if was_card { "Card" } else { "Drive" };
+            log::warn!("{what} unplugged: {name} ({})", path.display());
+            let busy = self
+                .ingest
+                .running
+                .as_ref()
+                .is_some_and(|r| r.done.is_none())
+                && (self.ingest.opts.source.starts_with(path)
+                    || self.ingest.opts.primary.starts_with(path)
+                    || self
+                        .ingest
+                        .opts
+                        .secondary
+                        .as_ref()
+                        .is_some_and(|s| s.starts_with(path)));
+            self.status = if busy {
+                format!("{what} unplugged during the ingest: {name} · remaining files will fail; plug it back in and ingest again (only new photos copy)")
+            } else {
+                format!("{what} unplugged: {name}")
+            };
+            self.status_since = Some(Instant::now());
+            if self.folder.as_ref().is_some_and(|f| f.starts_with(path)) {
+                self.folder_unplugged = Some(name.clone());
+            }
+            if self.ingest.opts.source.starts_with(path) && !busy {
+                self.ingest.plan = None;
+                self.ingest.plan_error = Some(format!("{name} was unplugged"));
+            }
+        }
+        // Back again?
+        if let Some(name) = self.folder_unplugged.clone() {
+            if self.folder.as_ref().is_some_and(|f| f.exists()) {
+                self.folder_unplugged = None;
+                self.status = format!("{name} is back");
+                self.refresh_folder();
+            }
+        }
+        let before: Vec<PathBuf> = before.into_iter().map(|(_, p)| p).collect();
         let new_cards: Vec<(String, PathBuf)> = self
             .volumes
             .iter()
@@ -3058,6 +3106,25 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(t.photo))
             .show(ctx, |ui| {
+                if let Some(name) = self.folder_unplugged.clone() {
+                    egui::Frame::NONE
+                        .fill(t.raised)
+                        .inner_margin(egui::Margin::symmetric(ui::tokens::S4 as i8, ui::tokens::S2 as i8))
+                        .show(ui, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{name} was unplugged. This folder lives on it: plug it back in to keep working, or close the tab. Marks you make now cannot be saved."
+                                    ))
+                                    .size(12.5)
+                                    .color(t.reject),
+                                );
+                                if ui.small_button("Close tab").clicked() {
+                                    self.dispatch_later = Some(Command::CloseTab);
+                                }
+                            });
+                        });
+                }
                 if self.items.is_empty() {
                     ui.centered_and_justified(|ui| {
                         let msg = if self.folder.is_some() {
