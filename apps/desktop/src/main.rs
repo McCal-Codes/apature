@@ -27,6 +27,8 @@ pub struct Launch {
     pub screenshot: Option<PathBuf>,
     /// With --preview: open the crop tool (layout checks).
     pub crop: bool,
+    /// With --ingest: start Live Ingest on the source at launch (tests).
+    pub live: bool,
     /// Window size at launch (for layout checks at small sizes).
     pub size: Option<(f32, f32)>,
     pub screenshot_frame: u64,
@@ -88,6 +90,7 @@ fn parse_args() -> Launch {
             "--caption" => l.caption = true,
             "--ingest" => l.ingest = true,
             "--crop" => l.crop = true,
+            "--live" => l.live = true,
             "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
             "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),
             "--export" => l.export = true,

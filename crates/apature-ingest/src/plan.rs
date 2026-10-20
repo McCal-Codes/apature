@@ -38,6 +38,10 @@ pub struct Options {
     pub on_collision: CollisionPolicy,
     /// Only photos captured on this (year, month, day); None = every day.
     pub day: Option<(i32, u32, u32)>,
+    /// Only these source files (Live Ingest hands over the batch that has
+    /// settled); None = everything the scan found.
+    #[serde(default)]
+    pub only_paths: Option<Vec<PathBuf>>,
     /// Keep the card's subfolders (e.g. `DCIM/100NIKON`) under the folder
     /// template, like Photo Mechanic's "Preserve folder structure".
     pub preserve_folders: bool,
@@ -72,6 +76,7 @@ impl Default for Options {
             headline: None,
             on_collision: CollisionPolicy::Refuse,
             day: None,
+            only_paths: None,
             preserve_folders: false,
             copy_companions: true,
         }
@@ -372,6 +377,11 @@ pub fn build_plan(opts: &Options, ledger: &Ledger) -> Result<Plan, PlanError> {
     let mut item_count = 0usize;
 
     for (i, item) in items.iter().enumerate() {
+        if let Some(only) = &opts.only_paths {
+            if !item.variants().any(|v| only.iter().any(|p| p == &v.path)) {
+                continue;
+            }
+        }
         let variants: Vec<_> = item
             .variants()
             .filter(|v| match opts.filter {

@@ -260,6 +260,29 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
             ui.set_width(ui.available_width());
             super::eyebrow(ui, t, "Plan");
             ui.add_space(S2);
+            // Live Ingest: the receiving end of a camera or FTP drop folder.
+            ui.horizontal_wrapped(|ui| {
+                let on = app.ingest.live.on;
+                let label = if on { "Live Ingest on" } else { "Live Ingest" };
+                if super::icons::chip(ui, t, label, on)
+                    .on_hover_text("Watch the source folder and ingest every photo that lands, once its size has held for two polls (about 4 s). Naming, verification, the ledger and the sequence counter apply as usual.")
+                    .clicked()
+                {
+                    cmds.push(Command::LiveToggle);
+                }
+                if on {
+                    let mins = app.ingest.live.since.map(|s| s.elapsed().as_secs() / 60).unwrap_or(0);
+                    let waiting = app.ingest.live.pending.len();
+                    ui.label(RichText::new(format!(
+                        "watching {} · {} ingested · {} settling · {mins} min",
+                        app.ingest.opts.source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                        app.ingest.live.ingested,
+                        waiting
+                    )).size(11.5).color(t.text2));
+                    ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
+                }
+            });
+            ui.add_space(S2);
             if app.ingest.planning {
                 ui.label(RichText::new("reading the card…").size(12.0).color(t.muted));
             }

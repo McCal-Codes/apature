@@ -80,7 +80,24 @@ pub struct Tab {
 }
 
 #[derive(Default)]
+/// Live Ingest: the source folder is polled every two seconds; a new file is
+/// copied once its size has held for two polls (the camera or FTP server
+/// has finished writing it). Batches run through the normal ingest, so
+/// verification, naming, the ledger and the sequence counter all apply.
+pub struct LiveIngest {
+    pub on: bool,
+    /// Files seen but not yet stable: path → (size, polls at that size).
+    pub pending: HashMap<PathBuf, (u64, u8)>,
+    /// Files already handed to an ingest this session.
+    pub handed: HashSet<PathBuf>,
+    pub ingested: usize,
+    pub since: Option<Instant>,
+    pub last_batch: Option<Instant>,
+}
+
+#[derive(Default)]
 pub struct IngestState {
+    pub live: LiveIngest,
     pub opts: apature_ingest::Options,
     pub plan: Option<apature_ingest::Plan>,
     pub plan_error: Option<String>,
@@ -601,6 +618,9 @@ impl App {
         if launch.ingest {
             app.open_ingest(&cc.egui_ctx);
             app.ingest_options_changed();
+            if launch.live {
+                app.dispatch_later = Some(Command::LiveToggle);
+            }
         }
         if launch.preview && !app.view.is_empty() {
             app.enter_preview();
@@ -1103,6 +1123,114 @@ impl App {
         self.ingest.planning = true;
         self.ingest_jobs
             .plan(self.ingest.opts.clone(), self.ingest.generation);
+    }
+
+    /// One Live Ingest poll: note new files, promote the ones whose size held
+    /// for two polls, and run them as a batch when no ingest is running.
+    fn live_tick(&mut self) {
+        if !self.ingest.live.on {
+            return;
+        }
+        let src = self.ingest.opts.source.clone();
+        if !src.is_dir() {
+            return;
+        }
+        let depth = if self.ingest.opts.include_subfolders {
+            8
+        } else {
+            1
+        };
+        let Ok(items) = apature_core::scan(
+            &src,
+            &apature_core::ScanOptions {
+                recursive: depth > 1,
+            },
+        ) else {
+            return;
+        };
+        let mut ready: Vec<PathBuf> = Vec::new();
+        for it in &items {
+            for v in it.variants() {
+                if self.ingest.live.handed.contains(&v.path) {
+                    continue;
+                }
+                let size = std::fs::metadata(&v.path).map(|m| m.len()).unwrap_or(0);
+                let e = self
+                    .ingest
+                    .live
+                    .pending
+                    .entry(v.path.clone())
+                    .or_insert((size, 0));
+                if e.0 == size {
+                    e.1 = e.1.saturating_add(1);
+                } else {
+                    *e = (size, 0);
+                }
+                if e.1 >= 2 && size > 0 {
+                    ready.push(v.path.clone());
+                }
+            }
+        }
+        if ready.is_empty()
+            || self
+                .ingest
+                .running
+                .as_ref()
+                .is_some_and(|r| r.done.is_none())
+        {
+            return;
+        }
+        // Hand the settled files to a normal ingest.
+        let mut opts = self.ingest.opts.clone();
+        opts.only_paths = Some(ready.clone());
+        opts.day = None;
+        let ledger = apature_ingest::Ledger::load(&self.ledger_path());
+        match apature_ingest::build_plan(&opts, &ledger) {
+            Ok(plan) if plan.can_run() && !plan.entries.is_empty() => {
+                for p in &ready {
+                    self.ingest.live.pending.remove(p);
+                    self.ingest.live.handed.insert(p.clone());
+                }
+                let n = plan.items;
+                self.ingest.live.ingested += n;
+                self.ingest.live.last_batch = Some(Instant::now());
+                log::info!("live ingest: batch of {n} photos");
+                self.status = format!(
+                    "Live Ingest: copying {n} new photo{}",
+                    if n == 1 { "" } else { "s" }
+                );
+                let pad = if self.ingest.apply_pad {
+                    self.assignment.as_ref().map(|a| a.iptc())
+                } else {
+                    None
+                };
+                self.ingest.plan = Some(plan.clone());
+                self.ingest.running = Some(self.ingest_jobs.start(plan, pad));
+            }
+            Ok(plan) => {
+                // Already in the ledger (or filtered out): forget them.
+                for p in &ready {
+                    self.ingest.live.pending.remove(p);
+                    self.ingest.live.handed.insert(p.clone());
+                }
+                if !plan.collisions.is_empty() {
+                    let msg = format!(
+                        "Live Ingest: {} name collision(s); turn on the -1, -2 suffix option",
+                        plan.collisions.len()
+                    );
+                    self.toast(ui::toasts::Kind::Error, msg);
+                }
+            }
+            Err(e) => {
+                self.status = format!("Live Ingest: {e}");
+            }
+        }
+    }
+
+    fn ledger_path(&self) -> PathBuf {
+        directories::ProjectDirs::from("dev", "mccal", "Apature")
+            .map(|d| d.data_dir().join("ingested.json"))
+            .unwrap_or_else(|| PathBuf::from("ingested.json"))
     }
 
     fn drain_ingest(&mut self) {
@@ -3173,6 +3301,45 @@ impl App {
             }
             Command::ToggleCompare => self.toggle_compare(),
             Command::IngestStart => self.ingest_start(),
+            Command::LiveToggle => {
+                let l = &mut self.ingest.live;
+                l.on = !l.on;
+                if l.on {
+                    l.pending.clear();
+                    l.handed.clear();
+                    l.ingested = 0;
+                    l.since = Some(Instant::now());
+                    // Everything already there counts as seen: Live Ingest is
+                    // for what arrives from now on.
+                    let src = self.ingest.opts.source.clone();
+                    let depth = if self.ingest.opts.include_subfolders {
+                        8
+                    } else {
+                        1
+                    };
+                    if let Ok(items) = apature_core::scan(
+                        &src,
+                        &apature_core::ScanOptions {
+                            recursive: depth > 1,
+                        },
+                    ) {
+                        for it in &items {
+                            for v in it.variants() {
+                                self.ingest.live.handed.insert(v.path.clone());
+                            }
+                        }
+                    }
+                    self.status =
+                        format!("Live Ingest watching {}", self.ingest.opts.source.display());
+                    log::info!("live ingest on: {}", self.ingest.opts.source.display());
+                } else {
+                    self.status = format!(
+                        "Live Ingest stopped · {} photos this session",
+                        self.ingest.live.ingested
+                    );
+                    log::info!("live ingest off");
+                }
+            }
             Command::IngestCancel => {
                 if let Some(r) = &self.ingest.running {
                     r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -3602,6 +3769,7 @@ impl eframe::App for App {
         if self.volumes_checked.elapsed().as_secs_f32() >= 2.0 {
             self.volumes_checked = Instant::now();
             self.poll_volumes(ctx);
+            self.live_tick();
         }
         ctx.request_repaint_after(std::time::Duration::from_secs(2));
         if let Some(c) = self.dispatch_later.take() {

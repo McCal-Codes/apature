@@ -76,6 +76,8 @@ pub enum Command {
     IngestOpenResult,
     /// Unmount the ingested card (after a verified ingest).
     IngestEject,
+    /// Live Ingest: watch the source folder and ingest what arrives.
+    LiveToggle,
     /// Copy the focused photo's marks and IPTC; paste onto the selection.
     CopyMetadata,
     PasteMetadata,
