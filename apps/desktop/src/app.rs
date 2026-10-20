@@ -142,6 +142,73 @@ pub struct DeliverState {
     pub pw_drafts: HashMap<String, String>,
     /// Target picked on the Export sheet for a one-off send.
     pub pick: Option<String>,
+    /// Every file ever sent, by source photo path (persisted to delivered.json).
+    pub sent: HashMap<PathBuf, SentRecord>,
+    /// Output path → source photo path for the last export, so sends can be
+    /// recorded against the photo you see on the sheet.
+    pub source_of: HashMap<PathBuf, PathBuf>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct SentRecord {
+    pub target: String,
+    /// Local time as "YYYY-MM-DD HH:MM".
+    pub at: String,
+    pub output: PathBuf,
+}
+
+fn delivered_path() -> PathBuf {
+    directories::ProjectDirs::from("dev", "mccal", "Apature")
+        .map(|d| d.data_dir().join("delivered.json"))
+        .unwrap_or_else(|| PathBuf::from("delivered.json"))
+}
+
+fn load_delivered() -> HashMap<PathBuf, SentRecord> {
+    std::fs::read_to_string(delivered_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn save_delivered(map: &HashMap<PathBuf, SentRecord>) {
+    let p = delivered_path();
+    if let Some(dir) = p.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(t) = serde_json::to_string(map) {
+        let tmp = p.with_extension("json.tmp");
+        if std::fs::write(&tmp, t).is_ok() {
+            let _ = std::fs::rename(&tmp, &p);
+        }
+    }
+}
+
+fn local_stamp() -> String {
+    // Civil time from the system clock without a date crate: UTC offset via
+    // the C library's localtime is not available here, so use the date
+    // command's format through std only when possible; fall back to UTC.
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let (y, m, d) = {
+        let z = secs.div_euclid(86_400) + 719_468;
+        let era = z.div_euclid(146_097);
+        let doe = z - era * 146_097;
+        let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+        let y = yoe + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 };
+        (if m <= 2 { y + 1 } else { y }, m, d)
+    };
+    let t = secs.rem_euclid(86_400);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}Z",
+        t / 3600,
+        (t % 3600) / 60
+    )
 }
 
 #[derive(Default)]
@@ -338,7 +405,10 @@ impl App {
             codes: CodeTable::default(),
             ingest: IngestState::default(),
             export: ExportState::default(),
-            deliver: DeliverState::default(),
+            deliver: DeliverState {
+                sent: load_delivered(),
+                ..Default::default()
+            },
             pv: PreviewView::default(),
             rename_dialog: None,
             meta_clip: None,
@@ -778,6 +848,16 @@ impl App {
             };
             if let Some((ok, failed, dest, errors, outs)) = finished {
                 self.deliver.last_outputs = outs;
+                self.deliver.source_of = self
+                    .export
+                    .names
+                    .iter()
+                    .filter_map(|(i, out)| {
+                        self.items
+                            .get(*i)
+                            .map(|it| (out.clone(), it.path().to_path_buf()))
+                    })
+                    .collect();
                 if failed == 0 && !self.deliver.last_outputs.is_empty() {
                     if let Some(name) = self.prefs.send_after_export.clone() {
                         self.start_delivery(&name);
@@ -1447,6 +1527,23 @@ impl App {
                     r.bytes += bytes;
                     if let Some(s) = r.statuses.get_mut(index) {
                         *s = DStatus::Sent;
+                    }
+                    if let Some(out) = r.files.get(index).cloned() {
+                        let src = self
+                            .deliver
+                            .source_of
+                            .get(&out)
+                            .cloned()
+                            .unwrap_or_else(|| out.clone());
+                        self.deliver.sent.insert(
+                            src,
+                            SentRecord {
+                                target: r.target.clone(),
+                                at: local_stamp(),
+                                output: out,
+                            },
+                        );
+                        save_delivered(&self.deliver.sent);
                     }
                 }
                 DMsg::Event(apature_deliver::Event::Failed { index, error }) => {
@@ -2613,6 +2710,30 @@ impl App {
             }
             Command::SaveCaptionToSelection => self.save_caption_to_selection(),
             Command::RefreshFolder => self.refresh_folder(),
+            Command::DeliverResendFailed => {
+                let failed: Vec<PathBuf> = self
+                    .deliver
+                    .running
+                    .as_ref()
+                    .map(|r| {
+                        r.files
+                            .iter()
+                            .zip(r.statuses.iter())
+                            .filter(|(_, s)| **s == DStatus::Failed)
+                            .map(|(f, _)| f.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if failed.is_empty() {
+                    self.status = "Nothing failed to resend".into();
+                } else {
+                    let name = self.deliver.running.as_ref().map(|r| r.target.clone());
+                    self.deliver.last_outputs = failed;
+                    if let Some(n) = name {
+                        self.start_delivery(&n);
+                    }
+                }
+            }
             Command::CyclePreviewBoost => {
                 self.preview_boost = (self.preview_boost + 1) % 3;
                 // Previews re-upload with the new gain; thumbnails are untouched.

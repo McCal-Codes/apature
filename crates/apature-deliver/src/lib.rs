@@ -231,9 +231,32 @@ pub fn send(
                 .unwrap_or_default();
             remote_path(&base, Path::new(&format!(".{name}.part")))
         };
-        let result = remote
-            .put(f, &part)
-            .and_then(|n| remote.rename(&part, &final_name).map(|_| n));
+        // Three tries per file; a failed try reconnects first, since a
+        // dropped FTP data connection usually takes the control one with it.
+        let mut result: Result<u64, String> = Err(String::new());
+        for attempt in 1..=3u32 {
+            if attempt > 1 {
+                std::thread::sleep(std::time::Duration::from_secs(attempt as u64));
+                match connect(target, secret) {
+                    Ok(r) => remote = r,
+                    Err(e) => {
+                        result = Err(format!("reconnect: {e}"));
+                        continue;
+                    }
+                }
+            }
+            result = remote
+                .put(f, &part)
+                .and_then(|n| remote.rename(&part, &final_name).map(|_| n));
+            match &result {
+                Ok(_) => break,
+                Err(e) => log::warn!(
+                    "delivery try {attempt}/3 failed {} → {}: {e}",
+                    f.display(),
+                    target.host
+                ),
+            }
+        }
         match result {
             Ok(n) => {
                 report.sent += 1;

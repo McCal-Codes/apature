@@ -114,6 +114,8 @@ pub enum Command {
     DeliverLast,
     /// Connect and log in to a target without sending (Settings > Delivery).
     DeliverTest(String),
+    /// Send again only the files that failed in the last delivery.
+    DeliverResendFailed,
     SetWorkspace(Workspace),
     ZoomIn,
     ZoomOut,
@@ -144,6 +146,7 @@ impl Command {
             Command::CyclePreviewBoost => "view.boost".into(),
             Command::DeliverLast => "file.deliver".into(),
             Command::DeliverTest(n) => format!("delivery.test.{n}"),
+            Command::DeliverResendFailed => "file.deliver.resend".into(),
             Command::SetWorkspace(w) => format!("view.workspace.{}", w.label().to_lowercase()),
             Command::SelectAll => "edit.selectall".into(),
             Command::SelectNone => "edit.selectnone".into(),
@@ -192,6 +195,7 @@ impl Command {
             "view.refresh" => Command::RefreshFolder,
             "view.boost" => Command::CyclePreviewBoost,
             "file.deliver" => Command::DeliverLast,
+            "file.deliver.resend" => Command::DeliverResendFailed,
             "view.workspace.sheet" => Command::SetWorkspace(Workspace::Sheet),
             "view.workspace.preview" => Command::SetWorkspace(Workspace::Preview),
             "view.workspace.caption" => Command::SetWorkspace(Workspace::Caption),

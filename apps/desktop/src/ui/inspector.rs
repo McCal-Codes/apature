@@ -373,6 +373,9 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         if !app.conflicts[idx].is_empty() {
                             rows.push(("Conflict", app.conflicts[idx].join("; ")));
                         }
+                        if let Some(s) = app.deliver.sent.get(it.path()) {
+                            rows.push(("Sent", format!("{} · {}", s.target, s.at)));
+                        }
                         if sc.is_file() {
                             if let Ok(e) = apature_metadata::edits::read(&sc) {
                                 let mut parts = Vec::new();

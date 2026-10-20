@@ -241,6 +241,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                             for e in r.errors.iter().flatten().take(3) {
                                 ui.label(RichText::new(e).size(10.5).color(t.reject));
                             }
+                            if r.done.is_some() && failed > 0 && ui.button(format!("Resend {failed} failed")).clicked() {
+                                cmds.push(Command::DeliverResendFailed);
+                            }
                         }
                     }
                     ui.add(egui::Label::new(RichText::new("Pairs export their JPEG. A RAW alone uses its embedded full-size preview unless decoding is on. A JPEG's own ICC profile is kept.").size(10.5).color(t.muted)).wrap());
