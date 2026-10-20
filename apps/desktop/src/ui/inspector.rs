@@ -15,7 +15,7 @@ fn kv(ui: &mut egui::Ui, t: &Theme, rows: &[(&str, String)]) {
         .show(ui, |ui| {
             for (k, v) in rows {
                 ui.add_sized(
-                    [64.0, 14.0],
+                    [72.0, 14.0],
                     egui::Label::new(
                         RichText::new(k.to_uppercase())
                             .monospace()
@@ -43,20 +43,21 @@ fn section<R>(
     let state =
         egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
     let header = state.show_header(ui, |ui| {
-        ui.label(
-            RichText::new(title.to_uppercase())
-                .size(10.0)
-                .strong()
-                .color(t.muted),
-        );
+        super::eyebrow(ui, t, title);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(RichText::new(trailing).size(10.0).color(t.muted));
+            ui.label(RichText::new(trailing).monospace().size(9.5).color(t.muted));
         });
     });
     header.body(|ui| {
+        ui.add_space(S1);
         add(ui);
     });
-    ui.add_space(S3);
+    ui.add_space(S2);
+    // Hairline between sections, like the sheet frames.
+    let r = ui.available_rect_before_wrap();
+    ui.painter()
+        .hline(r.x_range(), r.top(), egui::Stroke::new(1.0, t.line));
+    ui.add_space(S2);
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
@@ -371,6 +372,28 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         ));
                         if !app.conflicts[idx].is_empty() {
                             rows.push(("Conflict", app.conflicts[idx].join("; ")));
+                        }
+                        if sc.is_file() {
+                            if let Ok(e) = apature_metadata::edits::read(&sc) {
+                                let mut parts = Vec::new();
+                                if let Some(o) = e.orientation {
+                                    parts.push(match o {
+                                        6 => "turned right".to_string(),
+                                        8 => "turned left".to_string(),
+                                        3 => "upside down".to_string(),
+                                        other => format!("orientation {other}"),
+                                    });
+                                }
+                                if e.crop.as_ref().is_some_and(|c| !c.is_full()) {
+                                    parts.push("cropped".into());
+                                }
+                                if e.straightened_crop {
+                                    parts.push("straightened (export only)".into());
+                                }
+                                if !parts.is_empty() {
+                                    rows.push(("Edits", parts.join(" · ")));
+                                }
+                            }
                         }
                         kv(ui, t, &rows);
                         let _ = Rating(0);
