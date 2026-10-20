@@ -16,6 +16,7 @@ pub const NS_DC: &str = "http://purl.org/dc/elements/1.1/";
 pub const NS_PHOTOSHOP: &str = "http://ns.adobe.com/photoshop/1.0/";
 pub const NS_IPTC_CORE: &str = "http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/";
 pub const NS_XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/";
+pub const NS_EXIF: &str = "http://ns.adobe.com/exif/1.0/";
 
 /// Editorial metadata. `None` = leave untouched when writing / absent when
 /// reading; `Some("")` or `Some(vec![])` = remove the property.
@@ -41,6 +42,10 @@ pub struct Iptc {
     pub instructions: Option<String>,
     pub transmission_reference: Option<String>,
     pub usage_terms: Option<String>,
+    /// XMP exif:GPSLatitude / GPSLongitude in their own "DD,MM.mmmmN" form;
+    /// use `set_gps` and `gps_decimal` for decimal degrees.
+    pub gps_latitude: Option<String>,
+    pub gps_longitude: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +77,8 @@ pub enum Field {
     Instructions,
     TransmissionReference,
     UsageTerms,
+    GpsLatitude,
+    GpsLongitude,
 }
 
 /// (field, prefix, namespace, local name, kind). Prefix is what we write and
@@ -131,6 +138,20 @@ const TABLE: &[(Field, &str, &str, &str, Kind)] = &[
         "photoshop",
         NS_PHOTOSHOP,
         "Country",
+        Kind::Simple,
+    ),
+    (
+        Field::GpsLatitude,
+        "exif",
+        NS_EXIF,
+        "GPSLatitude",
+        Kind::Simple,
+    ),
+    (
+        Field::GpsLongitude,
+        "exif",
+        NS_EXIF,
+        "GPSLongitude",
         Kind::Simple,
     ),
     (
@@ -200,6 +221,8 @@ impl Iptc {
             Field::Instructions => one(&self.instructions),
             Field::TransmissionReference => one(&self.transmission_reference),
             Field::UsageTerms => one(&self.usage_terms),
+            Field::GpsLatitude => one(&self.gps_latitude),
+            Field::GpsLongitude => one(&self.gps_longitude),
         }
     }
 
@@ -225,6 +248,8 @@ impl Iptc {
             Field::Instructions => self.instructions = one(v),
             Field::TransmissionReference => self.transmission_reference = one(v),
             Field::UsageTerms => self.usage_terms = one(v),
+            Field::GpsLatitude => self.gps_latitude = one(v),
+            Field::GpsLongitude => self.gps_longitude = one(v),
         }
     }
 
@@ -243,6 +268,53 @@ impl Iptc {
     pub fn is_empty(&self) -> bool {
         TABLE.iter().all(|(f, ..)| self.get(*f).is_none())
     }
+
+    /// Store a location in XMP's own GPS notation ("40,26.7676N" "79,53.7512W").
+    pub fn set_gps(&mut self, lat: f64, lon: f64) {
+        self.gps_latitude = Some(gps_to_xmp(lat, if lat < 0.0 { 'S' } else { 'N' }));
+        self.gps_longitude = Some(gps_to_xmp(lon, if lon < 0.0 { 'W' } else { 'E' }));
+    }
+
+    pub fn gps_decimal(&self) -> Option<(f64, f64)> {
+        Some((
+            gps_from_xmp(self.gps_latitude.as_deref()?)?,
+            gps_from_xmp(self.gps_longitude.as_deref()?)?,
+        ))
+    }
+}
+
+fn gps_to_xmp(v: f64, hemi: char) -> String {
+    let a = v.abs();
+    let deg = a.floor();
+    let min = (a - deg) * 60.0;
+    format!("{},{:.4}{}", deg as u32, min, hemi)
+}
+
+/// Accepts "40,26.7676N", "40,26,45.6N" and plain decimal "40.4461".
+pub fn gps_from_xmp(s: &str) -> Option<f64> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let (body, hemi) = match s.chars().last() {
+        Some(c) if "NSEW".contains(c) => (&s[..s.len() - 1], Some(c)),
+        _ => (s, None),
+    };
+    let parts: Vec<&str> = body.split(',').collect();
+    let mut v = match parts.as_slice() {
+        [d] => d.trim().parse::<f64>().ok()?,
+        [d, m] => d.trim().parse::<f64>().ok()? + m.trim().parse::<f64>().ok()? / 60.0,
+        [d, m, sec] => {
+            d.trim().parse::<f64>().ok()?
+                + m.trim().parse::<f64>().ok()? / 60.0
+                + sec.trim().parse::<f64>().ok()? / 3600.0
+        }
+        _ => return None,
+    };
+    if matches!(hemi, Some('S') | Some('W')) {
+        v = -v;
+    }
+    Some(v)
 }
 
 static RE_LI: OnceLock<Regex> = OnceLock::new();
@@ -459,6 +531,22 @@ pub fn satisfies(want: &Iptc, got: &Iptc) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gps_round_trips_through_xmp_notation() {
+        let mut i = Iptc::default();
+        i.set_gps(40.4461, -79.8955);
+        assert_eq!(i.gps_latitude.as_deref(), Some("40,26.7660N"));
+        assert_eq!(i.gps_longitude.as_deref(), Some("79,53.7300W"));
+        let (la, lo) = i.gps_decimal().unwrap();
+        assert!((la - 40.4461).abs() < 1e-4 && (lo + 79.8955).abs() < 1e-4);
+        assert_eq!(
+            gps_from_xmp("40,26,45.6N"),
+            Some(40.0 + 26.0 / 60.0 + 45.6 / 3600.0)
+        );
+        assert_eq!(gps_from_xmp("-79.8955"), Some(-79.8955));
+        assert_eq!(gps_from_xmp("nope"), None);
+    }
 
     const BUTLER: &str = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">

@@ -175,6 +175,16 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                                 opts_changed = true;
                             }
                         });
+                    labeled(ui, t, "GPS for every photo (optional)", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut app.ingest.gps_on, "");
+                            ui.add_enabled(app.ingest.gps_on, egui::TextEdit::singleline(&mut app.ingest.gps).desired_width(220.0).hint_text("40.4461, -79.8955"));
+                            if app.ingest.gps_on {
+                                let ok = crate::app::parse_latlon(&app.ingest.gps).is_some();
+                                ui.label(RichText::new(if ok { "written to each sidecar after the copy verifies" } else { "lat, lon in decimal degrees" }).size(10.5).color(if ok { t.muted } else { t.reject }));
+                            }
+                        });
+                    });
                     labeled(ui, t, "Seq. start", |ui| {
                         ui.horizontal_wrapped(|ui| {
                             if ui.add(egui::DragValue::new(&mut app.ingest.opts.seq_start).range(1..=99999)).changed() {

@@ -31,6 +31,9 @@ pub struct DraftFields {
     pub caption_writer: String,
     pub instructions: String,
     pub transmission_reference: String,
+    /// Decimal degrees as typed; empty = none.
+    pub gps_lat: String,
+    pub gps_lon: String,
 }
 
 impl DraftFields {
@@ -56,6 +59,14 @@ impl DraftFields {
             caption_writer: s(&i.caption_writer),
             instructions: s(&i.instructions),
             transmission_reference: s(&i.transmission_reference),
+            gps_lat: i
+                .gps_decimal()
+                .map(|(la, _)| format!("{la:.6}"))
+                .unwrap_or_default(),
+            gps_lon: i
+                .gps_decimal()
+                .map(|(_, lo)| format!("{lo:.6}"))
+                .unwrap_or_default(),
         }
     }
 
@@ -80,7 +91,7 @@ impl DraftFields {
                 None
             }
         };
-        Iptc {
+        let mut out = Iptc {
             description: d(&self.caption, &original.caption),
             headline: d(&self.headline, &original.headline),
             keywords: list(&self.keywords, &original.keywords),
@@ -100,7 +111,20 @@ impl DraftFields {
                 &original.transmission_reference,
             ),
             ..Default::default()
+        };
+        if self.gps_lat != original.gps_lat || self.gps_lon != original.gps_lon {
+            match (
+                self.gps_lat.trim().parse::<f64>(),
+                self.gps_lon.trim().parse::<f64>(),
+            ) {
+                (Ok(la), Ok(lo)) => out.set_gps(la, lo),
+                _ => {
+                    out.gps_latitude = Some(String::new());
+                    out.gps_longitude = Some(String::new());
+                }
+            }
         }
+        out
     }
 }
 
@@ -316,7 +340,56 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 }
                 let hist = |k: &str| -> Vec<String> { app.prefs.caption_history.get(k).cloned().unwrap_or_default() };
                 field_h(ui, t, "Headline", &mut draft.fields.headline, false, &hist("headline"));
-                field_h(ui, t, "Keywords (; separated)", &mut draft.fields.keywords, false, &hist("keywords"));
+                // Keywords: chips with ×, an add box, and recent keywords to click in.
+                ui.label(RichText::new("KEYWORDS").monospace().size(9.5).color(t.muted));
+                let mut kws: Vec<String> = draft.fields.keywords.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                let mut changed = false;
+                ui.horizontal_wrapped(|ui| {
+                    let mut remove: Option<usize> = None;
+                    for (i, k) in kws.iter().enumerate() {
+                        if super::icons::chip(ui, t, &format!("{k}  ×"), false).on_hover_text("Remove").clicked() {
+                            remove = Some(i);
+                        }
+                    }
+                    if let Some(i) = remove {
+                        kws.remove(i);
+                        changed = true;
+                    }
+                    let add = ui.add(egui::TextEdit::singleline(&mut app.caption_kw_draft).desired_width(140.0).hint_text("add keyword ⏎"));
+                    if add.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                        for k in app.caption_kw_draft.split([';', ',']).map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                            if !kws.iter().any(|x| x.eq_ignore_ascii_case(k)) {
+                                kws.push(k.to_string());
+                                changed = true;
+                            }
+                        }
+                        app.caption_kw_draft.clear();
+                        add.request_focus();
+                    }
+                });
+                let recent: Vec<String> = hist("keywords")
+                    .iter()
+                    .flat_map(|h| h.split(';').map(|s| s.trim().to_string()).collect::<Vec<_>>())
+                    .filter(|k| !k.is_empty() && !kws.iter().any(|x| x.eq_ignore_ascii_case(k)))
+                    .fold(Vec::new(), |mut acc: Vec<String>, k| { if !acc.contains(&k) { acc.push(k); } acc })
+                    .into_iter()
+                    .take(12)
+                    .collect();
+                if !recent.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("recent").size(10.5).color(t.muted));
+                        for k in recent {
+                            if ui.small_button(&k).clicked() {
+                                kws.push(k.clone());
+                                changed = true;
+                            }
+                        }
+                    });
+                }
+                if changed {
+                    draft.fields.keywords = kws.join("; ");
+                }
+                ui.add_space(S1);
                 ui.columns(2, |cols| {
                     field_h(&mut cols[0], t, "Sublocation", &mut draft.fields.sublocation, false, &hist("sublocation"));
                     field_h(&mut cols[1], t, "City", &mut draft.fields.city, false, &hist("city"));
@@ -346,6 +419,16 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                         });
                         field_h(ui, t, "Instructions", &mut draft.fields.instructions, false, &hist("instructions"));
                         field_h(ui, t, "Transmission reference", &mut draft.fields.transmission_reference, false, &hist("transmission_reference"));
+                        ui.label(RichText::new("GPS (DECIMAL DEGREES)").monospace().size(9.5).color(t.muted));
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut draft.fields.gps_lat).desired_width(120.0).hint_text("40.4461"));
+                            ui.add(egui::TextEdit::singleline(&mut draft.fields.gps_lon).desired_width(120.0).hint_text("-79.8955"));
+                            if (!draft.fields.gps_lat.is_empty() || !draft.fields.gps_lon.is_empty()) && ui.small_button("Clear").clicked() {
+                                draft.fields.gps_lat.clear();
+                                draft.fields.gps_lon.clear();
+                            }
+                        });
+                        ui.label(RichText::new("Written as exif:GPSLatitude/Longitude in the sidecar; Lightroom and PM read it. Both fields or neither.").size(10.5).color(t.muted));
                     });
                 let delim = app.prefs.code_delimiter;
                 if !app.codes.codes.is_empty() {

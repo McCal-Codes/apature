@@ -85,6 +85,9 @@ pub struct IngestState {
     pub generation: u64,
     pub running: Option<Running>,
     pub apply_pad: bool,
+    /// Set GPS on ingest: "lat, lon" in decimal degrees, and the switch.
+    pub gps: String,
+    pub gps_on: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -131,6 +134,17 @@ pub struct RenameDialog {
 }
 
 /// Export workspace state; settings live in `Prefs::export`.
+/// "40.4461, -79.8955" (comma or space) → (lat, lon).
+pub fn parse_latlon(s: &str) -> Option<(f64, f64)> {
+    let mut it = s
+        .split([',', ' '])
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty());
+    let la: f64 = it.next()?.parse().ok()?;
+    let lo: f64 = it.next()?.parse().ok()?;
+    ((-90.0..=90.0).contains(&la) && (-180.0..=180.0).contains(&lo)).then_some((la, lo))
+}
+
 #[derive(Default)]
 pub struct DeliverState {
     pub running: Option<crate::deliver_job::Running>,
@@ -294,6 +308,8 @@ pub struct App {
     pub toasts: Vec<ui::toasts::Toast>,
     /// View-only exposure boost for previews, in stops (0, 1, 2); never written anywhere.
     pub preview_boost: u8,
+    /// Keyword being typed on the Caption workspace.
+    pub caption_kw_draft: String,
     pub filter_popup_open: bool,
     pub caption_draft: Option<Draft>,
     pub assignment: Option<Assignment>,
@@ -399,6 +415,7 @@ impl App {
             folder_unplugged: None,
             toasts: Vec::new(),
             preview_boost: 0,
+            caption_kw_draft: String::new(),
             filter_popup_open: false,
             caption_draft: None,
             assignment: None,
@@ -1244,11 +1261,20 @@ impl App {
         if !plan.can_run() {
             return;
         }
-        let pad = if self.ingest.apply_pad {
+        let mut pad = if self.ingest.apply_pad {
             self.assignment.as_ref().map(|a| a.iptc())
         } else {
             None
         };
+        // Set GPS on ingest: one fixed location for the whole card (a stadium,
+        // a venue), written into every copy's sidecar with the pad.
+        if self.ingest.gps_on && !self.ingest.gps.trim().is_empty() {
+            if let Some((la, lo)) = parse_latlon(&self.ingest.gps) {
+                let mut p = pad.unwrap_or_default();
+                p.set_gps(la, lo);
+                pad = Some(p);
+            }
+        }
         self.ingest.running = Some(self.ingest_jobs.start(plan, pad));
         self.status = "Ingesting…".into();
     }
