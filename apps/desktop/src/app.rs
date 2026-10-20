@@ -3708,14 +3708,9 @@ impl App {
         self.frames += 1;
         if self.frames == self.launch.screenshot_frame && !self.screenshot_requested {
             self.screenshot_requested = true;
-            if self.launch.settings {
-                ctx.send_viewport_cmd_to(
-                    egui::ViewportId::from_hash_of("apature-settings"),
-                    egui::ViewportCommand::Screenshot(egui::UserData::default()),
-                );
-            } else {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
-            }
+            // Settings is drawn inline on the root window in screenshot mode
+            // (ui::settings::show_inline), so the root capture covers it.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         // Screenshot events for every viewport (the Settings window included)
         // arrive in the root input queue.
@@ -3821,6 +3816,11 @@ impl eframe::App for App {
         }
         ui::toolbar::show(self, ctx, &t);
         ui::tabs::show(self, ctx, &t);
+        if self.launch.settings && self.launch.screenshot.is_some() {
+            ui::settings::show_inline(self, ctx, &t);
+            self.maybe_screenshot(ctx);
+            return;
+        }
         ui::settings::show(self, ctx, &t);
         ui::dialogs::show(self, ctx, &t);
         ui::status::show(self, ctx, &t);
