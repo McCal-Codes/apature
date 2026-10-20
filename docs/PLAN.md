@@ -67,6 +67,15 @@ Observed once, unexplained
 
 - Design system artifact (2026-10-19): https://claude.ai/artifact/KKoM7Em7u3hrLtBHt3ouCu, extracted from tokens.rs/icons.rs. Font decided: IBM Plex Sans + IBM Plex Mono. TODO: embed the Plex files in the desktop crate (egui font definitions), add licence to THIRD_PARTY.md, list them under fonts/ in the design system.
 
+## Status 2026-10-20 (evening)
+Done today: unplug detection, toasts, inspector pass, export presets, PM-board
+quick wins (codes switch, big tag badge, B exposure boost, {dest}), delivery
+queue (retry+reconnect, delivered.json ledger + Sent row, resend), Folder
+delivery kind (shares and Google Drive/OneDrive/Dropbox sync folders, no
+sign-in), keywords chips + GPS in Caption, set-GPS-on-ingest. Cloud APIs
+(Drive/Graph with OAuth) still wait on client IDs. Next: crop tool with
+ratios/overlays/AF point, loupe with unified zoom, burst stacks.
+
 ## Re-ordered after reading Camera Bits' feature-request board (2026-10-20)
 See docs/research/pm-feature-gap.md §5. Quick wins with real demand first:
 a. Code-replacement on/off switch in Caption; bigger tag badge on thumbnails;
