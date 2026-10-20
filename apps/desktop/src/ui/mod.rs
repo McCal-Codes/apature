@@ -15,6 +15,7 @@ pub mod sheet;
 pub mod sidebar;
 pub mod status;
 pub mod tabs;
+pub mod toasts;
 pub mod tokens;
 pub mod toolbar;
 

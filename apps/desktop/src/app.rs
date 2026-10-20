@@ -221,6 +221,8 @@ pub struct App {
     pub volume_kinds: HashMap<PathBuf, crate::platform::VolumeKind>,
     /// The open folder's volume vanished (name), until it comes back or the tab closes.
     pub folder_unplugged: Option<String>,
+    /// Notices above the status bar (see ui/toasts.rs); at most four.
+    pub toasts: Vec<ui::toasts::Toast>,
     pub filter_popup_open: bool,
     pub caption_draft: Option<Draft>,
     pub assignment: Option<Assignment>,
@@ -324,6 +326,7 @@ impl App {
             volumes: Vec::new(),
             volume_kinds: HashMap::new(),
             folder_unplugged: None,
+            toasts: Vec::new(),
             filter_popup_open: false,
             caption_draft: None,
             assignment: None,
@@ -783,6 +786,15 @@ impl App {
                 } else {
                     format!("Export finished with {failed} failed file(s)")
                 };
+                let msg = self.status.clone();
+                self.toast(
+                    if failed == 0 {
+                        ui::toasts::Kind::Info
+                    } else {
+                        ui::toasts::Kind::Error
+                    },
+                    msg,
+                );
                 if self.launch.export_run {
                     eprintln!("export-run: {ok} ok, {failed} failed");
                     for e in &errors {
@@ -799,6 +811,20 @@ impl App {
     // ----- ingest ------------------------------------------------------------
 
     pub const INGEST_VIEWPORT: &'static str = "apature-ingest";
+
+    /// Post a toast; identical text replaces the older one.
+    pub fn toast(&mut self, kind: ui::toasts::Kind, text: impl Into<String>) {
+        let text = text.into();
+        self.toasts.retain(|x| x.text != text);
+        self.toasts.push(ui::toasts::Toast {
+            text,
+            kind,
+            since: Instant::now(),
+        });
+        if self.toasts.len() > 4 {
+            self.toasts.remove(0);
+        }
+    }
 
     /// Reduce Motion: the system setting unless Settings › Accessibility overrides it.
     pub fn reduce_motion(&self) -> bool {
@@ -1008,6 +1034,15 @@ impl App {
                         };
                         r.done = Some(rep);
                         r.done_since = Some(Instant::now());
+                        let msg = self.status.clone();
+                        self.toast(
+                            if ok {
+                                ui::toasts::Kind::Info
+                            } else {
+                                ui::toasts::Kind::Error
+                            },
+                            msg,
+                        );
                     }
                     if open_after {
                         self.dispatch_later = Some(Command::IngestOpenResult);
@@ -1436,7 +1471,14 @@ impl App {
                         ),
                         Err(e) => format!("Delivery to {} failed: {e}", r.target),
                     };
+                    let kind = if matches!(&result, Ok(rep) if rep.failed.is_empty()) {
+                        ui::toasts::Kind::Info
+                    } else {
+                        ui::toasts::Kind::Error
+                    };
                     r.done = Some(result);
+                    let msg = self.status.clone();
+                    self.toast(kind, msg);
                 }
             }
         }
@@ -2281,6 +2323,8 @@ impl App {
                 format!("{what} unplugged: {name}")
             };
             self.status_since = Some(Instant::now());
+            let msg = self.status.clone();
+            self.toast(ui::toasts::Kind::Warn, msg);
             if self.folder.as_ref().is_some_and(|f| f.starts_with(path)) {
                 self.folder_unplugged = Some(name.clone());
             }
@@ -3095,6 +3139,7 @@ impl eframe::App for App {
         ui::settings::show(self, ctx, &t);
         ui::dialogs::show(self, ctx, &t);
         ui::status::show(self, ctx, &t);
+        ui::toasts::show(self, ctx, &t);
         ui::sidebar::show(self, ctx, &t);
         match self.workspace {
             Workspace::Caption => ui::caption::show_fields(self, ctx, &t),
