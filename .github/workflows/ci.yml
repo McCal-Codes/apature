@@ -1,8 +1,9 @@
 name: CI
 
-# Linux only: Linux runner minutes are the cheapest, and the library crates
-# plus a desktop build cover what a push can break. macOS bundling, signing
-# and the real-card checks stay on the Mac.
+# Linux for the libraries and a type-check of the desktop (cheapest minutes);
+# one macOS job builds and tests the desktop crate itself on pushes to main,
+# so a commit that does not compile can never sit on main unnoticed.
+# Bundling, signing and the real-card checks stay on the owner's Mac.
 on:
   push:
     branches: [main]
@@ -35,3 +36,21 @@ jobs:
       # build run on the Mac, where it ships.
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace --exclude apature
+
+  desktop-macos:
+    # macOS minutes cost ten times Linux ones: pushes to main only, and not
+    # for docs-only changes.
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p apature -p apature-cli
+      - run: cargo test --release -p apature
+      - name: Headless smoke test (the sheet renders and a screenshot lands)
+        run: |
+          mkdir -p /tmp/smoke
+          target/release/apature /tmp/smoke --screenshot /tmp/smoke.png --frames 60
+          ls -la /tmp/smoke.png
