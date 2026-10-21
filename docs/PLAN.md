@@ -93,6 +93,18 @@ data cable, and confirm originals stay on the card after a physical-shutter
 capture. Then decide the Rust receiver (reuse apature-ingest's copy and
 ledger; capability table per camera per docs/cross-project). Keep the branch
 isolated until hardware behaviour is known; it does not touch main's code.
+Branch rebuilt 2026-10-21 on the rewritten main (four commits, experiments/ only).
+
+Hardware help wanted (owner, 2026-10-21): choose and spec the Pocket device
+when the camera test passes. Candidates to evaluate against the Z 6 II over
+USB: Raspberry Pi 5 (USB 3, NVMe HAT for the SSD, 5 V/5 A power), Pi Zero 2 W
+(small, USB 2 only, slow for NEF), Radxa/Orange Pi with USB 3 and NVMe,
+or a used Intel NUC. Must-haves: USB 3 host port, NVMe or SATA SSD with
+TRIM, a battery path (USB-C PD power bank with pass-through), one physical
+button and one RGB LED for state, a case with the camera cable strain
+relief, and a watchdog reboot. Deliverable: a bill of materials with prices
+and a wiring note, written only after `gphoto2 --wait-event` is confirmed
+with the camera.
 
 ## Status 2026-10-21
 Merged to main: cross-project audit, prefs versioning, Settings pass, UI
