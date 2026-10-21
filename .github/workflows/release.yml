@@ -38,6 +38,8 @@ jobs:
       - name: Store notary credentials (when provided)
         if: env.APPLE_ID != ''
         run: xcrun notarytool store-credentials apature --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD"
+      - name: Tag matches the version and the changelog
+        run: bash tools/check-version.sh "${GITHUB_REF_NAME}"
       - name: Build the disk image
         run: |
           if security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
@@ -48,6 +50,7 @@ jobs:
       - name: Release notes from the changelog
         run: |
           awk '/^## \[/{n++} n==1' CHANGELOG.md > notes.md
+          printf '\n**SHA-256** of the disk image: `%s`\n' "$(shasum -a 256 target/bundle/Apature-*.dmg | cut -d' ' -f1)" >> notes.md
           if ! security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
             printf '\n> This build is ad-hoc signed. Right-click › Open the first time, or wait for a notarised build.\n' >> notes.md
           fi

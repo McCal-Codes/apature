@@ -8,6 +8,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
 env:
   CARGO_INCREMENTAL: 0
@@ -31,6 +32,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: System libraries for the desktop build
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-3-dev
+      - name: Version in Cargo.toml matches the changelog
+        run: bash tools/check-version.sh
       - run: cargo fmt --all --check
       # Clippy type-checks the desktop app too; its tests and full debug
       # build run on the Mac, where it ships.
@@ -54,3 +57,19 @@ jobs:
           mkdir -p /tmp/smoke
           target/release/apature /tmp/smoke --screenshot /tmp/smoke.png --frames 60
           ls -la /tmp/smoke.png
+
+  release-rules:
+    # docs/RELEASES.md, the rules a machine can see: no AI attribution, a changelog line per change, the version
+    # bump on its own. Pull requests only; labels no-changelog and release-exception waive REL-7 and REL-13.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Branch, notes and version rules
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash tools/check-release-rules.sh "origin/${{ github.base_ref }}"
