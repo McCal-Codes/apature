@@ -109,6 +109,14 @@ pub struct Prefs {
     pub high_contrast: bool,
     /// Show scan, frame and thumbnail timings at the right of the status bar.
     pub show_perf_stats: bool,
+    /// Ask GitHub Releases once a day whether a newer Apature exists.
+    pub check_updates: bool,
+    /// Include pre-releases (betas) in that check.
+    pub beta_updates: bool,
+    /// Unix seconds of the last check.
+    pub last_update_check: u64,
+    /// A version the person chose to skip.
+    pub skipped_update: Option<String>,
     pub export: ExportPrefs,
     /// Export presets per outlet: size, quality, naming, format and the
     /// delivery target in one chip.
@@ -161,6 +169,10 @@ impl Default for Prefs {
             motion: Motion::System,
             high_contrast: false,
             show_perf_stats: false,
+            check_updates: true,
+            beta_updates: false,
+            last_update_check: 0,
+            skipped_update: None,
             export: ExportPrefs::default(),
             export_presets: Vec::new(),
             export_preset: None,

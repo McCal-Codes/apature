@@ -204,6 +204,14 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                 if ui.checkbox(&mut app.prefs.advance_after_mark, "Advance to the next photo after marking one").changed() {
                     app.prefs_dirty = true;
                 }
+                if ui.checkbox(&mut app.prefs.check_updates, "Check for updates once a day (one request to GitHub; nothing is sent)").changed() {
+                    app.prefs_dirty = true;
+                }
+                if app.prefs.check_updates
+                    && ui.checkbox(&mut app.prefs.beta_updates, "Include beta releases").changed()
+                {
+                    app.prefs_dirty = true;
+                }
                 if ui.checkbox(&mut app.prefs.preview_in_window, "Open Preview in its own window (the sheet stays; good for two screens)").changed() {
                     app.prefs_dirty = true;
                 }

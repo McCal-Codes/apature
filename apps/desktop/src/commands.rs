@@ -83,6 +83,9 @@ pub enum Command {
     /// Help menu: Settings > Shortcuts, the log, the repository.
     OpenShortcuts,
     OpenAbout,
+    /// Updates: check now (menu), open the newest release's DMG.
+    CheckUpdates,
+    OpenUpdate,
     RevealLog,
     OpenRepo,
     /// Copy the focused photo's marks and IPTC; paste onto the selection.
@@ -212,6 +215,7 @@ impl Command {
             Command::ShowMainWindow => "app.show".into(),
             Command::OpenShortcuts => "help.shortcuts".into(),
             Command::OpenAbout => "app.about".into(),
+            Command::CheckUpdates => "app.updates".into(),
             Command::RevealLog => "help.log".into(),
             Command::OpenRepo => "help.repo".into(),
             other => format!("other.{other:?}"),
@@ -234,6 +238,7 @@ impl Command {
             "app.show" => Command::ShowMainWindow,
             "help.shortcuts" => Command::OpenShortcuts,
             "app.about" => Command::OpenAbout,
+            "app.updates" => Command::CheckUpdates,
             "help.log" => Command::RevealLog,
             "help.repo" => Command::OpenRepo,
             "view.stack" => Command::ToggleStack,

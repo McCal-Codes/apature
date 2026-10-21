@@ -16,6 +16,7 @@ mod prefs;
 mod selection;
 mod ui;
 mod undo;
+mod updater;
 mod worker;
 
 use std::path::PathBuf;
@@ -31,6 +32,8 @@ pub struct Launch {
     pub live: bool,
     /// Open the About window at launch (screenshots).
     pub about: bool,
+    /// Run the update check now and log the result (tests).
+    pub check_updates: bool,
     /// Window size at launch (for layout checks at small sizes).
     pub size: Option<(f32, f32)>,
     pub screenshot_frame: u64,
@@ -94,6 +97,7 @@ fn parse_args() -> Launch {
             "--crop" => l.crop = true,
             "--live" => l.live = true,
             "--about" => l.about = true,
+            "--check-updates" => l.check_updates = true,
             "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
             "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),
             "--export" => l.export = true,

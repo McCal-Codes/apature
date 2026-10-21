@@ -6,8 +6,9 @@ are stable so a pull request or a commit can cite them.
 
 ## Rules
 
-- **REL-1 MUST** keep `main` releasable. Every change lands as a topic branch and a squashed pull request, or as a
-  small direct commit that passed the same checks locally (fmt, clippy, tests, bundle).
+- **REL-1 MUST** keep `main` releasable. Every change lands as a topic branch and a squashed pull request, or, for a
+  small change, as a direct commit that passed the same checks locally (fmt, clippy, tests, bundle). Direct pushes
+  are allowed by the owner's choice; the branch protection only forbids force-pushes and deletion.
 - **REL-2 MUST NOT** let a topic branch live long enough to hold a release. Rebase onto `main` whenever it moves.
 - **REL-4 MUST NOT** build, tag or publish anything from a topic branch. Releases are cut from `main`.
 - **REL-5 MUST** name branches after the change, never after the agent, the session or the tool. No AI attribution
@@ -31,6 +32,8 @@ are stable so a pull request or a commit can cite them.
 - **REL-25 MUST** use the author's own words for anything users read: release notes, the README intro, replies.
 - **REL-26 SHOULD** keep a short runbook per release in `docs/releases/`, written before the build.
 - **REL-30 MUST** take a published screenshot from the build being released (the headless harness does this).
+- **REL-33 MUST** keep the in-app updater pointed at GitHub Releases and able to see every release: a stable is a
+  normal release, a beta is a pre-release, and the DMG is attached under its `Apature-x.y.z.dmg` name.
 - **REL-32 MUST** keep the changelog's top version equal to `Cargo.toml`'s version; CI checks it on every push.
 
 ## Cutting a release

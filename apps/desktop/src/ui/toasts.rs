@@ -22,6 +22,8 @@ pub struct Toast {
     pub text: String,
     pub kind: Kind,
     pub since: Instant,
+    /// An optional button: label and the command it dispatches.
+    pub action: Option<(String, crate::commands::Command)>,
 }
 
 impl Toast {
@@ -41,6 +43,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
     }
     let reduce = app.reduce_motion();
     let mut dismiss: Option<usize> = None;
+    let mut act: Option<(usize, crate::commands::Command)> = None;
     egui::Area::new(egui::Id::new("toasts"))
         .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-S4, -(STATUS_H + S3)))
         .order(egui::Order::Foreground)
@@ -85,6 +88,11 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                 )
                                 .wrap(),
                             );
+                            if let Some((label, cmd)) = &toast.action {
+                                if ui.small_button(label).clicked() {
+                                    act = Some((i, cmd.clone()));
+                                }
+                            }
                             if ui
                                 .add(
                                     egui::Button::new(RichText::new("×").size(14.0).color(t.text2))
@@ -99,6 +107,10 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     });
             }
         });
+    if let Some((i, cmd)) = act {
+        app.toasts.remove(i);
+        app.dispatch(ctx, cmd);
+    }
     if let Some(i) = dismiss {
         app.toasts.remove(i);
     }

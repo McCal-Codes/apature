@@ -429,6 +429,10 @@ pub struct App {
     pub about_open: bool,
     /// Preview is showing in its own window (prefs.preview_in_window).
     pub preview_window: bool,
+    update_checker: Option<crate::updater::Checker>,
+    /// True when the person asked (menu), so "up to date" is worth a toast.
+    update_manual: bool,
+    pub update_available: Option<crate::updater::Update>,
     pub settings_page: ui::settings::Page,
     pub cache_size: Option<(usize, u64)>,
     applied_appearance: Option<crate::prefs::Appearance>,
@@ -549,6 +553,9 @@ impl App {
             settings_open: false,
             about_open: launch.about,
             preview_window: false,
+            update_checker: None,
+            update_manual: false,
+            update_available: None,
             settings_page: ui::settings::Page::General,
             cache_size: None,
             applied_appearance: None,
@@ -1058,6 +1065,109 @@ impl App {
 
     pub const INGEST_VIEWPORT: &'static str = "apature-ingest";
 
+    fn start_update_check(&mut self, ctx: &egui::Context, manual: bool) {
+        if self.update_checker.is_some() {
+            return;
+        }
+        self.update_manual = manual;
+        self.update_checker = Some(crate::updater::Checker::spawn(
+            env!("CARGO_PKG_VERSION").to_string(),
+            self.prefs.beta_updates,
+            ctx.clone(),
+        ));
+        self.prefs.last_update_check = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        self.prefs_dirty = true;
+    }
+
+    /// Daily check when enabled (never in headless runs unless asked), and
+    /// delivery of the result as a toast with a Download button.
+    fn update_tick(&mut self, ctx: &egui::Context) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let headless = self.launch.screenshot.is_some();
+        if self.launch.check_updates
+            && self.update_checker.is_none()
+            && self.update_available.is_none()
+            && !self.update_manual
+            && self.prefs.last_update_check < now - 5
+        {
+            self.start_update_check(ctx, true);
+        } else if !headless
+            && self.prefs.check_updates
+            && self.update_checker.is_none()
+            && now.saturating_sub(self.prefs.last_update_check) >= 86_400
+        {
+            self.start_update_check(ctx, false);
+        }
+        let Some(result) = self.update_checker.as_ref().and_then(|c| c.try_recv()) else {
+            return;
+        };
+        self.update_checker = None;
+        match result {
+            Ok(Some(u)) => {
+                log::info!("update available: {} ({})", u.version, u.page);
+                if self.launch.check_updates {
+                    eprintln!("check-updates: {} available at {}", u.version, u.page);
+                }
+                let skipped = self.prefs.skipped_update.as_deref() == Some(u.version.as_str());
+                if !skipped || self.update_manual {
+                    let text = format!(
+                        "Apature {} is available{}. You have {}.",
+                        u.version,
+                        if u.prerelease { " (beta)" } else { "" },
+                        env!("CARGO_PKG_VERSION")
+                    );
+                    self.toasts.retain(|t| {
+                        !t.text.starts_with("Apature ") || !t.text.contains("is available")
+                    });
+                    self.toasts.push(ui::toasts::Toast {
+                        text,
+                        kind: ui::toasts::Kind::Warn,
+                        since: Instant::now(),
+                        action: Some(("Download".into(), Command::OpenUpdate)),
+                    });
+                }
+                self.update_available = Some(u);
+            }
+            Ok(None) => {
+                log::info!("update check: up to date");
+                if self.launch.check_updates {
+                    eprintln!("check-updates: up to date");
+                }
+                if self.update_manual {
+                    self.toast(
+                        ui::toasts::Kind::Info,
+                        format!(
+                            "Apature {} is the newest version.",
+                            env!("CARGO_PKG_VERSION")
+                        ),
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!("update check failed: {e}");
+                if self.launch.check_updates {
+                    eprintln!("check-updates: failed: {e}");
+                }
+                if self.update_manual {
+                    self.toast(
+                        ui::toasts::Kind::Error,
+                        format!("Could not check for updates: {e}"),
+                    );
+                }
+            }
+        }
+        self.update_manual = false;
+        if self.launch.check_updates {
+            self.finish_headless_run();
+        }
+    }
+
     /// Post a toast; identical text replaces the older one.
     pub fn toast(&mut self, kind: ui::toasts::Kind, text: impl Into<String>) {
         let text = text.into();
@@ -1066,6 +1176,7 @@ impl App {
             text,
             kind,
             since: Instant::now(),
+            action: None,
         });
         if self.toasts.len() > 4 {
             self.toasts.remove(0);
@@ -3388,6 +3499,17 @@ impl App {
                 }
             }
             Command::OpenAbout => self.about_open = true,
+            Command::CheckUpdates => self.start_update_check(ctx, true),
+            Command::OpenUpdate => {
+                if let Some(u) = &self.update_available {
+                    let url = u.dmg.clone().unwrap_or_else(|| u.page.clone());
+                    let _ = std::process::Command::new("open").arg(&url).spawn();
+                    self.status = format!(
+                        "Downloading Apature {} · drag it to Applications when it opens",
+                        u.version
+                    );
+                }
+            }
             Command::TrashConfirm => self.trash_confirm(),
             Command::CloseDialog => {
                 self.rename_dialog = None;
@@ -3851,6 +3973,7 @@ impl eframe::App for App {
         }
         t.apply(ctx, self.reduce_motion());
         self.platform.on_first_frame();
+        self.update_tick(ctx);
         // Menu bar extra: what Apature is doing, in a few characters.
         let tray = if let Some(r) = self.ingest.running.as_ref().filter(|r| r.done.is_none()) {
             let total = self

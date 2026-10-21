@@ -36,6 +36,7 @@ impl MenuBar {
         let app = Submenu::new("Apature", true);
         app.append_items(&[
             &item(Command::OpenAbout, "About Apature", None),
+            &item(Command::CheckUpdates, "Check for Updates…", None),
             &PredefinedMenuItem::separator(),
             &item(Command::OpenSettings, "Settings…", acc(cmd, Code::Comma)),
             &PredefinedMenuItem::separator(),
