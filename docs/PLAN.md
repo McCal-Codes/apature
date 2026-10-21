@@ -67,6 +67,33 @@ Observed once, unexplained
 
 - Design system artifact (2026-10-19): https://claude.ai/artifact/KKoM7Em7u3hrLtBHt3ouCu, extracted from tokens.rs/icons.rs. Font decided: IBM Plex Sans + IBM Plex Mono. TODO: embed the Plex files in the desktop crate (egui font definitions), add licence to THIRD_PARTY.md, list them under fonts/ in the design system.
 
+## TODO (owner, 2026-10-21): ship 0.1.0 as something shareable
+1. Developer ID Application certificate (Xcode › Settings › Accounts › Manage
+   Certificates) and `xcrun notarytool store-credentials apature` — owner.
+2. `scripts/bundle.sh`: sign with the Developer ID (hardened runtime,
+   entitlements for file access), `xcrun notarytool submit … --wait`,
+   `xcrun stapler staple`, then a DMG (`hdiutil create` with an Applications
+   link) — Claude, after 1.
+3. Version 0.1.0 in Cargo.toml; CHANGELOG.md with the user-visible changes
+   since M1; README with screenshots and the "what it needs" list (macOS 14+,
+   optional Homebrew jpeg-xl for JPEG XL).
+4. Release gate in CI (changelog line per PR, version bump alone) and a tag
+   workflow that builds the DMG on the macOS runner — after 2.
+5. First-run: Settings › Delivery empty state, the capabilities table (RAW
+   engine, cjxl, Keychain) so a new Mac knows what it is missing.
+6. Known-limitations section of STATUS.md copied into the release notes.
+
+## Apature Pocket (branch feature/apature-pocket-phase-a, not merged)
+A Python + gPhoto2 prototype in `experiments/apature-pocket/` (pocket.py,
+test_pocket.py, README, 9 local tests): simulated camera ingest, SHA-256
+verified copies, collision protection, a transfer manifest with recovery.
+Untested on hardware. Next: on the Mac, `brew install gphoto2`, then
+`gphoto2 --auto-detect`, `--summary`, `--wait-event=15s` with the Z 6 II on a
+data cable, and confirm originals stay on the card after a physical-shutter
+capture. Then decide the Rust receiver (reuse apature-ingest's copy and
+ledger; capability table per camera per docs/cross-project). Keep the branch
+isolated until hardware behaviour is known; it does not touch main's code.
+
 ## Status 2026-10-21
 Merged to main: cross-project audit, prefs versioning, Settings pass, UI
 cleanup, top info strip + window title, menu bar extra, full menus (Image/

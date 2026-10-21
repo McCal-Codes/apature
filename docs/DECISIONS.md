@@ -227,3 +227,37 @@ the Finder-scripting default needs an Automation permission and timed out
 in testing; the cost is that Finder may not offer Put Back for those
 items, which the dialog says. Apature still never deletes.
 **Status:** implemented, CLI-tested, dialogs seen.
+
+## ADR-019 — Ingest is its own window (2026-10-15, accepted)
+Egui viewport; the sheet stays in the main window so culling continues while a card copies. Headless runs keep it inline. Rejected: a modal in the main window (blocks culling).
+
+## ADR-020 — Delivery and secrets (2026-10-19, accepted)
+`apature-deliver` crate: Folder, FTP, FTPS (explicit TLS), SFTP. `.part` then rename. Passwords only in the macOS Keychain (service `dev.mccal.Apature.delivery`, account = target name), never in prefs. Cloud APIs (Drive, Graph) planned with PKCE; until then the desktop sync folder is the cloud path. Rejected: storing credentials in prefs.json.
+
+## ADR-021 — Toasts (2026-10-20, accepted)
+Info toasts leave after 6 s; warnings and errors stay until dismissed. Unplug, delivery, ingest and export outcomes post one. Reduce Motion drops fades. Rejected: status-bar-only (messages scrolled away).
+
+## ADR-022 — Live Ingest by polling (2026-10-20, accepted)
+Source polled every 2 s; a file is handed over once its size held for two polls. Batches run through the normal ingest. Rejected: FSEvents (unreliable on network and FTP-written folders).
+
+## ADR-023 — Lavender in both appearances (2026-10-19, accepted)
+Light accent #5A48C7 / wash #E7E3F8, greys with a violet cast; dark accent #C9BEF8, sheet ground #1C1C20. Darkroom grounds stay neutral. Rejected: system blue in Light (no identity).
+
+## ADR-024 — IBM Plex Sans + Mono (2026-10-19, accepted, not yet embedded)
+Chosen in the design system; the app uses system fonts until the files are embedded.
+
+## ADR-025 — JPEG XL through an external cjxl (2026-10-19, accepted)
+Lossless transcode of the finished JPEG; macOS cannot encode JXL here and jpegxl-rs needs cmake. Rejected for now: bundling libjxl.
+
+## ADR-026 — Number keys rate by default (2026-10-19, accepted)
+Bare 1–5 = rating, ⌘1–8 = class; Photo Mechanic mode available in Settings › Shortcuts.
+
+## ADR-027 — Burst stacks by capture second (2026-10-20, accepted)
+Frames within one second group behind the first; off by default. Sub-second EXIF is not read, so one second is the grain.
+
+## ADR-028 — Versioned prefs (2026-10-21, accepted; from Folio STA-5/6/7)
+`version` key, step migrations on raw JSON, `prefs.damaged.json` kept on parse failure, backup before the first write after an upgrade, newer files never rewritten.
+
+## ADR-029 — Preview window is optional (2026-10-21, accepted)
+Default inline (faster for one screen); Settings switch opens Preview in its own window with full keyboard handling, like Photo Mechanic.
+

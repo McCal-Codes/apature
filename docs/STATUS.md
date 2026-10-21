@@ -5,6 +5,29 @@ Last updated 2026-10-13. Vocabulary: **implemented** = code exists;
 **verified** = tested against an external reference (exiftool, another
 app, a measurement); **production-ready** is not claimed for anything.
 
+## Where Apature is on 2026-10-21 (read this first; older sections are history)
+
+Daily loop complete and verified on real shoots: card in → verified ingest
+(day chips, live example name, MB/s, sheet opens while copying, Live Ingest)
+→ cull (ratings, classes, tags, burst stacks, loupe, exposure boost, rotate,
+crop) → caption (pad, codes, keywords, GPS, recent values, save to
+selection) → export (presets, JPEG or JPEG XL) → deliver (Folder, FTP,
+FTPS, SFTP; Keychain; retry; sent ledger). Two appearances, lavender accent,
+Reduce Motion, text scale, contrast, focus rings. Menus complete, About,
+menu bar extra, toasts, unplug detection, log file, versioned prefs.
+
+Measured: 134 NEF / 6.0 GB verified ingest from a Z 6 II card; headless
+harness captures every workspace. Tests: 94. CI: Linux + macOS.
+
+Known limitations (current): no VoiceOver tree; FTPS/SFTP untested against a
+real desk; Google Drive / OneDrive API sign-in waits on client IDs; no
+AF-point overlay (maker note); JPEG XL needs Homebrew cjxl; ad-hoc signed
+bundle only (no Developer ID yet); thumbnail priority on very large folders
+unmeasured; Apature Pocket is a Python prototype on a branch, not merged.
+
+Plan and handoff: docs/PLAN.md. Decisions: docs/DECISIONS.md (ADR-019+ added
+2026-10-21). Cross-project lessons: docs/cross-project/.
+
 ## Engine
 
 | feature | status | evidence |
@@ -283,23 +306,8 @@ The probe could not be screenshotted; the M2 shell can (see above).
   sidecars; all access is read-only `mmap`. Byte hashes against the cloud
   originals were not computed (would re-download 165 MB).
 
-## Known limitations and risks
-
-* Cells larger than 160 pt are upscaled on Retina (thumbs are 320 px).
-* Texture uploads happen on the UI thread; a 3 000 px preview is ~36 MB and
-  may cause a frame hitch. Not measured.
-* `Marks` are a single cursor's; there is no selection model, so batch
-  marking is impossible.
-* No undo.
-* No colour management, no light theme, no accessibility names on cells.
-* Font licence notices (Ubuntu, Noto) must ship with binaries; not generated.
-* Toolchain: egui pinned to 0.33 (rustc 1.93 on this machine; 0.36 needs 1.95).
+## Known limitations and risks (M3-era, superseded by the section at the top)
 
 ## Next priorities
 
-1. ~~Photo Mechanic round trip~~ done, including pairs via embedded JPEG XMP.
-2. Design decision from `docs/design/` (owner's call), then the shell:
-   menu bar, sidebar, inspector, tokens, light/dark, cell accessibility.
-3. Selection model + filters in the app state (no core change).
-4. IPTC fields in `apature-metadata` with the same in-place discipline, on a
-   streaming XML parser.
+See docs/PLAN.md.
