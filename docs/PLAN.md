@@ -70,6 +70,12 @@ Observed once, unexplained
 ## TODO (owner, 2026-10-21): ship 0.1.0 as something shareable
 1. Developer ID Application certificate (Xcode › Settings › Accounts › Manage
    Certificates) and `xcrun notarytool store-credentials apature` — owner.
+   Everything else below is DONE 2026-10-21 and waits only on this: with the
+   certificate present, `scripts/bundle.sh --notarize` signs (hardened
+   runtime, entitlements), builds the DMG, notarises and staples. Until then
+   `--dmg` makes an ad-hoc DMG (7 MB, verified to mount). Tag `v0.1.0` runs
+   .github/workflows/release.yml which attaches the DMG to a GitHub release
+   (signed when the DEVELOPER_ID_P12 / NOTARY_* secrets exist).
 2. `scripts/bundle.sh`: sign with the Developer ID (hardened runtime,
    entitlements for file access), `xcrun notarytool submit … --wait`,
    `xcrun stapler staple`, then a DMG (`hdiutil create` with an Applications
