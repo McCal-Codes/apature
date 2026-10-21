@@ -557,7 +557,7 @@ mod tests {
     xmlns:Iptc4xmpCore="http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/"
     xmlns:xmp="http://ns.adobe.com/xap/1.0/"
     xmlns:photomechanic="http://ns.camerabits.com/photomechanic/1.0/"
-    photoshop:Credit="Butler Eagle"
+    photoshop:Credit="Example Press"
     photoshop:Headline="100726 SPO BGLF WPIAL Championships"
     photoshop:City="Oakmont"
     photoshop:State="Pa."
@@ -565,7 +565,7 @@ mod tests {
     xmp:Rating="4"
     photomechanic:ColorClass="1">
    <dc:creator><rdf:Seq><rdf:li>Caleb McCartney</rdf:li></rdf:Seq></dc:creator>
-   <dc:rights><rdf:Alt><rdf:li xml:lang="x-default">© 2026 Butler Eagle</rdf:li></rdf:Alt></dc:rights>
+   <dc:rights><rdf:Alt><rdf:li xml:lang="x-default">© 2026 Example Press</rdf:li></rdf:Alt></dc:rights>
    <dc:description><rdf:Alt><rdf:li xml:lang="x-default">Old caption &amp; text</rdf:li></rdf:Alt></dc:description>
    <dc:subject><rdf:Bag><rdf:li>WPIAL</rdf:li><rdf:li>golf</rdf:li></rdf:Bag></dc:subject>
   </rdf:Description>
@@ -580,10 +580,10 @@ mod tests {
             i.headline.as_deref(),
             Some("100726 SPO BGLF WPIAL Championships")
         );
-        assert_eq!(i.credit.as_deref(), Some("Butler Eagle"));
+        assert_eq!(i.credit.as_deref(), Some("Example Press"));
         assert_eq!(i.sublocation.as_deref(), Some("Oakmont Country Club"));
         assert_eq!(i.description.as_deref(), Some("Old caption & text"));
-        assert_eq!(i.copyright.as_deref(), Some("© 2026 Butler Eagle"));
+        assert_eq!(i.copyright.as_deref(), Some("© 2026 Example Press"));
         assert_eq!(i.creator, Some(vec!["Caleb McCartney".into()]));
         assert_eq!(i.keywords, Some(vec!["WPIAL".into(), "golf".into()]));
         assert_eq!(i.country, None);
@@ -610,7 +610,7 @@ mod tests {
         // Untouched properties survive verbatim.
         assert!(out.contains(r#"xmp:Rating="4""#));
         assert!(out.contains(r#"photomechanic:ColorClass="1""#));
-        assert!(out.contains("<dc:rights><rdf:Alt><rdf:li xml:lang=\"x-default\">© 2026 Butler Eagle</rdf:li></rdf:Alt></dc:rights>"));
+        assert!(out.contains("<dc:rights><rdf:Alt><rdf:li xml:lang=\"x-default\">© 2026 Example Press</rdf:li></rdf:Alt></dc:rights>"));
         assert_eq!(crate::xmp::parse(&out).rating, Some(4));
         // Idempotent.
         assert_eq!(apply(&out, &edit).unwrap(), out);
@@ -651,18 +651,18 @@ mod tests {
     #[test]
     fn fresh_sidecar_and_overlay() {
         let base = Iptc {
-            credit: Some("Butler Eagle".into()),
+            credit: Some("Example Press".into()),
             city: Some("Oakmont".into()),
             ..Default::default()
         };
         let pad = Iptc {
-            city: Some("Butler".into()),
+            city: Some("Springfield".into()),
             headline: Some("Slug".into()),
             ..Default::default()
         };
         let merged = base.overlay(&pad);
-        assert_eq!(merged.city.as_deref(), Some("Butler"));
-        assert_eq!(merged.credit.as_deref(), Some("Butler Eagle"));
+        assert_eq!(merged.city.as_deref(), Some("Springfield"));
+        assert_eq!(merged.credit.as_deref(), Some("Example Press"));
         let out = apply("", &merged).unwrap();
         assert!(satisfies(&merged, &parse(&out)));
         assert!(Iptc::default().is_empty());

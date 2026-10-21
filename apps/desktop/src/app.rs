@@ -3968,6 +3968,7 @@ impl eframe::App for App {
             self.applied_ui_scale = Some(self.prefs.ui_scale);
         }
         let mut t = Theme::for_ctx(ctx);
+        t = t.with_accent(self.prefs.accent);
         if self.prefs.high_contrast {
             t = t.high_contrast();
         }

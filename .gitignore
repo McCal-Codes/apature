@@ -7,3 +7,6 @@
 /tests/fixtures/*.JPG
 /tests/fixtures/*.jpg
 /tests/fixtures/*.xmp
+
+# Generated Photoshop files: attached to releases as the press kit zip
+docs/marketing/*.psd

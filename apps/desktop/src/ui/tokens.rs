@@ -92,6 +92,25 @@ impl Theme {
         }
     }
 
+    /// Swap the accent for one of the soft presets. The dark appearance takes
+    /// the pale tint (text-weight on charcoal), the light appearance the deep
+    /// one (text-weight on white); the wash is the same hue at panel strength.
+    pub fn with_accent(mut self, accent: crate::prefs::Accent) -> Theme {
+        use crate::prefs::Accent as A;
+        let (dark_accent, dark_wash, light_accent, light_wash) = match accent {
+            A::Lavender => return self,
+            A::Sage => ((0xB8, 0xDC, 0xC4), (0x26, 0x30, 0x2A), (0x2F, 0x7D, 0x5A), (0xE1, 0xF2, 0xE7)),
+            A::Sky => ((0xB9, 0xD6, 0xF7), (0x26, 0x2C, 0x35), (0x2C, 0x6B, 0xB8), (0xE1, 0xEC, 0xF9)),
+            A::Peach => ((0xF6, 0xC9, 0xB3), (0x34, 0x2B, 0x26), (0xB8, 0x55, 0x2C), (0xFA, 0xE6, 0xDD)),
+            A::Rose => ((0xF3, 0xBE, 0xD1), (0x33, 0x26, 0x30), (0xB2, 0x3A, 0x6B), (0xF9, 0xE1, 0xEA)),
+            A::Mist => ((0xD6, 0xD6, 0xDE), (0x2C, 0x2C, 0x31), (0x55, 0x55, 0x6A), (0xE6, 0xE6, 0xEC)),
+        };
+        let (a, w) = if self.dark { (dark_accent, dark_wash) } else { (light_accent, light_wash) };
+        self.accent = rgb(a.0, a.1, a.2);
+        self.accent_wash = rgb(w.0, w.1, w.2);
+        self
+    }
+
     /// Accessibility: lift the quiet greys one step and strengthen borders.
     /// Hierarchy survives (text > text2 > muted), the floor just rises.
     pub fn high_contrast(mut self) -> Theme {

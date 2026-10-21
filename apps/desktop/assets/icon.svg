@@ -1,13 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#26262B"/><stop offset="1" stop-color="#141417"/></linearGradient>
-    <linearGradient id="pick" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E2DDFB"/><stop offset="1" stop-color="#BDB4EE"/></linearGradient>
-  </defs>
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#g)"/>
-  <rect x="64.5" y="64.5" width="895" height="895" rx="200" fill="none" stroke="#fff" stroke-opacity="0.06"/>
-  <!-- 2x2 frames, 3:2, 24px gutter, no ornament: the picked frame is simply the bright one -->
-  <rect x="222" y="292" width="276" height="184" rx="16" fill="url(#pick)"/>
-  <rect x="526" y="292" width="276" height="184" rx="16" fill="#ECEBF3" fill-opacity="0.80"/>
-  <rect x="222" y="548" width="276" height="184" rx="16" fill="#ECEBF3" fill-opacity="0.80"/>
-  <rect x="526" y="548" width="276" height="184" rx="16" fill="#ECEBF3" fill-opacity="0.80"/>
+<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2A31"/><stop offset="1" stop-color="#121214"/></linearGradient>
+<clipPath id="ring"><circle cx="512" cy="512" r="318"/></clipPath>
+<filter id="drop" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.35"/></filter>
+<filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/><rect x="100.5" y="100.5" width="823" height="823" rx="185" fill="none" stroke="#FFFFFF" stroke-opacity="0.08"/>
+<circle cx="512" cy="512" r="334" fill="#8C7DDD" fill-opacity="0.35" filter="url(#glow)"/><circle cx="512" cy="512" r="318" fill="#0E0E11"/><g clip-path="url(#ring)"><linearGradient id="ap0" gradientUnits="userSpaceOnUse" x1="200.5" y1="294.0" x2="823.5" y2="294.0"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="200.5" y1="294.0" x2="823.5" y2="294.0" stroke="url(#ap0)" stroke-width="200"/>
+<linearGradient id="ap1" gradientUnits="userSpaceOnUse" x1="445.9" y1="137.6" x2="886.4" y2="578.1"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="445.9" y1="137.6" x2="886.4" y2="578.1" stroke="url(#ap1)" stroke-width="200"/>
+<linearGradient id="ap2" gradientUnits="userSpaceOnUse" x1="730.0" y1="200.5" x2="730.0" y2="823.5"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="730.0" y1="200.5" x2="730.0" y2="823.5" stroke="url(#ap2)" stroke-width="200"/>
+<linearGradient id="ap3" gradientUnits="userSpaceOnUse" x1="886.4" y1="445.9" x2="445.9" y2="886.4"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="886.4" y1="445.9" x2="445.9" y2="886.4" stroke="url(#ap3)" stroke-width="200"/>
+<linearGradient id="ap4" gradientUnits="userSpaceOnUse" x1="823.5" y1="730.0" x2="200.5" y2="730.0"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="823.5" y1="730.0" x2="200.5" y2="730.0" stroke="url(#ap4)" stroke-width="200"/>
+<linearGradient id="ap5" gradientUnits="userSpaceOnUse" x1="578.1" y1="886.4" x2="137.6" y2="445.9"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="578.1" y1="886.4" x2="137.6" y2="445.9" stroke="url(#ap5)" stroke-width="200"/>
+<linearGradient id="ap6" gradientUnits="userSpaceOnUse" x1="294.0" y1="823.5" x2="294.0" y2="200.5"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="294.0" y1="823.5" x2="294.0" y2="200.5" stroke="url(#ap6)" stroke-width="200"/>
+<linearGradient id="ap7" gradientUnits="userSpaceOnUse" x1="137.6" y1="578.1" x2="578.1" y2="137.6"><stop offset="0" stop-color="#C9BEF8"/><stop offset="1" stop-color="#3B3084"/></linearGradient><line x1="137.6" y1="578.1" x2="578.1" y2="137.6" stroke="url(#ap7)" stroke-width="200"/>
+<line x1="560.9" y1="394.0" x2="1023.5" y2="394.0" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/>
+<line x1="630.0" y1="463.1" x2="957.1" y2="790.3" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/>
+<line x1="630.0" y1="560.9" x2="630.0" y2="1023.5" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/>
+<line x1="560.9" y1="630.0" x2="233.7" y2="957.1" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/>
+<line x1="463.1" y1="630.0" x2="0.5" y2="630.0" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/>
+<line x1="394.0" y1="560.9" x2="66.9" y2="233.7" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/>
+<line x1="394.0" y1="463.1" x2="394.0" y2="0.5" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/>
+<line x1="463.1" y1="394.0" x2="790.3" y2="66.9" stroke="#0E0E11" stroke-width="10" stroke-linecap="round"/></g><circle cx="512" cy="512" r="318" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="3"/>
 </svg>
