@@ -80,6 +80,10 @@ pub enum Command {
     LiveToggle,
     /// Bring the main window to the front (menu bar extra).
     ShowMainWindow,
+    /// Help menu: Settings > Shortcuts, the log, the repository.
+    OpenShortcuts,
+    RevealLog,
+    OpenRepo,
     /// Copy the focused photo's marks and IPTC; paste onto the selection.
     CopyMetadata,
     PasteMetadata,
@@ -204,6 +208,10 @@ impl Command {
             Command::ToggleTag => "image.tag".into(),
             Command::Rotate(true) => "image.rotate.cw".into(),
             Command::Rotate(false) => "image.rotate.ccw".into(),
+            Command::ShowMainWindow => "app.show".into(),
+            Command::OpenShortcuts => "help.shortcuts".into(),
+            Command::RevealLog => "help.log".into(),
+            Command::OpenRepo => "help.repo".into(),
             other => format!("other.{other:?}"),
         }
     }
@@ -222,6 +230,9 @@ impl Command {
             "view.loupe" => Command::ToggleLoupe,
             "ingest.live" => Command::LiveToggle,
             "app.show" => Command::ShowMainWindow,
+            "help.shortcuts" => Command::OpenShortcuts,
+            "help.log" => Command::RevealLog,
+            "help.repo" => Command::OpenRepo,
             "view.stack" => Command::ToggleStack,
             "image.crop.clear" => Command::CropClear,
             "file.deliver" => Command::DeliverLast,

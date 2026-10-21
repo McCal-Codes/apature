@@ -11,7 +11,7 @@ VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
 BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 APP=target/bundle/Apature.app
 
-cargo build --release -p apature
+APATURE_BUILD="$BUILD" cargo build --release -p apature
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

@@ -21,10 +21,6 @@ fn item(cmd: Command, text: &str, acc: Option<Accelerator>) -> MenuItem {
     MenuItem::with_id(cmd.menu_id(), text, true, acc)
 }
 
-fn disabled(text: &str) -> MenuItem {
-    MenuItem::new(text, false, None)
-}
-
 fn acc(mods: Modifiers, code: Code) -> Option<Accelerator> {
     Some(Accelerator::new(mods, code))
 }
@@ -44,10 +40,13 @@ impl MenuBar {
                 Some(AboutMetadata {
                     name: Some("Apature".into()),
                     version: Some(env!("CARGO_PKG_VERSION").into()),
-                    comments: Some(
-                        "Keyboard-first contact sheet, culling and metadata for photojournalists."
-                            .into(),
-                    ),
+                    comments: Some(format!(
+                        "Keyboard-first contact sheet, culling and metadata for photojournalists.\nBuild {}.",
+                        option_env!("APATURE_BUILD").unwrap_or("dev")
+                    )),
+                    copyright: Some("© 2026 Caleb McCartney · MIT or Apache-2.0".into()),
+                    website: Some("https://github.com/McCal-Codes/apature".into()),
+                    website_label: Some("Apature on GitHub".into()),
                     ..Default::default()
                 }),
             ),
@@ -94,6 +93,10 @@ impl MenuBar {
                 "Reveal in Finder",
                 acc(cmd, Code::KeyR),
             ),
+            &PredefinedMenuItem::separator(),
+            &item(Command::DeliverLast, "Send Last Export…", None),
+            &item(Command::DeliverResendFailed, "Resend Failed Files", None),
+            &item(Command::LiveToggle, "Live Ingest", None),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::close_window(Some("Close Window")),
         ])?;
@@ -315,6 +318,28 @@ impl MenuBar {
             ),
             &item(Command::SaveCaption, "Save Caption", None),
             &PredefinedMenuItem::separator(),
+            &item(
+                Command::CropToggle,
+                "Crop…",
+                Some(Accelerator::new(Modifiers::empty(), Code::KeyK)),
+            ),
+            &item(Command::CropClear, "Remove Crop", None),
+            &item(
+                Command::ToggleLoupe,
+                "Loupe",
+                Some(Accelerator::new(Modifiers::empty(), Code::KeyL)),
+            ),
+            &item(
+                Command::CyclePreviewBoost,
+                "Brighten Preview (view only)",
+                Some(Accelerator::new(Modifiers::empty(), Code::KeyB)),
+            ),
+            &item(
+                Command::ToggleStack,
+                "Expand or Collapse Burst",
+                Some(Accelerator::new(Modifiers::empty(), Code::KeyS)),
+            ),
+            &PredefinedMenuItem::separator(),
             &advance,
         ])?;
 
@@ -335,7 +360,11 @@ impl MenuBar {
             ),
         ])?;
         let help = Submenu::new("Help", true);
-        help.append(&disabled("Apature Help (M6)"))?;
+        help.append_items(&[
+            &item(Command::OpenShortcuts, "Keyboard Shortcuts", None),
+            &item(Command::RevealLog, "Reveal Log in Finder", None),
+            &item(Command::OpenRepo, "Apature on GitHub", None),
+        ])?;
 
         menu.append_items(&[&app, &file, &edit, &view, &image, &window, &help])?;
         Ok(MenuBar {

@@ -3312,6 +3312,23 @@ impl App {
             }
             Command::ToggleCompare => self.toggle_compare(),
             Command::IngestStart => self.ingest_start(),
+            Command::OpenShortcuts => {
+                self.settings_open = true;
+                self.settings_page = ui::settings::Page::Shortcuts;
+            }
+            Command::RevealLog => {
+                if let Some(d) = directories::ProjectDirs::from("dev", "mccal", "Apature") {
+                    let _ = std::process::Command::new("open")
+                        .arg("-R")
+                        .arg(d.data_dir().join("apature.log"))
+                        .spawn();
+                }
+            }
+            Command::OpenRepo => {
+                let _ = std::process::Command::new("open")
+                    .arg("https://github.com/McCal-Codes/apature")
+                    .spawn();
+            }
             Command::ShowMainWindow => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
