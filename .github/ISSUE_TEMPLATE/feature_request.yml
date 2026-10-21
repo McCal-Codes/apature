@@ -1,0 +1,21 @@
+name: Feature request
+description: Something Apature should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem on a real shoot
+      description: What slows you down or goes wrong today, in the order it happens.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would fix it
+      description: If Photo Mechanic or another tool does this well, say how.
+  - type: input
+    id: outlet
+    attributes:
+      label: Who you deliver to
+      placeholder: "Daily paper via FTP, wire service, own archive"
