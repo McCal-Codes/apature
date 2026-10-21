@@ -95,6 +95,18 @@ ledger; capability table per camera per docs/cross-project). Keep the branch
 isolated until hardware behaviour is known; it does not touch main's code.
 Branch rebuilt 2026-10-21 on the rewritten main (four commits, experiments/ only).
 
+Camera test done 2026-10-21 on the Mac (gphoto2 2.5.32, Z 6 II firmware
+V1.62, USB-C data cable, MTP/PTP): detected as "Nikon Z6_2"; a physical
+shutter press emits `FILEADDED CAL_2246.NEF /store_00010001/DCIM/109NZ6_2`;
+the frame stays on the card after a PTP `--get-file` (listed before and
+after). Measured pull speed: 43.8 MB NEF in 18.9 s ≈ 2.3 MB/s, so a 10-frame
+burst takes ~3 min to drain over PTP. macOS relaunches `ptpcamerad` and
+steals the device; Mac tests need it killed in a loop (not an issue on a Pi).
+Implication for hardware: PTP pull is too slow to be the only path. Prefer
+the camera's own Wi-Fi/FTP push (the body supports FTP upload) into Pocket
+running an FTP server + Live Ingest, with PTP kept for events and small
+JPEGs. Measure Wi-Fi FTP throughput next.
+
 Hardware help wanted (owner, 2026-10-21): choose and spec the Pocket device
 when the camera test passes. Candidates to evaluate against the Z 6 II over
 USB: Raspberry Pi 5 (USB 3, NVMe HAT for the SSD, 5 V/5 A power), Pi Zero 2 W
