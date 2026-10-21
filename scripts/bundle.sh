@@ -53,7 +53,10 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # Signing. With a Developer ID Application certificate in the Keychain the
 # bundle is signed for distribution (hardened runtime, entitlements); without
 # one it is ad-hoc signed for local use. Set SIGN_IDENTITY to force one.
-IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Developer ID Application: [^"]*"' | tr -d '"')}"
+IDENTITY="${SIGN_IDENTITY:-}"
+if [[ -z "$IDENTITY" ]]; then
+  IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Developer ID Application: [^"]*"' | tr -d '"' || true)"
+fi
 if [[ -n "$IDENTITY" ]]; then
   codesign --force --deep --options runtime --timestamp \
     --entitlements apps/desktop/assets/entitlements.plist \
