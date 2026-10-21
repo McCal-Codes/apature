@@ -147,6 +147,17 @@ impl Checker {
     }
 }
 
+/// The release asset a user of this platform should download.
+fn is_download_for_this_platform(name: &str) -> bool {
+    if cfg!(target_os = "macos") {
+        name.ends_with(".dmg")
+    } else if cfg!(target_os = "windows") {
+        name.ends_with(".zip") && name.to_lowercase().contains("windows")
+    } else {
+        name.ends_with(".AppImage")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::is_newer;
@@ -159,16 +170,5 @@ mod tests {
         assert!(!is_newer("0.2.0-beta.1", "0.2.0"));
         assert!(is_newer("0.2.0-beta.2", "0.2.0-beta.1"));
         assert!(!is_newer("0.1.9", "0.10.0"));
-    }
-}
-
-/// The release asset a user of this platform should download.
-fn is_download_for_this_platform(name: &str) -> bool {
-    if cfg!(target_os = "macos") {
-        name.ends_with(".dmg")
-    } else if cfg!(target_os = "windows") {
-        name.ends_with(".zip") && name.to_lowercase().contains("windows")
-    } else {
-        name.ends_with(".AppImage")
     }
 }
