@@ -199,6 +199,29 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                     }
                 });
                 hint(ui, t, "System follows System Settings › Appearance.");
+                ui.add_space(S2);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Accent").color(t.text2));
+                    for a in crate::prefs::Accent::ALL {
+                        let swatch = Theme::for_ctx(ui.ctx()).with_accent(a);
+                        let selected = app.prefs.accent == a;
+                        let (rect, resp) = ui.allocate_exact_size(egui::vec2(22.0, 22.0), egui::Sense::click());
+                        let resp = resp.on_hover_text(a.label());
+                        let p = ui.painter();
+                        p.circle_filled(rect.center(), 9.0, swatch.accent);
+                        if selected {
+                            p.circle_stroke(rect.center(), 11.0, egui::Stroke::new(2.0, t.text));
+                        } else if resp.hovered() {
+                            p.circle_stroke(rect.center(), 11.0, egui::Stroke::new(1.0, t.line_strong));
+                        }
+                        if resp.clicked() {
+                            app.prefs.accent = a;
+                            app.prefs_dirty = true;
+                        }
+                    }
+                    ui.label(egui::RichText::new(app.prefs.accent.label()).color(t.muted));
+                });
+                hint(ui, t, "Selection, links and focus take the accent. Lavender is the Apature default.");
                 ui.add_space(S3);
                 section(ui, t, "Behaviour");
                 if ui.checkbox(&mut app.prefs.advance_after_mark, "Advance to the next photo after marking one").changed() {

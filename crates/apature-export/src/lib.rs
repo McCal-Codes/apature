@@ -516,10 +516,10 @@ mod tests {
 
     fn sample_iptc() -> Iptc {
         Iptc {
-            description: Some("A caption. Photog/Butler Eagle".into()),
-            credit: Some("Butler Eagle".into()),
+            description: Some("A caption. Photog/Example Press".into()),
+            credit: Some("Example Press".into()),
             creator: Some(vec!["Caleb".into()]),
-            copyright: Some("© 2026 Butler Eagle".into()),
+            copyright: Some("© 2026 Example Press".into()),
             headline: Some("100726 SPO BGLF".into()),
             ..Default::default()
         }
@@ -697,13 +697,13 @@ mod tests {
         let back = iptc::parse(packet);
         assert_eq!(
             back.description.as_deref(),
-            Some("A caption. Photog/Butler Eagle")
+            Some("A caption. Photog/Example Press")
         );
         let app13 = segs.iter().find(|s| s.marker == 0xED).unwrap();
         let sets = iim::parse(iim::from_app13(app13.payload(&bytes)).unwrap());
         assert!(sets
             .iter()
-            .any(|(r, s, v)| *r == 2 && *s == 110 && v == b"Butler Eagle"));
+            .any(|(r, s, v)| *r == 2 && *s == 110 && v == b"Example Press"));
         // Decodes again at the new size.
         let back = decode_jpeg(&bytes, None).unwrap();
         assert_eq!((back.width, back.height), (100, 50));

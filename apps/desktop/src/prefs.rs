@@ -19,6 +19,42 @@ pub enum Appearance {
     Light,
 }
 
+/// The accent colour, in a soft palette that stays readable on both
+/// appearances. Each name maps to a pair (dark appearance, light appearance)
+/// in `ui::tokens::Theme::with_accent`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Accent {
+    #[default]
+    Lavender,
+    Sage,
+    Sky,
+    Peach,
+    Rose,
+    Mist,
+}
+
+impl Accent {
+    pub const ALL: [Accent; 6] = [
+        Accent::Lavender,
+        Accent::Sage,
+        Accent::Sky,
+        Accent::Peach,
+        Accent::Rose,
+        Accent::Mist,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Accent::Lavender => "Lavender",
+            Accent::Sage => "Sage",
+            Accent::Sky => "Sky",
+            Accent::Peach => "Peach",
+            Accent::Rose => "Rose",
+            Accent::Mist => "Mist",
+        }
+    }
+}
+
 /// Export workspace defaults (the desk's delivery spec).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -85,6 +121,9 @@ pub struct Prefs {
     pub ingest: Option<apature_ingest::Options>,
     pub scheme: apature_core::ColorClassScheme,
     pub appearance: Appearance,
+    /// Accent colour; `Accent::Lavender` is the Apature default.
+    #[serde(default)]
+    pub accent: Accent,
     pub open_tabs: Vec<PathBuf>,
     pub active_tab: usize,
     pub code_delimiter: char,
@@ -168,6 +207,7 @@ impl Default for Prefs {
             ui_scale: 1.0,
             motion: Motion::System,
             high_contrast: false,
+            accent: Accent::default(),
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,

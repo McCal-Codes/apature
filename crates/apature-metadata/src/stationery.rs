@@ -1,5 +1,5 @@
 //! Assignment stationery: the `key: value` config the owner already writes
-//! for each Butler Eagle assignment becomes an IPTC pad, a caption template
+//! for each Example Press assignment becomes an IPTC pad, a caption template
 //! and a code table. Keys beyond the generator's set are accepted so one
 //! file can carry everything a newsroom needs.
 
@@ -191,7 +191,7 @@ impl Assignment {
 mod tests {
     use super::*;
 
-    const CFG: &str = "# Butler Eagle assignment config.\ndate: 2026-10-06\nslug: 100726 SPO BGLF WPIAL Championships\nvenue: Oakmont Country Club\ncity: Oakmont\nstate: Pa.\ncountry: USA\nevent: the WPIAL Class 2A Boys Individual Golf Championship\nkeywords: North Catholic; Trojans; WPIAL\nsupplemental: golf; high school\nteam: North Catholic's\nphotographer: Caleb McCartney/Special to the Eagle\nsource: Butler Eagle\ncopyright: © 2026 Butler Eagle\ncode: cf = North Catholic's Christopher Faber\ncode: oak = Oakmont Country Club\n";
+    const CFG: &str = "# Example Press assignment config.\ndate: 2026-10-06\nslug: 100726 SPO BGLF WPIAL Championships\nvenue: Oakmont Country Club\ncity: Oakmont\nstate: Pa.\ncountry: USA\nevent: the WPIAL Class 2A Boys Individual Golf Championship\nkeywords: North Catholic; Trojans; WPIAL\nsupplemental: golf; high school\nteam: North Catholic's\nphotographer: Caleb McCartney/Special to the Eagle\nsource: Example Press\ncopyright: © 2026 Example Press\ncode: cf = North Catholic's Christopher Faber\ncode: oak = Oakmont Country Club\n";
 
     #[test]
     fn parses_the_generator_format() {

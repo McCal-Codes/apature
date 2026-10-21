@@ -86,7 +86,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                         }
                     });
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut app.export.preset_draft).desired_width(160.0).hint_text("Butler Eagle"));
+                        ui.add(egui::TextEdit::singleline(&mut app.export.preset_draft).desired_width(160.0).hint_text("Daily Record"));
                         let name = app.export.preset_draft.trim().to_string();
                         if !name.is_empty() && ui.small_button("Save as preset").clicked() {
                             app.prefs.export_presets.retain(|p| p.name != name);

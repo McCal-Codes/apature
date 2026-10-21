@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/sheet.png" width="820" alt="The Apature contact sheet in the dark appearance: thumbnails on the left, the inspector with capture data and marks on the right">
+  <img src="docs/marketing/hero-dark.png" width="820" alt="Apature: card in, cull, caption, send. The contact sheet in the dark appearance with a storm-damage assignment open">
 </p>
 
 <div align="center">
@@ -111,6 +111,8 @@ refreshes, `⌘,` opens Settings. The full table is in Settings › Shortcuts.
   what both of those need to agree on a label.
 - Copies are verified by hash before they count. The card is read-only.
 - No account, no analytics, no network use except the delivery targets you set up. See [PRIVACY.md](PRIVACY.md).
+
+Press kit: screenshots, hero images, a social preview and approved wording are in [docs/marketing](docs/marketing).
 
 ## Get involved
 

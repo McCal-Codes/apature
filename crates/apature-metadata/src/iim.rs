@@ -171,13 +171,13 @@ mod tests {
         Iptc {
             title: Some("100726-SPO-BGLF-001".into()),
             headline: Some("100726 SPO BGLF WPIAL Championships".into()),
-            description: Some("Caption with ü. Photog/Butler Eagle".into()),
+            description: Some("Caption with ü. Photog/Example Press".into()),
             keywords: Some(vec!["golf".into(), "Oakmont".into()]),
             creator: Some(vec!["Caleb McCartney".into()]),
             creator_title: Some("Photographer".into()),
-            credit: Some("Butler Eagle".into()),
-            source: Some("Butler Eagle".into()),
-            copyright: Some("© 2026 Butler Eagle".into()),
+            credit: Some("Example Press".into()),
+            source: Some("Example Press".into()),
+            copyright: Some("© 2026 Example Press".into()),
             city: Some("Oakmont".into()),
             state: Some("Pa.".into()),
             country: Some("USA".into()),
@@ -206,7 +206,7 @@ mod tests {
                 .collect()
         };
         assert_eq!(get(1, 90), vec!["\x1b%G"]);
-        assert_eq!(get(2, 120), vec!["Caption with ü. Photog/Butler Eagle"]);
+        assert_eq!(get(2, 120), vec!["Caption with ü. Photog/Example Press"]);
         assert_eq!(get(2, 25), vec!["golf", "Oakmont"]);
         assert_eq!(get(2, 55), vec!["20261006"]);
         assert!(get(2, 60).is_empty(), "no zone → no TimeCreated");
@@ -222,7 +222,7 @@ mod tests {
             date_parts("2026:10:06 19:30:00"),
             Some(("20261006".into(), None))
         );
-        assert_eq!(get(2, 116), vec!["© 2026 Butler Eagle"]);
+        assert_eq!(get(2, 116), vec!["© 2026 Example Press"]);
         assert_eq!(get(2, 80), vec!["Caleb McCartney"]);
         assert_eq!(get(2, 105), vec!["100726 SPO BGLF WPIAL Championships"]);
         assert!(get(2, 92).is_empty(), "no sublocation → no dataset");
