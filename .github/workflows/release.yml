@@ -22,6 +22,8 @@ jobs:
       APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the build number is the commit count
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Import the Developer ID certificate (when provided)
