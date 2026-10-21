@@ -111,6 +111,8 @@ jobs:
         shell: bash
         run: bash tools/check-version.sh "${GITHUB_REF_NAME}"
       - run: cargo build --release -p apature -p apature-cli
+      - name: Software OpenGL for the runner (Mesa llvmpipe; the VM has no GPU)
+        uses: ssciwr/setup-mesa-dist-win@v2
       - name: Smoke test (the app starts headless and writes a screenshot)
         shell: pwsh
         run: |
