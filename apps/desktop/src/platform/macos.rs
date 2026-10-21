@@ -1,7 +1,7 @@
 //! Native menu bar via `muda`, mapped onto `Command`s.
 
 use muda::accelerator::{Accelerator, Code, Modifiers};
-use muda::{AboutMetadata, CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 
 use crate::commands::{Command, Workspace};
 
@@ -35,21 +35,7 @@ impl MenuBar {
 
         let app = Submenu::new("Apature", true);
         app.append_items(&[
-            &PredefinedMenuItem::about(
-                Some("About Apature"),
-                Some(AboutMetadata {
-                    name: Some("Apature".into()),
-                    version: Some(env!("CARGO_PKG_VERSION").into()),
-                    comments: Some(format!(
-                        "Keyboard-first contact sheet, culling and metadata for photojournalists.\nBuild {}.",
-                        option_env!("APATURE_BUILD").unwrap_or("dev")
-                    )),
-                    copyright: Some("© 2026 Caleb McCartney · MIT or Apache-2.0".into()),
-                    website: Some("https://github.com/McCal-Codes/apature".into()),
-                    website_label: Some("Apature on GitHub".into()),
-                    ..Default::default()
-                }),
-            ),
+            &item(Command::OpenAbout, "About Apature", None),
             &PredefinedMenuItem::separator(),
             &item(Command::OpenSettings, "Settings…", acc(cmd, Code::Comma)),
             &PredefinedMenuItem::separator(),

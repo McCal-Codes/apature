@@ -82,6 +82,7 @@ pub enum Command {
     ShowMainWindow,
     /// Help menu: Settings > Shortcuts, the log, the repository.
     OpenShortcuts,
+    OpenAbout,
     RevealLog,
     OpenRepo,
     /// Copy the focused photo's marks and IPTC; paste onto the selection.
@@ -210,6 +211,7 @@ impl Command {
             Command::Rotate(false) => "image.rotate.ccw".into(),
             Command::ShowMainWindow => "app.show".into(),
             Command::OpenShortcuts => "help.shortcuts".into(),
+            Command::OpenAbout => "app.about".into(),
             Command::RevealLog => "help.log".into(),
             Command::OpenRepo => "help.repo".into(),
             other => format!("other.{other:?}"),
@@ -231,6 +233,7 @@ impl Command {
             "ingest.live" => Command::LiveToggle,
             "app.show" => Command::ShowMainWindow,
             "help.shortcuts" => Command::OpenShortcuts,
+            "app.about" => Command::OpenAbout,
             "help.log" => Command::RevealLog,
             "help.repo" => Command::OpenRepo,
             "view.stack" => Command::ToggleStack,

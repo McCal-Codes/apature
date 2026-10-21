@@ -426,6 +426,9 @@ pub struct App {
     pub active: usize,
     next_generation: u64,
     pub settings_open: bool,
+    pub about_open: bool,
+    /// Preview is showing in its own window (prefs.preview_in_window).
+    pub preview_window: bool,
     pub settings_page: ui::settings::Page,
     pub cache_size: Option<(usize, u64)>,
     applied_appearance: Option<crate::prefs::Appearance>,
@@ -544,6 +547,8 @@ impl App {
             active: 0,
             next_generation: 1,
             settings_open: false,
+            about_open: launch.about,
+            preview_window: false,
             settings_page: ui::settings::Page::General,
             cache_size: None,
             applied_appearance: None,
@@ -2275,9 +2280,60 @@ impl App {
 
     /// Enter the Preview workspace with a grow-in from the focused cell.
     fn enter_preview(&mut self) {
-        self.workspace = Workspace::Preview;
         self.preview_from = self.cursor_cell_rect;
         self.preview_since = Some(Instant::now());
+        if self.prefs.preview_in_window && self.launch.screenshot.is_none() {
+            // Its own window; the sheet stays where it is.
+            self.preview_window = true;
+            return;
+        }
+        self.workspace = Workspace::Preview;
+    }
+
+    /// Preview in a separate window: keys are read from that window's own
+    /// input, with the workspace set to Preview for the duration so every
+    /// preview shortcut (Z, C, L, K, B, arrows) behaves as it does inline.
+    fn show_preview_window(&mut self, ctx: &egui::Context, t: &ui::tokens::Theme) {
+        if !self.preview_window {
+            return;
+        }
+        let id = egui::ViewportId::from_hash_of("apature-preview");
+        let builder = egui::ViewportBuilder::default()
+            .with_title("Preview")
+            .with_app_id("dev.mccal.apature")
+            .with_inner_size([1280.0, 860.0])
+            .with_min_inner_size([640.0, 480.0]);
+        ctx.show_viewport_immediate(id, builder, |ctx, class| {
+            let saved = self.workspace;
+            self.workspace = Workspace::Preview;
+            let cmds = self.keyboard_commands(ctx);
+            for c in cmds {
+                self.dispatch(ctx, c);
+            }
+            let exited = self.workspace != Workspace::Preview
+                || ctx.input(|i| i.viewport().close_requested());
+            if !exited {
+                if class == egui::ViewportClass::Embedded {
+                    egui::Window::new("Preview")
+                        .default_size([1200.0, 800.0])
+                        .show(ctx, |ui| ui::preview::show(self, ui, t));
+                } else {
+                    egui::CentralPanel::default()
+                        .frame(egui::Frame::NONE.fill(t.photo))
+                        .show(ctx, |ui| ui::preview::show(self, ui, t));
+                }
+            }
+            // The sheet in the main window stays on whatever it was showing.
+            self.workspace = if saved == Workspace::Preview {
+                Workspace::Sheet
+            } else {
+                saved
+            };
+            if exited {
+                self.preview_window = false;
+                self.scroll_to_cursor = true;
+            }
+        });
     }
 
     /// Toggle 1:1 and fit. `at` is the image point (0..1) to zoom into (the
@@ -3302,9 +3358,36 @@ impl App {
                 if !self.items.is_empty() {
                     let mut targets = self.selection.targets(self.cursor);
                     targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
-                    self.trash_dialog = Some(targets);
+                    // The system's own confirmation (a sheet on macOS); the
+                    // in-window dialog stays for headless screenshot runs.
+                    if self.launch.screenshot.is_some() {
+                        self.trash_dialog = Some(targets);
+                    } else {
+                        let n = targets.len();
+                        let files: usize = targets
+                            .iter()
+                            .map(|&i| apature_core::fileops::item_files(&self.items[i]).len())
+                            .sum();
+                        let ok = rfd::MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Warning)
+                            .set_title(if n == 1 { "Move this photo to the Trash?" } else { "Move these photos to the Trash?" })
+                            .set_description(format!(
+                                "{n} photo{} ({files} file{} with sidecars and pairs) go to the Trash. You can put them back from the Finder.",
+                                if n == 1 { "" } else { "s" },
+                                if files == 1 { "" } else { "s" }
+                            ))
+                            .set_buttons(rfd::MessageButtons::OkCancelCustom("Move to Trash".into(), "Cancel".into()))
+                            .show();
+                        if ok == rfd::MessageDialogResult::Ok
+                            || matches!(ok, rfd::MessageDialogResult::Custom(ref s) if s == "Move to Trash")
+                        {
+                            self.trash_dialog = Some(targets);
+                            self.trash_confirm();
+                        }
+                    }
                 }
             }
+            Command::OpenAbout => self.about_open = true,
             Command::TrashConfirm => self.trash_confirm(),
             Command::CloseDialog => {
                 self.rename_dialog = None;
@@ -3925,6 +4008,7 @@ impl eframe::App for App {
                 }
             });
         self.show_ingest_window(ctx, &t);
+        self.show_preview_window(ctx, &t);
         let r = ctx.content_rect();
         ctx.layer_painter(egui::LayerId::background()).line_segment(
             [

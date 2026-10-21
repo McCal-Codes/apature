@@ -3,11 +3,68 @@
 
 use egui::RichText;
 
-use super::tokens::{Theme, S2, S3, S4};
+use super::tokens::{Theme, S1, S2, S3, S4};
 use crate::app::App;
 use crate::commands::Command;
 
+const THIRD_PARTY: &str = include_str!("../../../../docs/THIRD_PARTY.md");
+
+/// About: name, version and build, what it is, where it lives, and the
+/// third-party notices the licences require us to show.
+fn about(app: &mut App, ctx: &egui::Context, t: &Theme) {
+    if !app.about_open {
+        return;
+    }
+    let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
+        ui.set_width(520.0);
+        ui.vertical_centered(|ui| {
+            ui.add_space(S3);
+            ui.label(RichText::new("Apature").size(22.0).strong().color(t.text));
+            ui.label(
+                RichText::new(format!(
+                    "Version {} · build {}",
+                    env!("CARGO_PKG_VERSION"),
+                    option_env!("APATURE_BUILD").unwrap_or("dev")
+                ))
+                .monospace()
+                .size(11.0)
+                .color(t.text2),
+            );
+            ui.add_space(S2);
+            ui.label(RichText::new("Keyboard-first contact sheet, culling, metadata and delivery for photojournalists.").size(12.5).color(t.text2));
+            ui.add_space(S2);
+            ui.horizontal(|ui| {
+                ui.hyperlink_to("Apature on GitHub", "https://github.com/McCal-Codes/apature");
+                ui.label(RichText::new("·  © 2026 Caleb McCartney  ·  MIT or Apache-2.0").size(11.0).color(t.muted));
+            });
+        });
+        ui.add_space(S3);
+        super::eyebrow(ui, t, "Third-party notices");
+        ui.add_space(S1);
+        egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+            // The notices file is a Markdown table; show it as plain lines.
+            let plain: String = THIRD_PARTY
+                .lines()
+                .filter(|l| !l.starts_with("|---"))
+                .map(|l| l.trim_start_matches('#').replace(" | ", "   ").trim_matches(|c| c == '|' || c == ' ').to_string())
+                .collect::<Vec<_>>()
+                .join("\n");
+            ui.add(egui::Label::new(RichText::new(plain).monospace().size(10.0).color(t.text2)).wrap());
+        });
+        ui.add_space(S3);
+        ui.vertical_centered(|ui| {
+            if ui.button("Close").clicked() {
+                app.about_open = false;
+            }
+        });
+    });
+    if modal.should_close() {
+        app.about_open = false;
+    }
+}
+
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
+    about(app, ctx, t);
     let mut cmds: Vec<Command> = Vec::new();
 
     if let Some(d) = app.rename_dialog.as_mut() {

@@ -75,6 +75,9 @@ pub struct Prefs {
     /// Group frames shot within a second of the previous one behind one
     /// thumbnail (bursts); S expands or collapses the focused stack.
     pub stack_bursts: bool,
+    /// Preview opens in its own window (Photo Mechanic style) instead of
+    /// replacing the sheet; Enter and Esc still toggle it.
+    pub preview_in_window: bool,
     /// What the bare 1–8 keys set: colour class (Photo Mechanic) or star rating.
     pub number_keys: NumberKeys,
     pub assignment_file: Option<PathBuf>,
@@ -138,6 +141,7 @@ impl Default for Prefs {
             sort_reversed: false,
             advance_after_mark: true,
             stack_bursts: false,
+            preview_in_window: false,
             number_keys: NumberKeys::Rating,
             assignment_file: None,
             codes_file: None,

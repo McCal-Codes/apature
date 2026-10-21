@@ -204,6 +204,9 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                 if ui.checkbox(&mut app.prefs.advance_after_mark, "Advance to the next photo after marking one").changed() {
                     app.prefs_dirty = true;
                 }
+                if ui.checkbox(&mut app.prefs.preview_in_window, "Open Preview in its own window (the sheet stays; good for two screens)").changed() {
+                    app.prefs_dirty = true;
+                }
                 if ui.checkbox(&mut app.prefs.stack_bursts, "Stack bursts: frames shot within a second sit behind one thumbnail (S expands)").changed() {
                     app.prefs_dirty = true;
                     app.rebuild_view();
