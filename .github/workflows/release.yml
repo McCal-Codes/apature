@@ -1,0 +1,56 @@
+name: Release
+
+# A tag like v0.1.0 builds the app on macOS and attaches the DMG to a GitHub
+# release. Signing and notarisation run only when the secrets exist; without
+# them the DMG is ad-hoc signed and the release notes say so.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Import the Developer ID certificate (when provided)
+        if: ${{ secrets.DEVELOPER_ID_P12 != '' }}
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          echo "$P12" | base64 --decode > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+      - name: Store notary credentials (when provided)
+        if: ${{ secrets.NOTARY_APPLE_ID != '' }}
+        env:
+          APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+        run: xcrun notarytool store-credentials apature --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD"
+      - name: Build the disk image
+        run: |
+          if security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
+            scripts/bundle.sh --notarize
+          else
+            scripts/bundle.sh --dmg
+          fi
+      - name: Release notes from the changelog
+        run: |
+          awk '/^## \[/{n++} n==1' CHANGELOG.md > notes.md
+          if ! security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
+            printf '\n> This build is ad-hoc signed. Right-click › Open the first time, or wait for a notarised build.\n' >> notes.md
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: target/bundle/Apature-*.dmg
+          body_path: notes.md

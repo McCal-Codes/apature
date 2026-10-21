@@ -50,10 +50,43 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-# Ad-hoc signature so Gatekeeper lets a local build launch and the identifier
-# is attached to the process (menu title, cache paths, permissions prompts).
-codesign --force --deep --sign - "$APP" >/dev/null
+# Signing. With a Developer ID Application certificate in the Keychain the
+# bundle is signed for distribution (hardened runtime, entitlements); without
+# one it is ad-hoc signed for local use. Set SIGN_IDENTITY to force one.
+IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Developer ID Application: [^"]*"' | tr -d '"')}"
+if [[ -n "$IDENTITY" ]]; then
+  codesign --force --deep --options runtime --timestamp \
+    --entitlements apps/desktop/assets/entitlements.plist \
+    --sign "$IDENTITY" "$APP"
+  echo "signed with $IDENTITY"
+else
+  codesign --force --deep --sign - "$APP" >/dev/null
+  echo "ad-hoc signed (no Developer ID Application certificate found)"
+fi
 echo "built $APP (version $VERSION, build $BUILD)"
+
+# --dmg: a drag-to-Applications disk image; --notarize additionally submits
+# it to Apple with the keychain profile "apature" (xcrun notarytool
+# store-credentials apature) and staples the ticket. --install copies the
+# app to /Applications (local use).
+if [[ "${1:-}" == "--dmg" || "${2:-}" == "--dmg" || "${1:-}" == "--notarize" || "${2:-}" == "--notarize" ]]; then
+  DMG="target/bundle/Apature-${VERSION}.dmg"
+  STAGE=target/bundle/dmg-stage
+  rm -rf "$STAGE" "$DMG"; mkdir -p "$STAGE"
+  cp -R "$APP" "$STAGE/Apature.app"
+  ln -s /Applications "$STAGE/Applications"
+  hdiutil create -quiet -volname "Apature $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+  rm -rf "$STAGE"
+  if [[ -n "$IDENTITY" ]]; then codesign --force --timestamp --sign "$IDENTITY" "$DMG"; fi
+  echo "disk image: $DMG ($(du -h "$DMG" | cut -f1))"
+  if [[ "${1:-}" == "--notarize" || "${2:-}" == "--notarize" ]]; then
+    if [[ -z "$IDENTITY" ]]; then echo "notarize needs a Developer ID signature"; exit 1; fi
+    xcrun notarytool submit "$DMG" --keychain-profile apature --wait
+    xcrun stapler staple "$DMG"
+    xcrun stapler staple "$APP"
+    echo "notarized and stapled"
+  fi
+fi
 
 if [[ "${1:-}" == "--install" ]]; then
   rm -rf /Applications/Apature.app

@@ -1,86 +1,104 @@
 # Apature
 
-> Renamed from `photo-workflow` on 2026-10-13; history is continuous.
+Keyboard-first contact sheet, culling, captions, export and delivery for
+photojournalists. Rust, macOS first, open source. The ingest → cull →
+caption → deliver loop of Photo Mechanic, rebuilt around one rule: the
+photographs are the content, the interface is the darkroom.
 
-Apature is a fast, keyboard-first contact sheet, culling and metadata tool
-for photojournalists, written in Rust, macOS first. The ingest → cull →
-caption → deliver loop of Photo Mechanic, rebuilt as an independent
-open-source application.
+![Contact sheet](docs/screenshots/sheet.png)
 
-**Status: 0.1 engine proof of concept with a throwaway UI probe.** The
-engine opens a folder of RAW/JPEG files, finds the camera-embedded previews
-(no RAW decoding), decodes them with DCT scaling, caches thumbnails, and
-records star ratings, colour classes and tags into XMP sidecars edited in
-place so Photo Mechanic and Lightroom data survives. The egui window
-exercises all of that but is not the product interface; see
-[docs/STATUS.md](docs/STATUS.md) for exactly what is implemented, tested
-and verified, and [docs/design/](docs/design/) for where the real UI is
-being designed.
+## What it does
 
-## Run it
+- **Ingest** from a card or any folder: day chips before you copy, a live
+  example of every name the templates produce, SHA-256 verification of every
+  copy at every destination, a ledger so a card is never copied twice,
+  voice-memo and sidecar companions, optional folder preservation, a backup
+  destination, eject when verified, and Live Ingest for a watched folder.
+- **Cull** on the sheet: ratings, colour classes, tags, filters, sort, tabs,
+  burst stacks, compare up to four frames, a loupe, 1:1 with one shared
+  magnification, a view-only exposure boost, rotate and crop stored in the
+  sidecar and applied on export.
+- **Caption** with an assignment pad, code replacements, Photo Mechanic's
+  variables, keywords, GPS, recent values, and save-to-selection.
+- **Export** JPEG or JPEG XL with presets per outlet, EXIF, XMP and
+  IPTC-IIM kept, then **deliver** to a folder, FTP, FTPS or SFTP with
+  passwords in the Keychain, retry, and a per-photo sent ledger.
+- Two appearances, Reduce Motion, text scaling, higher contrast, focus
+  rings, a menu bar extra with live status, toasts, a log file.
+
+| Preview and crop | Caption | Export |
+|---|---|---|
+| ![Crop](docs/screenshots/crop.png) | ![Caption](docs/screenshots/caption.png) | ![Export](docs/screenshots/export.png) |
+
+| Ingest | Settings |
+|---|---|
+| ![Ingest](docs/screenshots/ingest.png) | ![Settings](docs/screenshots/settings.png) |
+
+## Install
+
+Download the DMG from the latest release, drag Apature to Applications.
+Requires macOS 12 or newer. Optional: `brew install jpeg-xl` for JPEG XL
+export.
+
+Or build it yourself (Rust 1.80 or newer):
 
 ```bash
-cargo run --release -p apature -- /path/to/assignment
+scripts/bundle.sh --install   # builds, bundles, ad-hoc signs, installs to /Applications
 ```
 
-Build a double-clickable app (ad-hoc signed, local use):
+## Keys
 
-```bash
-scripts/bundle.sh --install   # → /Applications/Apature.app
-```
+Arrows move, Enter or Space opens Preview, Esc returns. `1`–`5` rate,
+`0` clears, `⌘1`–`⌘8` set a colour class (or the Photo Mechanic layout in
+Settings › Shortcuts), `X` rejects, `T` tags. In Preview: `Z` 1:1, `C`
+compare, `L` loupe, `K` crop, `B` brighten, `S` burst stack, `⌘[` `⌘]`
+rotate. `⌘⇧1`–`5` switch workspaces, `⌘E` exports, `⌘R` refreshes,
+`⌘,` opens Settings. The full table is in Settings › Shortcuts.
 
-Or use the engine from the command line:
+## Compatibility promises
 
-```bash
-cargo run --release -p apature-cli -- previews DSC_0001.NEF   # what previews are embedded
-cargo run --release -p apature-cli -- bench ./assignment --cache  # thumbnail throughput
-cargo run --release -p apature-cli -- mark DSC_0001.NEF --rating 4 --class 1
-```
-
-Keys in the app (Photo Mechanic conventions): arrows move, Enter/Space opens
-the full preview, Esc returns, `1`–`8` set a colour class, `0` clears it,
-`⌘0`–`⌘5` set stars, `X` rejects, `T` toggles the tag, `+`/`-` resize cells,
-`⌘O` opens a folder.
+- Originals are never modified. Marks, rotation and crop go to the XMP
+  sidecar next to the file, edited property by property so what Photo
+  Mechanic or Lightroom wrote survives.
+- `xmp:Rating`, `xmp:Label`, `photomechanic:ColorClass` and
+  `photomechanic:Tagged` are written together, which is what both of those
+  need to agree on a label.
+- Copies are verified by hash before they count. The card is read-only.
 
 ## How it is built
 
 ```
 crates/
-  apature-core/      file model, RAW+JPEG pairing, folder scan, marks, tiny TIFF reader
-  apature-preview/   find embedded JPEGs in RAW files, decode with DCT downscaling, disk cache
-  apature-metadata/  EXIF summary; XMP sidecar read/write that edits in place
-  apature-ingest/    verified copy (temp name → hash both sides → rename), never deletes
+  apature-core/      file model, RAW+JPEG pairing, folder scan, marks, rename/trash
+  apature-preview/   embedded-JPEG previews with DCT downscaling, disk cache
+  apature-metadata/  EXIF, XMP sidecars edited in place, IPTC-IIM, edits (rotate, crop)
+  apature-ingest/    plans, templates with Photo Mechanic variables, verified copy, ledger
+  apature-export/    resize, metadata, JPEG and JPEG XL
+  apature-deliver/   Folder, FTP, FTPS, SFTP
 apps/
-  desktop/         egui/eframe contact sheet and preview
-  cli/             `apature-cli`: scan, previews, extract, exif, bench, mark, copy
-docs/
-  architecture/    design and the preview pipeline
-  research/        how Photo Mechanic behaves, and how REA is used to study it
-  benchmarks/      measured numbers and how to reproduce them
+  desktop/           egui app
+  cli/               apature-cli: scan, ingest, export, deliver, rotate, crop, rename…
+docs/                STATUS, DECISIONS, PLAN, design system, research, cross-project
 ```
 
-The one rule everything follows: **never decode a RAW to show a thumbnail
-when the camera already embedded a JPEG.** See
-[docs/architecture/overview.md](docs/architecture/overview.md),
-[docs/DECISIONS.md](docs/DECISIONS.md) for why each piece is the way it is,
-[docs/BRIEF.md](docs/BRIEF.md) for the standing brief, and
-[docs/benchmarks/](docs/benchmarks/) for measured numbers.
+Command line examples:
 
-## Compatibility promises
+```bash
+apature-cli ingest --source /Volumes/CARD --primary /Volumes/SSD --headline Game --day 2026-10-08 --dry-run
+apature-cli export --out ./desk --long 2048 --jxl *.NEF
+apature-cli deliver --protocol sftp --host desk.example.com --user photo ./desk/*.jpg
+```
 
-* Originals are never modified. Marks go to `name.xmp` next to the file.
-* Sidecars written by other software are edited property-by-property, never
-  regenerated, so captions, develop settings and anything else survive.
-* `xmp:Rating`, `xmp:Label`, `photomechanic:ColorClass` and
-  `photomechanic:Tagged` are written together, which is what Photo Mechanic
-  and Lightroom each need to agree on a label.
+## Status and plans
 
-## Requirements
-
-Rust 1.80 or newer (`rustup update`). macOS is the development platform;
-Windows and Linux should build but are untested.
+[docs/STATUS.md](docs/STATUS.md) says what is implemented, tested and
+verified, with numbers. [docs/PLAN.md](docs/PLAN.md) is the handoff and the
+order of work. [docs/DECISIONS.md](docs/DECISIONS.md) records every
+architectural choice. [CHANGELOG.md](CHANGELOG.md) lists user-visible
+changes per release.
 
 ## License
 
 MIT OR Apache-2.0, at your option. See [LICENSE-MIT](LICENSE-MIT) and
-[LICENSE-APACHE](LICENSE-APACHE).
+[LICENSE-APACHE](LICENSE-APACHE). Third-party notices are in
+[docs/THIRD_PARTY.md](docs/THIRD_PARTY.md) and in About Apature.
