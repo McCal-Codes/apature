@@ -6,6 +6,10 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [Unreleased]
 
 ### Added
+- Welcome on first launch: the loop in four pages (card in, cull, caption, export and send), appearance and accent, a card or folder to start with, the keys for the day. Help › Welcome to Apature… brings it back; Settings › General › Learning the loop.
+- One short tip the first time each workspace opens (Sheet, Preview, Caption, Ingest, Export); Got it or No more tips.
+- Installers: a laid-out DMG (background, drag to Applications) when create-dmg is present; a Debian package beside the AppImage and tar.gz; a Windows installer (Inno Setup) beside the zip, with Start menu entry and uninstaller.
+- `APATURE_CONFIG_DIR` points prefs.json at another folder, so screenshots and tests never touch real settings.
 - Linux: an AppImage and a tar.gz on every release, built in CI on Ubuntu 22.04. Volumes are found under /media and /run/media, Eject uses gio or udisksctl, passwords go to the Secret Service keyring, Reveal opens the folder with xdg-open.
 - Windows: a zip with apature.exe on every release, unsigned. Drives appear as volumes, Reveal selects in Explorer, passwords go to Credential Manager. No eject or menu bar extra yet.
 - The update check picks the right download for the platform.

@@ -37,6 +37,31 @@ rm -f "$TAR"
 tar -C "$APPDIR" -czf "$TAR" usr AppRun dev.mccal.Apature.desktop dev.mccal.Apature.png
 echo "wrote $TAR"
 
+# .deb for Debian and Ubuntu: the same files under /usr, a desktop entry,
+# icons, and the GTK and D-Bus libraries as dependencies.
+if command -v dpkg-deb >/dev/null 2>&1; then
+  DEBARCH=$(dpkg --print-architecture 2>/dev/null || echo amd64)
+  DEBDIR=$OUT/deb
+  rm -rf "$DEBDIR" && mkdir -p "$DEBDIR/DEBIAN" "$DEBDIR/usr"
+  cp -R "$APPDIR/usr/." "$DEBDIR/usr/"
+  cat > "$DEBDIR/DEBIAN/control" <<CTRL
+Package: apature
+Version: $VERSION
+Section: graphics
+Priority: optional
+Architecture: $DEBARCH
+Depends: libgtk-3-0, libdbus-1-3, libxkbcommon0, libegl1
+Maintainer: Caleb McCartney <contact@mcc-cal.com>
+Homepage: https://github.com/McCal-Codes/apature
+Description: Contact sheet, culling, captions, export and delivery for photojournalists
+ Apature rebuilds the Photo Mechanic loop (card in, cull, caption, export,
+ send) as a native app. Originals are never modified.
+CTRL
+  DEB=$OUT/apature_${VERSION}_${DEBARCH}.deb
+  dpkg-deb --build --root-owner-group "$DEBDIR" "$DEB" >/dev/null
+  echo "wrote $DEB"
+fi
+
 TOOL=${APPIMAGETOOL:-$(command -v appimagetool || true)}
 if [ -n "$TOOL" ]; then
   APPIMAGE=$OUT/Apature-$VERSION-linux-$ARCH.AppImage

@@ -223,6 +223,22 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                 });
                 hint(ui, t, "Selection, links and focus take the accent. Lavender is the Apature default.");
                 ui.add_space(S3);
+                section(ui, t, "Learning the loop");
+                if ui.checkbox(&mut app.prefs.show_tips, "One short tip the first time each workspace opens").changed() {
+                    app.prefs_dirty = true;
+                }
+                ui.horizontal(|ui| {
+                    if ui.small_button("Show the welcome again").clicked() {
+                        app.welcome_open = true;
+                        app.welcome_step = 0;
+                        app.settings_open = false;
+                    }
+                    if !app.prefs.tips_seen.is_empty() && ui.small_button("Reset tips").clicked() {
+                        app.prefs.tips_seen.clear();
+                        app.prefs_dirty = true;
+                    }
+                });
+                ui.add_space(S3);
                 section(ui, t, "Behaviour");
                 if ui.checkbox(&mut app.prefs.advance_after_mark, "Advance to the next photo after marking one").changed() {
                     app.prefs_dirty = true;

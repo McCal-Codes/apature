@@ -427,6 +427,9 @@ pub struct App {
     next_generation: u64,
     pub settings_open: bool,
     pub about_open: bool,
+    /// The welcome (onboarding) modal and its page.
+    pub welcome_open: bool,
+    pub welcome_step: usize,
     /// Preview is showing in its own window (prefs.preview_in_window).
     pub preview_window: bool,
     update_checker: Option<crate::updater::Checker>,
@@ -488,6 +491,7 @@ impl App {
         prefs
             .favorites
             .retain(|p| p.exists() || Platform::is_volume(p));
+        let onboarded = prefs.onboarded;
         let platform = Platform::new();
         let mut app = App {
             folder: None,
@@ -552,6 +556,8 @@ impl App {
             next_generation: 1,
             settings_open: false,
             about_open: launch.about,
+            welcome_open: launch.welcome || (!onboarded && launch.screenshot.is_none()),
+            welcome_step: 0,
             preview_window: false,
             update_checker: None,
             update_manual: false,
@@ -3498,6 +3504,10 @@ impl App {
                 }
             }
             Command::OpenAbout => self.about_open = true,
+            Command::OpenWelcome => {
+                self.welcome_open = true;
+                self.welcome_step = 0;
+            }
             Command::CheckUpdates => self.start_update_check(ctx, true),
             Command::OpenUpdate => {
                 if let Some(u) = &self.update_available {
@@ -4071,6 +4081,8 @@ impl eframe::App for App {
         }
         ui::settings::show(self, ctx, &t);
         ui::dialogs::show(self, ctx, &t);
+        ui::welcome::show(self, ctx, &t);
+        ui::welcome::tips(self, ctx, &t);
         ui::status::show(self, ctx, &t);
         ui::toasts::show(self, ctx, &t);
         ui::sidebar::show(self, ctx, &t);

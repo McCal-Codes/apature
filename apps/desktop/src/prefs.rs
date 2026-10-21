@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+fn default_true() -> bool {
+    true
+}
+
 /// Current saved-format version of prefs.json.
 pub const PREFS_VERSION: u32 = 1;
 
@@ -124,6 +128,15 @@ pub struct Prefs {
     /// Accent colour; `Accent::Lavender` is the Apature default.
     #[serde(default)]
     pub accent: Accent,
+    /// The welcome has been seen (or skipped) once.
+    #[serde(default)]
+    pub onboarded: bool,
+    /// One short tip the first time each workspace opens.
+    #[serde(default = "default_true")]
+    pub show_tips: bool,
+    /// Workspace keys whose tip has been dismissed.
+    #[serde(default)]
+    pub tips_seen: Vec<String>,
     pub open_tabs: Vec<PathBuf>,
     pub active_tab: usize,
     pub code_delimiter: char,
@@ -208,6 +221,9 @@ impl Default for Prefs {
             motion: Motion::System,
             high_contrast: false,
             accent: Accent::default(),
+            onboarded: false,
+            show_tips: true,
+            tips_seen: Vec::new(),
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,
@@ -236,6 +252,13 @@ pub fn default_ingest_options() -> apature_ingest::Options {
 
 impl Prefs {
     pub fn path() -> Option<PathBuf> {
+        // APATURE_CONFIG_DIR: an alternative folder for prefs.json, so
+        // screenshots and tests never touch the real settings.
+        if let Ok(dir) = std::env::var("APATURE_CONFIG_DIR") {
+            if !dir.is_empty() {
+                return Some(PathBuf::from(dir).join("prefs.json"));
+            }
+        }
         directories::ProjectDirs::from("dev", "mccal", "Apature")
             .map(|d| d.config_dir().join("prefs.json"))
     }

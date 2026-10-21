@@ -94,19 +94,21 @@ go crazy about it; tell me what breaks and what you'd want next.
 Apature to Applications. 0.1.0 is not yet notarised: the first time, right-click the app and choose Open, or allow it
 under System Settings › Privacy & Security.
 
-**Linux.** Download the AppImage, mark it executable and run it (`chmod +x Apature-*.AppImage && ./Apature-*.AppImage`),
-or unpack the tar.gz and run `usr/bin/apature`. Passwords for delivery go to the Secret Service keyring (GNOME Keyring
+**Linux.** Debian and Ubuntu: `sudo apt install ./apature_*.deb`. Anything else: download the AppImage, mark it
+executable and run it (`chmod +x Apature-*.AppImage && ./Apature-*.AppImage`), or unpack the tar.gz and run
+`usr/bin/apature`. Passwords for delivery go to the Secret Service keyring (GNOME Keyring
 or KWallet); without one, delivery still works but asks for the password each session.
 
-**Windows.** Download the zip, unpack it anywhere and run `apature.exe`. It is not code-signed yet, so SmartScreen will
-ask once: More info › Run anyway. Delivery passwords go to Credential Manager. Eject and the menu bar extra are not
+**Windows.** Run the installer (`Apature-*-windows-x86_64-setup.exe`): Start menu entry, optional desktop icon,
+uninstaller. Or download the zip, unpack it anywhere and run `apature.exe`. Neither is code-signed yet, so SmartScreen
+will ask once: More info › Run anyway. Delivery passwords go to Credential Manager. Eject and the menu bar extra are not
 there yet.
 
 Build it yourself with Rust 1.80 or newer:
 
 ```bash
 scripts/bundle.sh --install     # macOS: builds, bundles, signs ad-hoc, installs to /Applications
-scripts/package-linux.sh        # Linux: target/bundle/Apature-<version>-linux-<arch>.AppImage and .tar.gz
+scripts/package-linux.sh        # Linux: AppImage, .deb and .tar.gz under target/bundle
 cargo build --release -p apature  # Windows: target\release\apature.exe
 ```
 

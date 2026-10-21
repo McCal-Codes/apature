@@ -42,6 +42,8 @@ jobs:
         run: xcrun notarytool store-credentials apature --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD"
       - name: Tag matches the version and the changelog
         run: bash tools/check-version.sh "${GITHUB_REF_NAME}"
+      - name: create-dmg for the laid-out disk image
+        run: brew install create-dmg >/dev/null
       - name: Build the disk image
         run: |
           if security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
@@ -52,7 +54,7 @@ jobs:
       - name: Release notes from the changelog
         run: |
           awk '/^## \[/{n++} n==1' CHANGELOG.md > notes.md
-          printf '\n**Downloads:** macOS DMG, Linux AppImage and tar.gz (x86_64), Windows zip (x86_64). Every file has a `.sha256` beside it.\n' >> notes.md
+          printf '\n**Downloads:** macOS DMG, Linux AppImage, .deb and tar.gz (x86_64), Windows installer and zip (x86_64). Every file has a `.sha256` beside it.\n' >> notes.md
           printf '\n**SHA-256** of the disk image: `%s`\n' "$(shasum -a 256 target/bundle/Apature-*.dmg | cut -d' ' -f1)" >> notes.md
           if ! security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
             printf '\n> The macOS build is ad-hoc signed. Right-click › Open the first time, or wait for a notarised build. The Windows build is unsigned: SmartScreen asks once.\n' >> notes.md
@@ -89,7 +91,7 @@ jobs:
           xvfb-run -a -s "-screen 0 1600x1000x24" target/bundle/Apature-*.AppImage /tmp/smoke --screenshot /tmp/smoke.png --frames 60
           ls -la /tmp/smoke.png
       - name: Checksums
-        run: for f in target/bundle/Apature-*.AppImage target/bundle/Apature-*.tar.gz; do sha256sum "$f" | cut -d' ' -f1 > "$f.sha256"; done
+        run: for f in target/bundle/Apature-*.AppImage target/bundle/Apature-*.tar.gz target/bundle/apature_*.deb; do sha256sum "$f" | cut -d' ' -f1 > "$f.sha256"; done
       - uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -97,6 +99,8 @@ jobs:
             target/bundle/Apature-*.AppImage.sha256
             target/bundle/Apature-*.tar.gz
             target/bundle/Apature-*.tar.gz.sha256
+            target/bundle/apature_*.deb
+            target/bundle/apature_*.deb.sha256
 
   windows:
     runs-on: windows-latest
@@ -128,9 +132,14 @@ jobs:
           $zip = "target\bundle\Apature-$v-windows-x86_64.zip"
           Compress-Archive -Path target\bundle\Apature\* -DestinationPath $zip -Force
           (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() | Out-File -NoNewline "$zip.sha256"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$v" "/DSourceDir=..\..\target\release" installer\windows\apature.iss
+          $setup = Get-ChildItem target\bundle\Apature-*-setup.exe | Select-Object -First 1
+          (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower() | Out-File -NoNewline "$($setup.FullName).sha256"
           Get-ChildItem target\bundle
       - uses: softprops/action-gh-release@v2
         with:
           files: |
+            target/bundle/Apature-*-windows-x86_64-setup.exe
+            target/bundle/Apature-*-windows-x86_64-setup.exe.sha256
             target/bundle/Apature-*-windows-x86_64.zip
             target/bundle/Apature-*-windows-x86_64.zip.sha256

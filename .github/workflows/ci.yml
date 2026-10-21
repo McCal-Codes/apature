@@ -85,12 +85,19 @@ jobs:
           New-Item -ItemType Directory -Force -Path C:\smoke | Out-Null
           & target\release\apature.exe C:\smoke --screenshot C:\smoke.png --frames 60
           Get-Item C:\smoke.png
+      - name: Installer builds (Inno Setup)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path target\bundle | Out-Null
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Q /DAppVersion=0.0.0 "/DSourceDir=..\..\target\release" installer\windows\apature.iss
+          Get-ChildItem target\bundle
       - uses: actions/upload-artifact@v4
         with:
           name: apature-windows-x86_64
           path: |
             target/release/apature.exe
             target/release/apature-cli.exe
+            target/bundle/Apature-*-setup.exe
           retention-days: 7
 
   desktop-macos:

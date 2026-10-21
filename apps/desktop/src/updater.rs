@@ -152,7 +152,7 @@ fn is_download_for_this_platform(name: &str) -> bool {
     if cfg!(target_os = "macos") {
         name.ends_with(".dmg")
     } else if cfg!(target_os = "windows") {
-        name.ends_with(".zip") && name.to_lowercase().contains("windows")
+        name.ends_with("-setup.exe")
     } else {
         name.ends_with(".AppImage")
     }

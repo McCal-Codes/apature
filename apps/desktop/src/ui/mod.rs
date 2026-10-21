@@ -19,6 +19,7 @@ pub mod tabs;
 pub mod toasts;
 pub mod tokens;
 pub mod toolbar;
+pub mod welcome;
 
 use apature_core::Rating;
 
