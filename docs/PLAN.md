@@ -32,7 +32,7 @@
 - 2026-10-20: unplug detection (status + sticky toast + tab banner + ingest warning), toasts module (ui/toasts.rs). Next fine-tuning: inspector density, thumbnail priority on big folders, focus rings, export presets per outlet, then keywords/GPS, crop tool, loupe.
 - 2026-10-19 night: JPEG XL export (owner request): Format::JpegXl in apature-export transcodes the finished JPEG losslessly with cjxl (Homebrew libjxl), EXIF+XMP carried, ~21 % smaller; Export sheet FORMAT chips, CLI --jxl. Not bundled: needs cjxl on the Mac (sips and ImageIO on macOS 27.2 cannot write JXL; jpegxl-rs vendored needs cmake). Later: link libjxl into the app and bundle the dylib.
 - 2026-10-19 evening: FTP/FTPS/SFTP delivery shipped (see item 9). Untested: FTPS, SFTP, Settings › Delivery page rendering (headless settings capture hangs), real desk.
-- Owner's operating rules for Claude sessions are in memory
+- Owner's operating rules for assistant sessions are kept outside the repo
   (`claude-agent-efficiency-rules`): no subagents unless independent, cheaper
   models for routine work, no repeated research, concise reports.
 
@@ -73,7 +73,7 @@ Observed once, unexplained
 2. `scripts/bundle.sh`: sign with the Developer ID (hardened runtime,
    entitlements for file access), `xcrun notarytool submit … --wait`,
    `xcrun stapler staple`, then a DMG (`hdiutil create` with an Applications
-   link) — Claude, after 1.
+   link) — after 1.
 3. Version 0.1.0 in Cargo.toml; CHANGELOG.md with the user-visible changes
    since M1; README with screenshots and the "what it needs" list (macOS 14+,
    optional Homebrew jpeg-xl for JPEG XL).
@@ -106,7 +106,7 @@ owner's Mac currently fails for every tool; verify UI via menus or the owner.
 Live Ingest shipped (polling + 2-poll size stability; Live chip on the Ingest
 sheet; verified with dropped NEFs). CI: Linux fixed, macOS desktop job added.
 Focus rings. Left for Caleb: client IDs, FTP details, Developer ID, notary,
-real-card run. Left for Claude: AF point (maker note), Plex embed, VoiceOver,
+real-card run. Left to build: AF point (maker note), Plex embed, VoiceOver,
 thumbnail priority, Fen, caption slice two, release engineering.
 
 ## Status 2026-10-20 (evening)
