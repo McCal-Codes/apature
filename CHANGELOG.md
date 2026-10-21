@@ -3,9 +3,9 @@
 All notable, user-visible changes. Versions follow semantic versioning;
 0.x while the app is finding its shape.
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-10-21
 
-First shareable build. Everything below is new.
+First shareable build, ad-hoc signed: on first launch right-click › Open, or allow it under System Settings › Privacy & Security. Everything below is new.
 
 ### Ingest
 - Card detection on mount, Ingest in its own window, day chips, a live
