@@ -102,10 +102,17 @@ the frame stays on the card after a PTP `--get-file` (listed before and
 after). Measured pull speed: 43.8 MB NEF in 18.9 s ≈ 2.3 MB/s, so a 10-frame
 burst takes ~3 min to drain over PTP. macOS relaunches `ptpcamerad` and
 steals the device; Mac tests need it killed in a loop (not an issue on a Pi).
-Implication for hardware: PTP pull is too slow to be the only path. Prefer
-the camera's own Wi-Fi/FTP push (the body supports FTP upload) into Pocket
-running an FTP server + Live Ingest, with PTP kept for events and small
-JPEGs. Measure Wi-Fi FTP throughput next.
+Correction (owner, 2026-10-21): the Z 6 II body has NO FTP client; its Wi-Fi
+only speaks Nikon's PTP/IP to SnapBridge or the Wireless Transmitter Utility.
+FTP needs the WT-7 (~$900) or a CamRanger 2, which is itself what Pocket
+would be. So Pocket's only direct paths are USB PTP (2.3 MB/s measured on the
+Mac through gphoto2, to be re-measured on Linux: the Mac figure may be the
+libusb stack, not the camera) and PTP/IP over the camera's Wi-Fi (gphoto2
+`ptpip` driver; usually slower than USB). Decision deferred until the USB
+number is measured on a Pi 5 with libgphoto2; if USB stays near 2 MB/s the
+honest product is "backup receiver that catches up between bursts", not a
+live mirror, and the design shifts to dual-slot in-camera backup plus Pocket
+draining at the end of each stint.
 
 Hardware help wanted (owner, 2026-10-21): choose and spec the Pocket device
 when the camera test passes. Candidates to evaluate against the Z 6 II over
