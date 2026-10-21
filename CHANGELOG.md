@@ -6,6 +6,9 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [Unreleased]
 
 ### Added
+- Linux: an AppImage and a tar.gz on every release, built in CI on Ubuntu 22.04. Volumes are found under /media and /run/media, Eject uses gio or udisksctl, passwords go to the Secret Service keyring, Reveal opens the folder with xdg-open.
+- Windows: a zip with apature.exe on every release, unsigned. Drives appear as volumes, Reveal selects in Explorer, passwords go to Credential Manager. No eject or menu bar extra yet.
+- The update check picks the right download for the platform.
 - Settings › Accent: six soft accent presets (Lavender, Sage, Sky, Peach, Rose, Mist) applied to selection, links and focus in both appearances.
 - A new app icon (the modern A) with three optional alternates (photo frame, aperture, field), every size and `.icns`, generated from `tools/apature_icons.py` with the accent as a parameter.
 - Press kit in `docs/marketing`: hero images, social preview, feature cards, copy kit; `tools/marketing-shots.sh` recaptures the screenshot set.

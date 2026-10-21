@@ -1,9 +1,11 @@
 name: CI
 
-# Linux for the libraries and a type-check of the desktop (cheapest minutes);
-# one macOS job builds and tests the desktop crate itself on pushes to main,
-# so a commit that does not compile can never sit on main unnoticed.
-# Bundling, signing and the real-card checks stay on the owner's Mac.
+# Linux for the libraries, a type-check of the desktop, and a real desktop
+# build with a headless smoke test under Xvfb (cheapest minutes). Windows
+# builds the desktop on pushes to main and pull requests. One macOS job
+# builds and tests the desktop crate on pushes to main, so a commit that does
+# not compile can never sit on main unnoticed. Bundling, signing and the
+# real-card checks stay on the owner's Mac.
 on:
   push:
     branches: [main]
@@ -31,7 +33,7 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: System libraries for the desktop build
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-3-dev
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-3-dev libdbus-1-dev
       - name: Version in Cargo.toml matches the changelog
         run: bash tools/check-version.sh
       - run: cargo fmt --all --check
@@ -39,6 +41,55 @@ jobs:
       # build run on the Mac, where it ships.
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace --exclude apature
+
+  desktop-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: System libraries
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-3-dev libdbus-1-dev xvfb libxkbcommon-x11-0 libegl1 libgl1-mesa-dri
+      - run: cargo build --release -p apature -p apature-cli
+      - name: Headless smoke test under Xvfb (the sheet renders and a screenshot lands)
+        run: |
+          mkdir -p /tmp/smoke
+          xvfb-run -a -s "-screen 0 1600x1000x24" target/release/apature /tmp/smoke --screenshot /tmp/smoke.png --frames 60
+          ls -la /tmp/smoke.png
+      - name: Package (tar.gz; AppImage when the tool is available)
+        run: |
+          curl -sSL -o /tmp/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
+          APPIMAGETOOL=/tmp/appimagetool scripts/package-linux.sh
+          ls -la target/bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apature-linux-x86_64
+          path: target/bundle/Apature-*
+          retention-days: 7
+
+  desktop-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p apature -p apature-cli
+      - name: Smoke test (the app starts headless and writes a screenshot)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\smoke | Out-Null
+          & target\release\apature.exe C:\smoke --screenshot C:\smoke.png --frames 60
+          Get-Item C:\smoke.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apature-windows-x86_64
+          path: |
+            target/release/apature.exe
+            target/release/apature-cli.exe
+          retention-days: 7
 
   desktop-macos:
     # macOS minutes cost ten times Linux ones: pushes to main only, and not

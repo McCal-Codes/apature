@@ -253,17 +253,17 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                 }
                 section(ui, t, "Files Apature keeps");
                 ui.horizontal_wrapped(|ui| {
-                    if ui.small_button("Reveal settings in Finder").clicked() {
+                    if ui.small_button(format!("Reveal settings in {}", crate::platform::Platform::file_manager())).clicked() {
                         if let Some(p) = crate::prefs::Prefs::path() {
-                            let _ = std::process::Command::new("open").arg("-R").arg(p).spawn();
+                            crate::platform::Platform::reveal(&p);
                         }
                     }
                     if ui.small_button("Reveal log").on_hover_text("apature.log: every ingest, export, send and error").clicked() {
                         if let Some(d) = directories::ProjectDirs::from("dev", "mccal", "Apature") {
-                            let _ = std::process::Command::new("open").arg("-R").arg(d.data_dir().join("apature.log")).spawn();
+                            crate::platform::Platform::reveal(&d.data_dir().join("apature.log"));
                         }
                     }
-                    if ui.small_button("Reset all settings").on_hover_text("Keeps a copy as prefs.json.bak-reset; delivery passwords stay in the Keychain").clicked() {
+                    if ui.small_button("Reset all settings").on_hover_text("Keeps a copy as prefs.json.bak-reset; delivery passwords stay in the system store").clicked() {
                         if let Some(p) = crate::prefs::Prefs::path() {
                             let _ = std::fs::copy(&p, p.with_extension("json.bak-reset"));
                         }
@@ -408,7 +408,7 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
             }
             Page::Delivery => {
                 heading(ui, t, "Delivery");
-                hint(ui, t, "Where finished exports go. Passwords are kept in the macOS Keychain, never in the prefs file. Each file lands as a hidden .part name and is renamed when complete.");
+                hint(ui, t, &format!("Where finished exports go. Passwords are kept in {store}, never in the prefs file. Each file lands as a hidden .part name and is renamed when complete.", store = crate::platform::Platform::secret_store()));
                 ui.add_space(S2);
                 let mut remove: Option<usize> = None;
                 let mut rename: Option<(String, String)> = None;
@@ -482,7 +482,7 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                                 let draft = app.deliver.pw_drafts.entry(old_name.clone()).or_default();
                                 ui.add(egui::TextEdit::singleline(draft).password(true).desired_width(180.0));
                                 let has = crate::platform::Platform::secret_get(&old_name).is_some();
-                                if ui.small_button("Save to Keychain").clicked() {
+                                if ui.small_button(if cfg!(target_os = "macos") { "Save to Keychain" } else { "Save password" }).clicked() {
                                     match crate::platform::Platform::secret_set(&old_name, draft) {
                                         Ok(()) => { draft.clear(); app.deliver.test_result = Some(format!("{old_name}: password saved")); }
                                         Err(e) => app.deliver.test_result = Some(format!("{old_name}: {e}")),

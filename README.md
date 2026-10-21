@@ -14,6 +14,8 @@
   <a href="https://github.com/McCal-Codes/apature/actions/workflows/ci.yml"><img src="https://github.com/McCal-Codes/apature/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20or%20Apache--2.0-blue" alt="License: MIT or Apache-2.0"></a>
   <img src="https://img.shields.io/badge/macOS-12%2B-000000?logo=apple" alt="macOS 12+">
+  <img src="https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&logoColor=black" alt="Linux AppImage">
+  <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows" alt="Windows 10+">
   <img src="https://img.shields.io/badge/Rust-stable-DEA584?logo=rust" alt="Rust stable">
   <img src="https://img.shields.io/badge/originals-never%20modified-5A48C7" alt="Originals never modified">
   <a href="https://ko-fi.com/mccal"><img src="https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-FF5E5B" alt="Buy me a coffee on Ko-fi"></a>
@@ -25,9 +27,9 @@
 
 <div align="center">
 
-| Version | Price | macOS | Camera files | Tested on |
+| Version | Price | Platforms | Camera files | Tested on |
 | :---: | :---: | :---: | :---: | :---: |
-| 0.1.0 | Free | 12+ | NEF, RAW+JPEG pairs, JPEG | Nikon Z 6 II, M1 Pro |
+| 0.1.0 | Free | macOS 12+, Linux, Windows 10+ | NEF, RAW+JPEG pairs, JPEG | Nikon Z 6 II, M1 Pro |
 
 </div>
 
@@ -79,21 +81,33 @@ go crazy about it; tell me what breaks and what you'd want next.
 
 ## What you need
 
-- A Mac on macOS 12 or newer. Apple silicon and Intel both build; Apple silicon is what it is tested on.
+- A Mac on macOS 12 or newer (Apple silicon is what it is tested on), a Linux desktop with GTK 3 (x86_64, Ubuntu 22.04
+  or newer, or anything with a glibc from 2022), or Windows 10 or newer (x86_64). The Mac build is the one I use every
+  week; Linux and Windows are built and smoke-tested in CI and are early.
 - Photos from a camera that embeds a JPEG preview in its RAW files, which is every current body. Apature never
   decodes a RAW to show a thumbnail when the camera already did the work.
 - Optional: `brew install jpeg-xl` for JPEG XL export. Nothing else.
 
 ## Install
 
-Download the DMG from the [latest release](https://github.com/McCal-Codes/apature/releases/latest) and drag Apature
-to Applications. 0.1.0 is not yet notarised: the first time, right-click the app and choose Open, or allow it under
-System Settings › Privacy & Security.
+**macOS.** Download the DMG from the [latest release](https://github.com/McCal-Codes/apature/releases/latest) and drag
+Apature to Applications. 0.1.0 is not yet notarised: the first time, right-click the app and choose Open, or allow it
+under System Settings › Privacy & Security.
+
+**Linux.** Download the AppImage, mark it executable and run it (`chmod +x Apature-*.AppImage && ./Apature-*.AppImage`),
+or unpack the tar.gz and run `usr/bin/apature`. Passwords for delivery go to the Secret Service keyring (GNOME Keyring
+or KWallet); without one, delivery still works but asks for the password each session.
+
+**Windows.** Download the zip, unpack it anywhere and run `apature.exe`. It is not code-signed yet, so SmartScreen will
+ask once: More info › Run anyway. Delivery passwords go to Credential Manager. Eject and the menu bar extra are not
+there yet.
 
 Build it yourself with Rust 1.80 or newer:
 
 ```bash
-scripts/bundle.sh --install   # builds, bundles, signs ad-hoc, installs to /Applications
+scripts/bundle.sh --install     # macOS: builds, bundles, signs ad-hoc, installs to /Applications
+scripts/package-linux.sh        # Linux: target/bundle/Apature-<version>-linux-<arch>.AppImage and .tar.gz
+cargo build --release -p apature  # Windows: target\release\apature.exe
 ```
 
 ## Keys

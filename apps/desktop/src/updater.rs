@@ -11,8 +11,9 @@ pub struct Update {
     pub version: String,
     pub prerelease: bool,
     pub page: String,
-    /// Direct link to the .dmg asset, when the release has one.
-    pub dmg: Option<String>,
+    /// Direct link to this platform's download (DMG, AppImage or Windows
+    /// zip), when the release has one.
+    pub asset: Option<String>,
     pub notes: String,
 }
 
@@ -94,10 +95,10 @@ pub fn check(current: &str, beta: bool) -> Result<Option<Update>, String> {
         if best.as_ref().is_some_and(|b| !is_newer(&tag, &b.version)) {
             continue;
         }
-        let dmg = r.get("assets").and_then(|a| a.as_array()).and_then(|a| {
+        let asset = r.get("assets").and_then(|a| a.as_array()).and_then(|a| {
             a.iter().find_map(|x| {
                 let n = x.get("name")?.as_str()?;
-                n.ends_with(".dmg")
+                is_download_for_this_platform(n)
                     .then(|| {
                         x.get("browser_download_url")?
                             .as_str()
@@ -114,7 +115,7 @@ pub fn check(current: &str, beta: bool) -> Result<Option<Update>, String> {
                 .and_then(|u| u.as_str())
                 .unwrap_or("")
                 .to_string(),
-            dmg,
+            asset,
             notes: r
                 .get("body")
                 .and_then(|b| b.as_str())
@@ -158,5 +159,16 @@ mod tests {
         assert!(!is_newer("0.2.0-beta.1", "0.2.0"));
         assert!(is_newer("0.2.0-beta.2", "0.2.0-beta.1"));
         assert!(!is_newer("0.1.9", "0.10.0"));
+    }
+}
+
+/// The release asset a user of this platform should download.
+fn is_download_for_this_platform(name: &str) -> bool {
+    if cfg!(target_os = "macos") {
+        name.ends_with(".dmg")
+    } else if cfg!(target_os = "windows") {
+        name.ends_with(".zip") && name.to_lowercase().contains("windows")
+    } else {
+        name.ends_with(".AppImage")
     }
 }
