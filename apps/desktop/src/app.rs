@@ -399,6 +399,7 @@ pub struct App {
     pub toasts: Vec<ui::toasts::Toast>,
     /// View-only exposure boost for previews, in stops (0, 1, 2); never written anywhere.
     pub preview_boost: u8,
+    window_title: String,
     /// Keyword being typed on the Caption workspace.
     pub caption_kw_draft: String,
     pub filter_popup_open: bool,
@@ -469,7 +470,17 @@ impl App {
             cc.egui_ctx.set_theme(theme);
         }
         ui::tokens::install_fonts(&cc.egui_ctx);
-        let prefs = Prefs::load();
+        let (prefs, prefs_outcome) = Prefs::load_report();
+        // Recent and favourite folders that no longer exist drop off the
+        // sidebar (scratch folders, a renamed shoot); a folder on an unplugged
+        // drive stays, since /Volumes/<name> comes back.
+        let mut prefs = prefs;
+        prefs
+            .recent
+            .retain(|p| p.exists() || p.starts_with("/Volumes"));
+        prefs
+            .favorites
+            .retain(|p| p.exists() || p.starts_with("/Volumes"));
         let platform = Platform::new();
         let mut app = App {
             folder: None,
@@ -508,6 +519,7 @@ impl App {
             folder_unplugged: None,
             toasts: Vec::new(),
             preview_boost: 0,
+            window_title: String::new(),
             caption_kw_draft: String::new(),
             filter_popup_open: false,
             caption_draft: None,
@@ -614,6 +626,34 @@ impl App {
         }
         if let Some(d) = launch.ingest_dest.clone() {
             app.ingest.opts.primary = d;
+        }
+        match prefs_outcome {
+            crate::prefs::LoadOutcome::Damaged { error, kept } => {
+                log::error!(
+                    "prefs.json unreadable ({error}); kept as {}",
+                    kept.display()
+                );
+                app.toast(
+                    ui::toasts::Kind::Error,
+                    format!(
+                        "Settings could not be read and were reset. The old file is kept as {}.",
+                        kept.file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
+                    ),
+                );
+            }
+            crate::prefs::LoadOutcome::Migrated { from } => {
+                log::info!("prefs migrated from version {from}; backup kept");
+            }
+            crate::prefs::LoadOutcome::Newer { version } => {
+                log::warn!("prefs.json is version {version}, newer than this build; running read-only on it");
+                app.toast(
+                    ui::toasts::Kind::Warn,
+                    "Settings were saved by a newer Apature. This build reads them but will not change the file.",
+                );
+            }
+            _ => {}
         }
         if launch.ingest {
             app.open_ingest(&cc.egui_ctx);
@@ -2849,42 +2889,13 @@ impl App {
         parts.join(", ")
     }
 
+    /// Bottom-bar parts: the folder, count and focused photo moved to the
+    /// info strip at the top (ui/infobar.rs); this keeps the marks and the
+    /// transient message.
     pub fn status_parts(&self) -> Vec<String> {
         let mut parts = Vec::new();
-        match &self.folder {
-            None => parts.push("No folder open · ⌘O".into()),
-            Some(f) => {
-                let name = f
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                if self.filter.is_active() {
-                    parts.push(format!(
-                        "{name} · showing {} of {}",
-                        self.view.len(),
-                        self.items.len()
-                    ));
-                } else {
-                    parts.push(format!("{name} · {} photos", self.items.len()));
-                }
-            }
-        }
-        if self.selection.len() > 1 {
-            parts.push(format!("{} selected", self.selection.len()));
-        }
         if let Some(it) = self.items.get(self.cursor) {
-            parts.push(format!(
-                "{}/{} {}",
-                self.cursor_pos() + 1,
-                self.view.len(),
-                it.display_name()
-            ));
-            if let Some(e) = &self.exif[self.cursor] {
-                let ex = e.exposure_line();
-                if !ex.is_empty() {
-                    parts.push(ex);
-                }
-            }
+            let _ = it;
             let m = self.marks[self.cursor];
             let stars = ui::rating_text(m.rating);
             if !stars.is_empty() {
@@ -3301,6 +3312,10 @@ impl App {
             }
             Command::ToggleCompare => self.toggle_compare(),
             Command::IngestStart => self.ingest_start(),
+            Command::ShowMainWindow => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
             Command::LiveToggle => {
                 let l = &mut self.ingest.live;
                 l.on = !l.on;
@@ -3680,14 +3695,9 @@ impl App {
         self.frames += 1;
         if self.frames == self.launch.screenshot_frame && !self.screenshot_requested {
             self.screenshot_requested = true;
-            if self.launch.settings {
-                ctx.send_viewport_cmd_to(
-                    egui::ViewportId::from_hash_of("apature-settings"),
-                    egui::ViewportCommand::Screenshot(egui::UserData::default()),
-                );
-            } else {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
-            }
+            // Settings is drawn inline on the root window in screenshot mode
+            // (ui::settings::show_inline), so the root capture covers it.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         // Screenshot events for every viewport (the Settings window included)
         // arrive in the root input queue.
@@ -3741,6 +3751,27 @@ impl eframe::App for App {
         }
         t.apply(ctx, self.reduce_motion());
         self.platform.on_first_frame();
+        // Menu bar extra: what Apature is doing, in a few characters.
+        let tray = if let Some(r) = self.ingest.running.as_ref().filter(|r| r.done.is_none()) {
+            let total = self
+                .ingest
+                .plan
+                .as_ref()
+                .map(|p| p.entries.len())
+                .unwrap_or(0)
+                .max(1);
+            format!("Ingest {}/{}", r.verified_count, total)
+        } else if let Some(r) = self.deliver.running.as_ref().filter(|r| r.done.is_none()) {
+            let sent = r.statuses.iter().filter(|s| **s == DStatus::Sent).count();
+            format!("Sending {}/{}", sent, r.files.len())
+        } else if let Some(r) = self.export.running.as_ref().filter(|r| !r.finished) {
+            format!("Export {}/{}", r.ok + r.failed, r.statuses.len())
+        } else if self.ingest.live.on {
+            format!("Live · {}", self.ingest.live.ingested)
+        } else {
+            String::new()
+        };
+        self.platform.status_item(&tray, self.ingest.live.on);
         if self.status != self.last_status {
             self.last_status = self.status.clone();
             self.status_since = Some(Instant::now());
@@ -3793,6 +3824,26 @@ impl eframe::App for App {
         }
         ui::toolbar::show(self, ctx, &t);
         ui::tabs::show(self, ctx, &t);
+        ui::infobar::show(self, ctx, &t);
+        // Window title names the folder, like a document.
+        let title = match &self.folder {
+            Some(f) => format!(
+                "{} — Apature",
+                f.file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ),
+            None => "Apature".into(),
+        };
+        if self.window_title != title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
+        }
+        if self.launch.settings && self.launch.screenshot.is_some() {
+            ui::settings::show_inline(self, ctx, &t);
+            self.maybe_screenshot(ctx);
+            return;
+        }
         ui::settings::show(self, ctx, &t);
         ui::dialogs::show(self, ctx, &t);
         ui::status::show(self, ctx, &t);

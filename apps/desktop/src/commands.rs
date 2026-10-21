@@ -78,6 +78,8 @@ pub enum Command {
     IngestEject,
     /// Live Ingest: watch the source folder and ingest what arrives.
     LiveToggle,
+    /// Bring the main window to the front (menu bar extra).
+    ShowMainWindow,
     /// Copy the focused photo's marks and IPTC; paste onto the selection.
     CopyMetadata,
     PasteMetadata,
@@ -218,6 +220,8 @@ impl Command {
             "view.boost" => Command::CyclePreviewBoost,
             "image.crop" => Command::CropToggle,
             "view.loupe" => Command::ToggleLoupe,
+            "ingest.live" => Command::LiveToggle,
+            "app.show" => Command::ShowMainWindow,
             "view.stack" => Command::ToggleStack,
             "image.crop.clear" => Command::CropClear,
             "file.deliver" => Command::DeliverLast,

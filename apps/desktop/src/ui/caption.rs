@@ -281,7 +281,7 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     }
                     None => {
                         ui.label(RichText::new("No assignment loaded").size(13.0).color(t.text2));
-                        ui.label(RichText::new("File › Load Assignment… reads the key: value file your generator uses.").size(11.0).color(t.muted));
+                        ui.label(RichText::new("Load an assignment file for the pad and codes.").size(11.0).color(t.muted));
                     }
                 }
                 ui.horizontal_wrapped(|ui| {
