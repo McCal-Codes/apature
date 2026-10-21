@@ -9,6 +9,8 @@ Thanks for helping with Apature. Bug reports, ideas and fixes are all welcome.
   in Finder gives you `apature.log`, which records every ingest, export, send and error.
 - **Bigger changes:** open an issue first for anything that touches how files are copied, named or written.
 - **Security problems:** report privately, see [SECURITY.md](SECURITY.md).
+- **Artists and animators:** the mascot, icon and marketing are open for collaboration; read the
+  [artist brief](docs/design/ARTIST_BRIEF.md) and open an issue with a few pieces of your work.
 - Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## The rules the code follows

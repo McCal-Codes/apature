@@ -36,7 +36,7 @@
 
 **Contents:** [Why I made this](#why-i-made-this) · [Screenshots](#screenshots) · [What it does](#what-it-does) ·
 [What you need](#what-you-need) · [Install](#install) · [Keys](#keys) · [Promises](#promises) · [Get involved](#get-involved) ·
-[Contact](#contact) · [License](#license)
+[Artists wanted](#artists-and-animators-wanted) · [Contact](#contact) · [License](#license)
 
 ## Why I made this
 
@@ -118,6 +118,15 @@ Bug reports and ideas go to [Issues](https://github.com/McCal-Codes/apature/issu
 [CONTRIBUTING.md](CONTRIBUTING.md) for how changes are made and checked, and [SECURITY.md](SECURITY.md) for anything
 sensitive. [docs/STATUS.md](docs/STATUS.md) says what is implemented, tested and verified, with numbers;
 [docs/PLAN.md](docs/PLAN.md) is the order of work; [docs/DECISIONS.md](docs/DECISIONS.md) records every choice.
+
+## Artists and animators wanted
+
+Apature has a mascot, Fen the fennec, drawn as a placeholder, and a motion language for the app that is written
+down but not yet animated. I'm looking for illustrators and animation artists to work with on Fen, the app icon, and
+the marketing: a short reel, stills for the site and the store, and the small one-shot animations the app plays at
+earned moments. Start with the [artist brief](docs/design/ARTIST_BRIEF.md), the [brand kit](docs/design/brand/) and
+the [motion notes](docs/design/MOTION_DESIGN.md), then open an issue or email me with a few pieces of your work and
+we'll talk about scope and terms. Credit is always given; the brief says how the work is licensed.
 
 ## Contact
 
