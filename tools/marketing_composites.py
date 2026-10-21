@@ -136,7 +136,7 @@ def social():
     icon.alpha_composite(Image.open(ICON).convert("RGBA").resize((200, 200), Image.LANCZOS), (80, 96))
     wordmark = text_layer(size, [(310, 104, "Apature", font(104), TEXT_D)])
     tag = text_layer(size, [(314, 226, "Ingest, cull, caption, export, deliver.", font(36, "Regular"), LAV), (314, 276, "Free, open source, macOS. Originals never modified.", font(30, "Regular"), TEXT2_D)])
-    shadow, win = window_layers(size, f"{SHOTS}/sheet-dark.png", 1100, 250, 450, radius=22)
+    shadow, win = window_layers(size, f"{SHOTS}/sheet.png", 1100, 250, 450, radius=22)
     write("social-preview", size, [("Background", bg), ("Glow", glow), ("Window shadow", shadow), ("Window", win), ("Icon", icon), ("Tagline", tag), ("Wordmark", wordmark)])
 
 
@@ -153,12 +153,12 @@ def card(name, shot, title, line):
     write(name, size, [("Background", bg), ("Glow", glow), ("Window shadow", shadow), ("Window", win), ("Subhead", sub), ("Headline", headline)])
 
 
-hero("hero-dark", f"{SHOTS}/sheet-dark.png", True)
+hero("hero-dark", f"{SHOTS}/sheet.png", True)
 hero("hero-light", f"{SHOTS}/sheet-light.png", False)
 social()
-card("feature-ingest", f"{SHOTS}/ingest-dark.png", "Ingest you can trust", "Day chips before you copy, a live example of every name, SHA-256 at every destination, a ledger so a card is never copied twice.")
-card("feature-caption", f"{SHOTS}/caption-dark.png", "Captions at deadline speed", "Assignment pad, code replacements, the variables Photo Mechanic users already know, save to the whole selection.")
-card("feature-cull", f"{SHOTS}/compare-dark.png", "Cull without leaving the keyboard", "Ratings, colour classes, burst stacks, compare up to four frames, a loupe, 1:1 with one shared magnification.")
-card("feature-crop", f"{SHOTS}/crop-dark.png", "Crop and rotate in the sidecar", "Edits live in the XMP next to the file. The original is never modified, and Photo Mechanic reads the result.")
-card("feature-export", f"{SHOTS}/export-dark.png", "Export and deliver", "JPEG or JPEG XL, presets per outlet, EXIF, XMP and IPTC-IIM kept, then folder, FTP, FTPS or SFTP with a sent ledger.")
+card("feature-ingest", f"{SHOTS}/ingest.png", "Ingest you can trust", "Day chips before you copy, a live example of every name, SHA-256 at every destination, a ledger so a card is never copied twice.")
+card("feature-caption", f"{SHOTS}/caption.png", "Captions at deadline speed", "Assignment pad, code replacements, the variables Photo Mechanic users already know, save to the whole selection.")
+card("feature-cull", f"{SHOTS}/compare.png", "Cull without leaving the keyboard", "Ratings, colour classes, burst stacks, compare up to four frames, a loupe, 1:1 with one shared magnification.")
+card("feature-crop", f"{SHOTS}/crop.png", "Crop and rotate in the sidecar", "Edits live in the XMP next to the file. The original is never modified, and Photo Mechanic reads the result.")
+card("feature-export", f"{SHOTS}/export.png", "Export and deliver", "JPEG or JPEG XL, presets per outlet, EXIF, XMP and IPTC-IIM kept, then folder, FTP, FTPS or SFTP with a sent ledger.")
 print("composites ok")

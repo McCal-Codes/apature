@@ -7,7 +7,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ### Added
 - Settings › Accent: six soft accent presets (Lavender, Sage, Sky, Peach, Rose, Mist) applied to selection, links and focus in both appearances.
-- A new app icon (eight-blade aperture) with three alternates, every size and `.icns`, generated from `tools/apature_icons.py` with the accent as a parameter.
+- A new app icon (the modern A) with three optional alternates (photo frame, aperture, field), every size and `.icns`, generated from `tools/apature_icons.py` with the accent as a parameter.
 - Press kit in `docs/marketing`: hero images, social preview, feature cards, copy kit; `tools/marketing-shots.sh` recaptures the screenshot set.
 - Check for updates: once a day, or Apature › Check for Updates…, a toast offers the newest release's download. Settings › General can turn it off or include betas.
 

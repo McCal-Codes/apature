@@ -1,15 +1,15 @@
 # Apature icons
 
 Four concepts, each in a dark tile and a light tile, generated from
-`tools/apature_icons.py`. The app ships **aperture-dark** (see
-`apps/desktop/assets/Apature.icns`); the others are alternates for marketing
-and for a future per-appearance icon.
+`tools/apature_icons.py`. The app ships **modern-a-dark** (see
+`apps/desktop/assets/Apature.icns`); the other three are optional alternates,
+kept at every size for marketing and for a future icon picker.
 
 | Concept | Idea |
 | --- | --- |
-| `modern-a` | A chevron A built from two aperture-like strokes. Clean at 16 px. |
+| `modern-a` | A chevron A built from two aperture-like strokes. Clean at 16 px. **The app icon.** |
 | `photo-frame` | Focus brackets around a picture. Reads as "photos" anywhere. |
-| `aperture` | Eight overlapping blades, the classic mark. The app icon. |
+| `aperture` | Eight overlapping blades, the classic mark. |
 | `field` | The same blades around a landscape: on location, outdoors. |
 
 Each `<concept>-<appearance>/` folder holds PNGs at 1024, 512, 256, 128, 64,

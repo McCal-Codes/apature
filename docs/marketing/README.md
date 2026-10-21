@@ -54,7 +54,7 @@ Palette: base `#121214`, ink `#1C192E`, paper `#F3F2F7`, accent `#C9BEF8`
 3. Build the composites and PSDs:
 
    ```bash
-   python3 -I tools/marketing_composites.py docs/screenshots docs/design/icons/aperture-dark/aperture-dark-1024.png docs/marketing
+   python3 -I tools/marketing_composites.py docs/screenshots docs/design/icons/modern-a-dark/modern-a-dark-1024.png docs/marketing
    ```
 
    Needs Pillow and ImageMagick (`brew install imagemagick`).
