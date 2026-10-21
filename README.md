@@ -40,10 +40,19 @@
 
 ## Why I made this
 
-<!-- Caleb writes this section. A few paragraphs in your own words: the deadline nights, why Photo Mechanic, what
-     you wanted instead, and what Apature is and is not. -->
+Honestly, I made this to see what I could do. I love Photo Mechanic and I use it on deadline, but I was curious what
+I could build myself, so I rebuilt the loop I actually use every week: card in, cull, caption, export, send. Along
+the way I added a few things it doesn't have, like hashed verification of every copy, day chips before you ingest,
+and delivery with a sent ledger, and I kept the things it gets right, like the keys and the variables.
 
-*Coming from the author.*
+Where I want this to go is onboarding. Getting into photojournalism shouldn't mean a cold start with software that
+assumes you already know the workflow. I plan for Apature to teach the loop as you use it, the same loop you would
+run in Photo Mechanic, so that someone picking it up for the first time can learn the job and the tool together. I
+don't like gatekeeping. I'd like the people already in the industry to see this as an effort to bring more people
+in, and to show that it isn't that hard. Sometimes it's the software and the experience, not the person.
+
+Who knows where it goes from here. This is the first version, I'm still learning Rust, and it shows in places. Don't
+go crazy about it; tell me what breaks and what you'd want next.
 
 ## Screenshots
 
