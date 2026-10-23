@@ -234,7 +234,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apature"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ab_glyph",
  "apature-core",
@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "apature-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "apature-core",
@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "apature-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "log",
  "serde",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "apature-deliver"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "log",
  "serde",
@@ -307,7 +307,7 @@ dependencies = [
 
 [[package]]
 name = "apature-export"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "apature-core",
  "apature-metadata",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "apature-ingest"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "apature-core",
  "apature-metadata",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "apature-metadata"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "apature-core",
  "log",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "apature-preview"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "apature-core",
  "image",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "apature-receive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "libunftp",

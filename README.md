@@ -29,11 +29,11 @@
 
 | Version | Price | Platforms | Camera files | Tested on |
 | :---: | :---: | :---: | :---: | :---: |
-| 0.1.0 | Free | macOS 12+, Linux, Windows 10+ | NEF, RAW+JPEG pairs, JPEG | Nikon Z 6 II, M1 Pro |
+| 0.1.1 | Free | macOS 12+, Linux, Windows 10+ | NEF, RAW+JPEG pairs, JPEG | Nikon Z 6 II, M1 Pro |
 
 </div>
 
-> **Status:** 0.1.0, the first shareable build. It runs my own assignments end to end, but it is early: expect rough
+> **Status:** 0.1.1, the second shareable build: Linux and Windows downloads, a welcome, receive over Wi-Fi, Settings rebuilt. It runs my own assignments end to end, but it is early: expect rough
 > edges, and tell me about them. Developed on a Mac with a Nikon Z 6 II. See what's changed in [CHANGELOG.md](CHANGELOG.md).
 
 **Contents:** [Why I made this](#why-i-made-this) · [How I work](#how-i-work) · [Screenshots](#screenshots) · [What it does](#what-it-does) ·
@@ -101,7 +101,7 @@ can so others can learn too.
 ## Install
 
 **macOS.** Download the DMG from the [latest release](https://github.com/McCal-Codes/apature/releases/latest) and drag
-Apature to Applications. 0.1.0 is not yet notarised: the first time, right-click the app and choose Open, or allow it
+Apature to Applications. 0.1.1 is not yet notarised: the first time, right-click the app and choose Open, or allow it
 under System Settings › Privacy & Security.
 
 **Linux.** Debian and Ubuntu: `sudo apt install ./apature_*.deb`. Anything else: download the AppImage, mark it

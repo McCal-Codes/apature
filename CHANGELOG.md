@@ -5,6 +5,8 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-10-23
+
 ### Added
 - Variables: captions and code replacements resolve Photo Mechanic's names ({iptcmonthnameap}, {iptcdow}, {city}, {credit}, {copyright}, {creator}, {filename}, …) and plain aliases; Settings › Metadata › Your variables defines your own {name} for any template or caption.
 - Import from Photo Mechanic (File menu, Settings › Metadata, the welcome): an ingest snapshot sets the folder and rename templates verbatim, a code replacement file loads as is.
