@@ -292,7 +292,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
             if let Some(r) = &app.ingest.receive {
                 ui.add_space(S1);
                 ui.label(RichText::new(format!("Point the phone or camera at {}  ·  user {}  ·  password {}  ·  {} connected so far", r.url(), apature_receive::USER, r.password, r.logins())).size(11.5).monospace().color(t.text2));
-                ui.label(RichText::new("The phone stands in for a WT-7: SnapBridge sends each frame to the phone, a transfer app on the phone sends it here over the hotspot, Live Ingest does the rest.").size(11.0).color(t.muted));
+                ui.label(RichText::new("No WT-7 needed. Nikon's Wireless Transmitter Utility can also send straight from the camera into this folder; or SnapBridge to a phone and a transfer app from the phone to here. Live Ingest does the rest either way.").size(11.0).color(t.muted));
             }
             if let Some(e) = &app.ingest.receive_error {
                 ui.label(RichText::new(e).size(11.5).color(t.reject));

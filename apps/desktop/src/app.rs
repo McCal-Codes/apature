@@ -430,6 +430,8 @@ pub struct App {
     next_generation: u64,
     pub settings_open: bool,
     pub about_open: bool,
+    /// Settings search text; non-empty replaces the page with results.
+    pub settings_query: String,
     /// The welcome (onboarding) modal and its page.
     pub welcome_open: bool,
     pub welcome_step: usize,
@@ -559,6 +561,7 @@ impl App {
             next_generation: 1,
             settings_open: false,
             about_open: launch.about,
+            settings_query: String::new(),
             welcome_open: launch.welcome || (!onboarded && launch.screenshot.is_none()),
             welcome_step: 0,
             preview_window: false,

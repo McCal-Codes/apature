@@ -106,3 +106,34 @@ stand in for the phone. Findings:
 Sources: dpreview's SnapBridge test, Digital Trends on the BLE/Wi-Fi
 hand-off, Nikon's D6 and Z5 manuals on the app, the PIXLS Z50 wireless
 thread, PC-Welt's gphoto2 Raspberry Pi article, pypi `ptpip`.
+
+## Correction (2026-10-23, from a research note Caleb shared): the camera can send to the Mac by itself
+
+Nikon's own **Wireless Transmitter Utility** (WTU, free, Mac) pairs with the
+Z 6 II over the body's built-in Wi-Fi (Setup › Connect to PC: the camera as
+access point, or both on one network such as a phone hotspot), takes an
+authentication code shown on the camera, and then receives files into a
+folder of your choice. With *Connect to PC › Options › Auto send* on, every
+frame goes as it is written to the card, full size, RAW+JPEG or JPEG only
+(*Send file as*). No phone, no WT-7. The WT-7 is only needed for FTP from
+the body and for wireless tethered control.
+
+So the first-choice chain is:
+
+```
+Z 6 II  --built-in Wi-Fi, WTU pairing-->  a folder on the Mac  -->  Live Ingest
+```
+
+Apature already covers the right-hand half: pick the WTU folder as the
+Ingest source and turn Live Ingest on. The FTP receiver stays for phones and
+for cameras that speak FTP. Not yet tested on Caleb's body; the test plan
+is in the note's "direct PTP/IP experiment" (pair with WTU first, then
+`gphoto2 --port ptpip:<camera ip> --summary`, then `--list-files`).
+
+The note also corrects my BLE finding: two open projects (furble, MIT; Nikon
+Smart GPS, AGPL-3.0) have reverse-engineered parts of the SnapBridge
+smart-device Bluetooth pairing, with Z7 II, Z50 II and Z8 reports. Image
+transfer over that path is still undemonstrated. Licence check before any
+reuse. Recommended staging: (1) WTU folder + Live Ingest, (2) a PTP/IP
+spike with the `gphoto2` crate (a libgphoto2 wrapper with `wait_event` and
+`NewFile`), (3) BLE research as its own track.
