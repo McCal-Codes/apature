@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Apature Wi-Fi receiver prototype for Nikon Z bodies (PTP/IP).
 
-    python3 -I tools/ptpip_spike.py OUT_DIR [--camera IP] [--name "Apature"]
+    python3 -I tools/ptpip_spike.py OUT_DIR [--pair] [--camera IP] [--name "Apature"]
 
 Finds the camera over Bonjour (_ptp._tcp), reads its mode from the TXT
 record, and then:
 
-  pairing mode  (apps=PAIR)  pairs with a fresh identity, which the camera
-                             confirms on its own screen, and saves it to
-                             ~/.apature-camera-id so later runs reuse it
+  pairing mode  (apps=PAIR)  with --pair: the camera shows a code, you type
+                             it, and only a matching code is confirmed to
+                             the camera; the identity is then saved to
+                             ~/.apature-camera-id for later runs
   transfer mode (apps=WT)    opens a session with the saved identity, waits
                              for the camera to announce frames, and fetches
                              each one into OUT_DIR with its own file name
@@ -32,6 +33,7 @@ PT = {1: "InitCmdReq", 2: "InitCmdAck", 3: "InitEvtReq", 4: "InitEvtAck", 5: "In
       6: "CmdReq", 7: "CmdResp", 8: "Event", 9: "StartData", 10: "Data", 11: "Cancel", 12: "EndData", 13: "Ping", 14: "Pong"}
 OP_GET_DEVICE_INFO, OP_OPEN_SESSION, OP_CLOSE_SESSION = 0x1001, 0x1002, 0x1003
 OP_GET_OBJECT_INFO, OP_GET_OBJECT = 0x1008, 0x1009
+OP_GET_OBJECT_HANDLES, OP_GET_PARTIAL_OBJECT, OP_GET_STORAGE_IDS = 0x1007, 0x101b, 0x1004
 EV_OBJECT_ADDED = 0x4002
 RC_OK = 0x2001
 
@@ -203,18 +205,95 @@ def object_info(b):
 # ---- the two modes -------------------------------------------------------------------
 
 def pair(ip, name):
+    """Pair the way the camera expects: it shows a code on its screen; the
+    person types that code here; only a matching code is confirmed to the
+    camera. A wrong or missing code ends the session without pairing."""
     guid = uuid.uuid4().bytes
     cam = Camera(ip, guid, name)
     cam.connect()
     manu, model, ver, _ = device_info(cam.op(OP_GET_DEVICE_INFO))
     log(f"{manu} {model}, firmware {ver}: pairing")
     cam.op(OP_OPEN_SESSION, 1)
-    # The camera shows the pairing on its own screen and confirms it there.
-    cam.op(0x952b)
+    reply = cam.op(0x952b)
+    n = struct.unpack("<I", reply[:4])[0] if len(reply) >= 4 else 0
+    expected = "".join(str(d) for d in reply[4:4 + n])
+    if not expected:
+        cam.close()
+        raise SystemExit("the camera did not offer a pairing code; cancel on the camera and start the wizard again")
+    print()
+    print("The camera is showing a pairing code. Type it exactly as shown, then Enter.")
+    print("If the camera shows nothing, press Enter with no code to cancel.")
+    try:
+        typed = input("code: ").strip()
+    except EOFError:
+        typed = ""
+    if typed != expected:
+        log("codes do not match; not pairing")
+        cam.close()
+        raise SystemExit(1)
     cam.op(0x935a, 0x2001)
     save_identity(guid)
-    log(f"paired; identity saved to {ID_FILE}")
+    log(f"codes match; paired. Identity saved to {ID_FILE}")
     cam.close()
+
+
+def attempt(label, fn):
+    try:
+        r = fn()
+        log(f"  {label}: ok" + (f" ({len(r)} bytes)" if isinstance(r, bytes) else ""))
+        return r
+    except Exception as e:
+        log(f"  {label}: {e}")
+        return None
+
+
+def fetch(cam, handle, out):
+    """A frame was announced. The camera in transfer mode has refused a
+    straight GetObjectInfo on the announced handle once (0x200f), so try
+    the ways Nikon's framework hints at and log each: a short wait, the
+    handle list, the newest listed handle, and a partial read."""
+    log(f"frame announced: handle {handle:#010x}")
+    time.sleep(1.5)
+    info = attempt("GetObjectInfo on the announced handle", lambda: cam.op(OP_GET_OBJECT_INFO, handle))
+    if info is None:
+        ids = attempt("GetStorageIDs", lambda: cam.op(OP_GET_STORAGE_IDS))
+        handles = attempt("GetObjectHandles (all storage)", lambda: cam.op(OP_GET_OBJECT_HANDLES, 0xFFFFFFFF, 0, 0))
+        if handles:
+            n = struct.unpack("<I", handles[:4])[0]
+            hs = struct.unpack("<%dI" % n, handles[4:4 + 4 * n])
+            log(f"  {n} handles; last {[f'{h:#x}' for h in hs[-3:]]}")
+            if hs:
+                handle = hs[-1]
+                info = attempt(f"GetObjectInfo on {handle:#x}", lambda: cam.op(OP_GET_OBJECT_INFO, handle))
+    if info is None:
+        part = attempt("GetPartialObject on the announced handle, first 64 KB", lambda: cam.op(OP_GET_PARTIAL_OBJECT, handle, 0, 65536))
+        if part:
+            path = os.path.join(out, f"{handle:08x}.partial")
+            open(path, "wb").write(part)
+            log(f"  wrote {path}")
+        return
+    size, fname = object_info(info)
+    log(f"  {fname}, {size / 1e6:.1f} MB")
+    t0 = time.time()
+    data = attempt("GetObject", lambda: cam.op(OP_GET_OBJECT, handle))
+    if data is None:
+        data = b""
+        off = 0
+        while off < size:
+            chunk = attempt(f"GetPartialObject at {off}", lambda: cam.op(OP_GET_PARTIAL_OBJECT, handle, off, 1 << 20))
+            if not chunk:
+                break
+            data += chunk
+            off += len(chunk)
+        if off < size:
+            return
+    path = os.path.join(out, fname or f"{handle:08x}.bin")
+    tmp = path + ".part"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
+    dt = max(time.time() - t0, 0.001)
+    log(f"  saved {path} ({len(data) / 1e6:.1f} MB, {len(data) / 1e6 / dt:.1f} MB/s)")
 
 
 def receive(ip, name, out):
@@ -242,16 +321,7 @@ def receive(ip, name, out):
             if code != EV_OBJECT_ADDED or not params:
                 continue
             handle = params[0]
-            size, fname = object_info(cam.op(OP_GET_OBJECT_INFO, handle))
-            t0 = time.time()
-            data = cam.op(OP_GET_OBJECT, handle)
-            path = os.path.join(out, fname or f"{handle:08x}.bin")
-            tmp = path + ".part"
-            with open(tmp, "wb") as f:
-                f.write(data)
-            os.replace(tmp, path)
-            dt = max(time.time() - t0, 0.001)
-            log(f"{fname}: {len(data) / 1e6:.1f} MB in {dt:.1f} s ({len(data) / 1e6 / dt:.1f} MB/s)")
+            fetch(cam, handle, out)
     except KeyboardInterrupt:
         log("stopping")
     finally:
@@ -275,8 +345,10 @@ def main():
         ip, mode, inst = found
         log(f"found {inst} at {ip}, mode {mode}")
     if mode == "PAIR":
+        if "--pair" not in args:
+            raise SystemExit("the camera is in its connection wizard; run with --pair in a terminal to pair (you will type the code the camera shows)")
         pair(ip, name)
-        log("now finish the wizard on the camera; when it shows connected, run again to receive")
+        log("now finish the wizard on the camera; when it shows connected, run again without --pair to receive")
     else:
         receive(ip, name, out)
 
