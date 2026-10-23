@@ -415,7 +415,7 @@ fn control(app: &mut App, ui: &mut egui::Ui, t: &Theme, id: Id) -> bool {
 /* -- Controls -------------------------------------------------------------- */
 
 /// A switch: a pill that slides, the way System Settings draws one.
-fn toggle(ui: &mut egui::Ui, t: &Theme, on: &mut bool) -> bool {
+pub(crate) fn toggle(ui: &mut egui::Ui, t: &Theme, on: &mut bool) -> bool {
     let size = egui::vec2(34.0, 20.0);
     let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
     let mut changed = false;

@@ -6,6 +6,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [Unreleased]
 
 ### Changed
+- Export workspace laid out in the order of Photo Mechanic's Save Photos As dialog: Preset, Photos, Destination and naming with an example, Image (format, size, quality, RAW decode), Metadata, Then (open folder, send to); switches instead of checkboxes; the Export button pinned at the bottom.
 - Caption workspace laid out as cards (Assignment, Caption, Keywords, Where, Who, More fields) with Save & next, Save and Revert pinned at the bottom; the code list sits behind a hover.
 
 ### Added

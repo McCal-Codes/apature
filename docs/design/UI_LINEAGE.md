@@ -67,3 +67,14 @@ dropped.
    in `apps/desktop/src/ui/tokens.rs` are Apature's.
 3. Write down what was borrowed and what was dropped, here, in one line each.
 4. When Caleb ships something new elsewhere, add it to Sources.
+
+**Workspaces as cards (2026-10-23).** Caption and Export now use the shared
+`ui::card` (eyebrow, raised fill, hairline, 8 px radius) with the primary
+action pinned in a bottom bar, the way Settings and TerraNova's dialogs do.
+Export follows the reading order of Photo Mechanic's Save Photos As dialog:
+preset, which photos, destination and names (with an example), the image
+(format, size, quality), the metadata, then where to send. Photo Mechanic
+puts the file-name variables and a live example beside the template, keeps
+sharpening and colour-space choices in the same dialog, and uses snapshots
+for presets; Apature keeps the example, the presets as chips, and leaves
+sharpening out until someone asks.
