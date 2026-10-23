@@ -540,7 +540,7 @@ fn worker(
             let mut sess = match Session::connect(found.ip, id, &host_name) {
                 Ok(s) => s,
                 Err(e) => {
-                    note(format!("{e}"));
+                    note(e);
                     std::thread::sleep(Duration::from_secs(3));
                     continue;
                 }
