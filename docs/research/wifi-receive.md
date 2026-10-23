@@ -71,3 +71,38 @@ inside the app: nothing to install, nothing listening when the chip is off.
 - Headless run on the Mac: the server reports `ftp://192.168.1.175:2121`
   and stops cleanly. A phone has not been tested yet; that needs Caleb's
   phone, SnapBridge and a transfer app on the same hotspot.
+
+## SnapBridge as a pseudo-bridge: can Apature talk to the camera the way the phone does? (2026-10-23)
+
+Looked for an open implementation of what SnapBridge does so the Mac could
+stand in for the phone. Findings:
+
+- **No open reimplementation of SnapBridge's pairing exists.** Reviews and
+  Nikon's manuals describe the layers (Bluetooth LE for the always-on link
+  and small transfers, Wi-Fi for full-size images and live view) but nobody
+  has published the BLE pairing handshake, and the Wi-Fi hand-off is
+  negotiated over that BLE link. Reverse-engineering it is a project, not a
+  task.
+- **PTP/IP over Wi-Fi is open and works for Z bodies.** gphoto2 drives a Z6
+  over `ptpip:` once the computer is on the camera's network (camera as
+  access point, or both on the same router or hotspot); a German test did
+  exactly that from a Raspberry Pi. The weak spot is the camera's
+  "Connect to computer" pairing wizard, which waits for Nikon's Wireless
+  Transmitter Utility to answer; a Z50 report shows gphoto2 identifying the
+  camera and the camera then refusing to save the connection. Nothing
+  documents the pairing exchange.
+- **Conclusion.** Two chains, both without a WT-7:
+  1. *Today, tested in the lab*: camera → SnapBridge → phone → transfer app →
+     Apature's FTP server (above). Phone required.
+  2. *Worth a spike*: Apature as a PTP/IP initiator on the camera's Wi-Fi,
+     pulling new frames as they are shot (the same `FILEADDED` loop the
+     Pocket prototype uses over USB), so the Mac replaces both the phone and
+     the WT-7. Needs: the camera in access-point mode or on the hotspot, a
+     Rust PTP/IP client (none mature; port the needed subset from
+     libgphoto2's `ptpip.c`), and a test of whether the Z 6 II accepts a
+     session from something other than WTU. Budget it as a research week,
+     not a feature.
+
+Sources: dpreview's SnapBridge test, Digital Trends on the BLE/Wi-Fi
+hand-off, Nikon's D6 and Z5 manuals on the app, the PIXLS Z50 wireless
+thread, PC-Welt's gphoto2 Raspberry Pi article, pypi `ptpip`.
