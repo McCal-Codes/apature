@@ -84,6 +84,10 @@ pub enum Command {
     OpenShortcuts,
     OpenAbout,
     OpenWelcome,
+    /// Load this assignment file (from the list or a new one).
+    LoadAssignmentFrom(PathBuf),
+    /// Open the New assignment sheet.
+    NewAssignment,
     /// Pick a Photo Mechanic snapshot (.snap) or code file and take what Apature understands.
     ImportPhotoMechanic,
     /// Start or stop the FTP receive server on the ingest source folder.
@@ -221,6 +225,7 @@ impl Command {
             Command::OpenShortcuts => "help.shortcuts".into(),
             Command::OpenAbout => "app.about".into(),
             Command::OpenWelcome => "help.welcome".into(),
+            Command::NewAssignment => "file.assignment.new".into(),
             Command::ImportPhotoMechanic => "file.import_pm".into(),
             Command::ReceiveToggle => "ingest.receive".into(),
             Command::CheckUpdates => "app.updates".into(),
@@ -247,6 +252,7 @@ impl Command {
             "help.shortcuts" => Command::OpenShortcuts,
             "app.about" => Command::OpenAbout,
             "help.welcome" => Command::OpenWelcome,
+            "file.assignment.new" => Command::NewAssignment,
             "file.import_pm" => Command::ImportPhotoMechanic,
             "ingest.receive" => Command::ReceiveToggle,
             "app.updates" => Command::CheckUpdates,

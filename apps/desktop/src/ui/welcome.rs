@@ -225,7 +225,7 @@ fn page_photos(
         .cloned()
         .collect();
     if cards.is_empty() {
-        body(ui, t, "No card plugged in yet. When one shows up, it lands in the sidebar and Ingest is one click away.");
+        body(ui, t, "No card plugged in yet. When one shows up, it lands in the sidebar and Ingest is one click away. A Nikon sending over Wi-Fi through the Wireless Transmitter Utility shows up there too.");
     } else {
         super::eyebrow(ui, t, "Card detected");
         for (name, path) in &cards {

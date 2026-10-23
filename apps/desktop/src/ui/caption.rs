@@ -365,11 +365,41 @@ fn fields_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Comma
         }
         ui.add_space(S1);
         ui.horizontal_wrapped(|ui| {
+            let listed = app
+                .assignments_dir()
+                .map(|d| super::assignments::list(&d))
+                .unwrap_or_default();
+            if !listed.is_empty() {
+                let current = app.prefs.assignment_file.clone();
+                egui::ComboBox::from_id_salt("assignment-pick")
+                    .selected_text(RichText::new("Upcoming").size(12.0))
+                    .width(130.0)
+                    .show_ui(ui, |ui| {
+                        for l in &listed {
+                            let on = current.as_deref() == Some(l.path.as_path());
+                            let label = if l.date.is_empty() {
+                                l.slug.clone()
+                            } else {
+                                format!("{}  {}", l.date, l.slug)
+                            };
+                            if ui.selectable_label(on, label).clicked() {
+                                cmds.push(Command::LoadAssignmentFrom(l.path.clone()));
+                            }
+                        }
+                    });
+            }
+            if ui
+                .small_button("New…")
+                .on_hover_text("Paste the editor's sheet; the file goes to your assignments folder")
+                .clicked()
+            {
+                cmds.push(Command::NewAssignment);
+            }
             if ui
                 .small_button(if app.assignment.is_some() {
-                    "Change…"
+                    "Other file…"
                 } else {
-                    "Load assignment…"
+                    "Load a file…"
                 })
                 .clicked()
             {

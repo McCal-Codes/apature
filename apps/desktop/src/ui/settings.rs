@@ -1084,6 +1084,84 @@ fn page_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command
                 });
                 ui.add_space(S2);
             });
+            card(ui, t, "Assignments folder", |ui| {
+                ui.add_space(S2);
+                hint(ui, t, "Where assignment files are kept and where New assignment writes them. Put it on Google Drive and the sheet you make at the desk is on the laptop at the game.");
+                ui.horizontal(|ui| {
+                    let shown = app
+                        .assignments_dir()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| "not set".into());
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(shown).monospace().size(10.5).color(t.text2),
+                        )
+                        .truncate(),
+                    );
+                    if ui.small_button("Choose…").clicked() {
+                        if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                            app.prefs.assignments_dir = Some(p);
+                            app.prefs_dirty = true;
+                        }
+                    }
+                    if app.prefs.assignments_dir.is_some()
+                        && ui.small_button("Use Drive default").clicked()
+                    {
+                        app.prefs.assignments_dir = None;
+                        app.prefs_dirty = true;
+                    }
+                });
+                ui.add_space(S2);
+            });
+            card(ui, t, "Outlet", |ui| {
+                ui.add_space(S2);
+                hint(
+                    ui,
+                    t,
+                    "Written into every new assignment file: who shot it and who it is for.",
+                );
+                let mut changed = false;
+                egui::Grid::new("outlet")
+                    .num_columns(2)
+                    .spacing([S3, S1])
+                    .show(ui, |ui| {
+                        for (label, v, h) in [
+                            (
+                                "Photographer",
+                                &mut app.prefs.outlet.photographer,
+                                "Caleb McCartney/Special to the Eagle",
+                            ),
+                            (
+                                "Credit",
+                                &mut app.prefs.outlet.credit,
+                                "Photog/Special to the Eagle",
+                            ),
+                            ("Source", &mut app.prefs.outlet.source, "the newspaper"),
+                            (
+                                "Copyright",
+                                &mut app.prefs.outlet.copyright,
+                                "© 2026 the newspaper",
+                            ),
+                        ] {
+                            ui.label(RichText::new(label).size(12.0).color(t.text2));
+                            if ui
+                                .add(
+                                    egui::TextEdit::singleline(v)
+                                        .desired_width(320.0)
+                                        .hint_text(h),
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                            ui.end_row();
+                        }
+                    });
+                if changed {
+                    app.prefs_dirty = true;
+                }
+                ui.add_space(S2);
+            });
             card(ui, t, "Code replacement file", |ui| {
                 ui.add_space(S2);
                 ui.horizontal(|ui| {
@@ -1176,6 +1254,39 @@ fn page_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command
             });
         }
         Page::Ingest => {
+            card(ui, t, "Camera over Wi-Fi", |ui| {
+                ui.add_space(S2);
+                hint(ui, t, "The folder Nikon's Wireless Transmitter Utility saves into. It is listed under Drives & cards; one click opens Ingest on it with Live Ingest on.");
+                ui.horizontal(|ui| {
+                    let shown = app
+                        .wireless_inbox()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| {
+                            "not set, and the utility's default folder does not exist yet".into()
+                        });
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(shown).monospace().size(10.5).color(t.text2),
+                        )
+                        .truncate(),
+                    );
+                    if ui.small_button("Choose…").clicked() {
+                        if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                            app.prefs.wireless_inbox = Some(p);
+                            app.prefs_dirty = true;
+                            app.volumes_checked =
+                                std::time::Instant::now() - std::time::Duration::from_secs(5);
+                        }
+                    }
+                    if app.prefs.wireless_inbox.is_some()
+                        && ui.small_button("Use default").clicked()
+                    {
+                        app.prefs.wireless_inbox = None;
+                        app.prefs_dirty = true;
+                    }
+                });
+                ui.add_space(S2);
+            });
             for s in sections_of(page) {
                 section_card(app, ui, t, page, s);
                 if s == "Sequence" && !app.prefs.seq_counters.is_empty() {

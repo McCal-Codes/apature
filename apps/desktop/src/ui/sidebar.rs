@@ -173,8 +173,25 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     super::eyebrow(ui, t, "Drives & cards");
                     for (name, path) in app.volumes.clone() {
                         let kind = app.volume_kinds.get(&path).copied();
-                        if row_glyph(ui, t, &name, None, false, kind).clicked() {
-                            cmds.push(Command::OpenFolder(path));
+                        let wireless = app.wireless_inbox().as_deref() == Some(path.as_path());
+                        let r = row_glyph(ui, t, &name, None, false, kind);
+                        let r = if wireless {
+                            r.on_hover_text("Frames sent by the camera through Nikon's Wireless Transmitter Utility. Click: Ingest with Live Ingest on.")
+                        } else {
+                            r
+                        };
+                        if r.clicked() {
+                            if wireless {
+                                app.ingest.opts.source = path.clone();
+                                // the utility makes a folder per camera inside
+                                app.ingest.opts.include_subfolders = true;
+                                cmds.push(Command::SetWorkspace(crate::commands::Workspace::Ingest));
+                                if !app.ingest.live.on {
+                                    cmds.push(Command::LiveToggle);
+                                }
+                            } else {
+                                cmds.push(Command::OpenFolder(path));
+                            }
                         }
                     }
                 });

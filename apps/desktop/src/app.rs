@@ -437,6 +437,9 @@ pub struct App {
     pub welcome_step: usize,
     /// Set by the welcome's Import button; handled after the modal closes.
     pub welcome_import: bool,
+    /// The New assignment sheet.
+    pub assignment_sheet_open: bool,
+    pub assignment_draft: ui::assignments::Draft,
     /// Preview is showing in its own window (prefs.preview_in_window).
     pub preview_window: bool,
     update_checker: Option<crate::updater::Checker>,
@@ -462,7 +465,7 @@ pub struct App {
     pub focus_since: Option<Instant>,
     pub status_since: Option<Instant>,
     /// `/Volumes` is polled every 2 s so a card shows up when it mounts.
-    volumes_checked: Instant,
+    pub volumes_checked: Instant,
     last_status: String,
     launch: Launch,
     quit_after_frame: bool,
@@ -568,6 +571,8 @@ impl App {
             welcome_open: launch.welcome || (!onboarded && launch.screenshot.is_none()),
             welcome_step: 0,
             welcome_import: false,
+            assignment_sheet_open: false,
+            assignment_draft: Default::default(),
             preview_window: false,
             update_checker: None,
             update_manual: false,
@@ -1510,6 +1515,25 @@ impl App {
                         .map(|p| rep.all_verified(p))
                         .unwrap_or(false);
                     let open_after = ok && self.prefs.open_after_ingest && !self.ingest.apply_pad;
+                    // The shoot carries its sheet: copy the loaded assignment
+                    // file into the day's folder on the destination drive.
+                    if ok {
+                        if let (Some(src), Some(day)) = (
+                            self.prefs.assignment_file.clone(),
+                            self.ingest
+                                .plan
+                                .as_ref()
+                                .and_then(|p| p.entries.first())
+                                .and_then(|e| e.primary.parent().map(|d| d.to_path_buf())),
+                        ) {
+                            if let Some(name) = src.file_name() {
+                                let dest = day.join(name);
+                                if !dest.exists() {
+                                    let _ = std::fs::copy(&src, &dest);
+                                }
+                            }
+                        }
+                    }
                     if let Some(r) = self.ingest.running.as_mut() {
                         self.status = if ok {
                             format!("Ingest complete: {} files verified", rep.files_ok())
@@ -2102,6 +2126,39 @@ impl App {
 
     // ----- folders -----------------------------------------------------------
 
+    /// Where assignment files live: the folder chosen in Settings, else a
+    /// Google Drive "My Drive/Apature/Assignments" when Drive is installed.
+    pub fn assignments_dir(&self) -> Option<PathBuf> {
+        if let Some(d) = &self.prefs.assignments_dir {
+            return Some(d.clone());
+        }
+        let home = directories::UserDirs::new()?;
+        let cloud = home.home_dir().join("Library/CloudStorage");
+        let mut drives: Vec<PathBuf> = std::fs::read_dir(&cloud)
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .map(|n| n.to_string_lossy().starts_with("GoogleDrive-"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        drives.sort();
+        drives
+            .first()
+            .map(|d| d.join("My Drive").join("Apature").join("Assignments"))
+    }
+
+    /// The folder frames sent over Wi-Fi land in: the one chosen in Settings,
+    /// else Nikon's default.
+    pub fn wireless_inbox(&self) -> Option<PathBuf> {
+        self.prefs
+            .wireless_inbox
+            .clone()
+            .or_else(Platform::wireless_inbox)
+    }
+
     fn refresh_volumes(&mut self) {
         let mut v = Vec::new();
         for (name, p) in Platform::volumes() {
@@ -2112,6 +2169,17 @@ impl App {
             if kind != crate::platform::VolumeKind::System {
                 v.push((name, p));
             }
+        }
+        let inbox = self
+            .prefs
+            .wireless_inbox
+            .clone()
+            .filter(|p| p.is_dir() || p.starts_with("/Volumes"))
+            .or_else(Platform::wireless_inbox);
+        if let Some(inbox) = inbox {
+            self.volume_kinds
+                .insert(inbox.clone(), crate::platform::VolumeKind::Camera);
+            v.push(("Camera over Wi-Fi".into(), inbox));
         }
         v.sort();
         let present: Vec<PathBuf> = v.iter().map(|(_, p)| p.clone()).collect();
@@ -3605,6 +3673,14 @@ impl App {
                     }
                 }
             }
+            Command::LoadAssignmentFrom(p) => {
+                self.load_assignment(&p);
+                self.prefs.assignment_file = Some(p);
+                self.prefs_dirty = true;
+            }
+            Command::NewAssignment => {
+                self.assignment_sheet_open = true;
+            }
             Command::OpenWelcome => {
                 self.welcome_open = true;
                 self.welcome_step = 0;
@@ -4187,6 +4263,7 @@ impl eframe::App for App {
         ui::settings::show(self, ctx, &t);
         ui::dialogs::show(self, ctx, &t);
         ui::welcome::show(self, ctx, &t);
+        ui::assignments::show(self, ctx, &t);
         ui::welcome::tips(self, ctx, &t);
         ui::status::show(self, ctx, &t);
         ui::toasts::show(self, ctx, &t);

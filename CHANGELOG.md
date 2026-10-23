@@ -5,6 +5,11 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+### Added
+- Assignments ahead of time: an assignments folder (Google Drive by default when it is installed), an Upcoming list in the Caption workspace, and New assignment, which turns a pasted editor's sheet into an assignment file with the outlet's credit, source and copyright from Settings. When an ingest finishes, the assignment file is copied into the day's folder on the destination drive.
+- Camera over Wi-Fi reads the utility's per-camera subfolder.
+- Camera over Wi-Fi: when Nikon's Wireless Transmitter Utility has a destination folder, it is listed under Drives & cards; one click opens Ingest on it with Live Ingest on. No WT-7, no phone.
+
 ### Changed
 - Inspector sections drawn as cards; the tag is a switch. The filter popup uses chips and switches, with colour classes as dotted chips.
 

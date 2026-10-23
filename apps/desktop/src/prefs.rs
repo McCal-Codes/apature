@@ -16,6 +16,19 @@ fn default_receive_port() -> u16 {
     apature_receive::DEFAULT_PORT
 }
 
+/// The outlet's lines for new assignment files (Settings › Metadata).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Outlet {
+    #[serde(default)]
+    pub photographer: String,
+    #[serde(default)]
+    pub credit: String,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub copyright: String,
+}
+
 /// Current saved-format version of prefs.json.
 pub const PREFS_VERSION: u32 = 1;
 
@@ -146,6 +159,16 @@ pub struct Prefs {
     /// The photographer's own `{variables}` for templates and captions.
     #[serde(default)]
     pub variables: Vec<(String, String)>,
+    /// Where assignment files live (a synced drive folder works well).
+    #[serde(default)]
+    pub assignments_dir: Option<PathBuf>,
+    /// The outlet written into every new assignment file.
+    #[serde(default)]
+    pub outlet: Outlet,
+    /// The folder Nikon's Wireless Transmitter Utility saves into, when it
+    /// is not the default one under Pictures.
+    #[serde(default)]
+    pub wireless_inbox: Option<PathBuf>,
     /// Port for Receive over Wi-Fi (the FTP server).
     #[serde(default = "default_receive_port")]
     pub receive_port: u16,
@@ -238,6 +261,9 @@ impl Default for Prefs {
             tips_seen: Vec::new(),
             receive_port: apature_receive::DEFAULT_PORT,
             variables: Vec::new(),
+            wireless_inbox: None,
+            assignments_dir: None,
+            outlet: Outlet::default(),
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,

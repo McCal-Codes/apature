@@ -144,6 +144,25 @@ impl Platform {
         }
     }
 
+    /// Where Nikon's Wireless Transmitter Utility drops frames sent from a
+    /// camera over Wi-Fi (its default destination). Present only once the
+    /// utility has run; listed in the sidebar as a camera so one click opens
+    /// Ingest on it with Live Ingest on.
+    pub fn wireless_inbox() -> Option<std::path::PathBuf> {
+        Self::default_wireless_inbox()
+    }
+
+    /// The utility's default destination under Pictures, if it exists.
+    pub fn default_wireless_inbox() -> Option<std::path::PathBuf> {
+        let home = directories::UserDirs::new()?;
+        let p = home
+            .picture_dir()
+            .map(|d| d.to_path_buf())
+            .unwrap_or_else(|| home.home_dir().join("Pictures"))
+            .join("Wireless Transmitter Utility");
+        p.is_dir().then_some(p)
+    }
+
     /// The mounted volumes to list in the sidebar: (display name, root).
     /// System volumes are filtered by the caller through `volume_kind`.
     pub fn volumes() -> Vec<(String, std::path::PathBuf)> {
