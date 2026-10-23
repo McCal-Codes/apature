@@ -1,30 +1,101 @@
 #!/usr/bin/env python3
-"""PTP/IP receiver spike: be the paired computer for a Nikon Z over Wi-Fi.
+"""Apature Wi-Fi receiver prototype for Nikon Z bodies (PTP/IP).
 
-    python3 -I tools/ptpip_spike.py CAMERA_IP GUID_HEX "HOST NAME" OUT_DIR
+    python3 -I tools/ptpip_spike.py OUT_DIR [--camera IP] [--name "Apature"]
 
-The camera (Connect to PC, Auto send) accepts only the host identity that
-was paired through Nikon's Wireless Transmitter Utility: a 16-byte GUID and
-a name. Captured from one utility session (tcpdump on port 15740), they can
-be replayed; the camera then treats this script as the paired computer.
+Finds the camera over Bonjour (_ptp._tcp), reads its mode from the TXT
+record, and then:
 
-What it does, read-only on the camera:
-  1. Init_Command_Request with the GUID + name → expects Init_Command_Ack.
-  2. Init_Event_Request on a second socket with the connection number.
-  3. GetDeviceInfo (0x1001), OpenSession (0x1002).
-  4. Waits for events; on ObjectAdded (0x4002) it does GetObjectInfo (0x1008)
-     and GetObject (0x1009) and writes the file into OUT_DIR.
-Ctrl-C closes the session. Nothing is deleted on the camera.
+  pairing mode  (apps=PAIR)  pairs with a fresh identity, which the camera
+                             confirms on its own screen, and saves it to
+                             ~/.apature-camera-id so later runs reuse it
+  transfer mode (apps=WT)    opens a session with the saved identity, waits
+                             for the camera to announce frames, and fetches
+                             each one into OUT_DIR with its own file name
+
+If Nikon's utility already paired this Mac, its system identity at
+/Library/ptpitcp.guid is used when no saved identity exists. Nothing on the
+camera is changed or deleted. Ctrl-C closes the session cleanly.
 """
 import os
+import re
 import socket
 import struct
+import subprocess
 import sys
 import time
+import uuid
 
+PORT = 15740
+ID_FILE = os.path.expanduser("~/.apature-camera-id")
 PT = {1: "InitCmdReq", 2: "InitCmdAck", 3: "InitEvtReq", 4: "InitEvtAck", 5: "InitFail",
       6: "CmdReq", 7: "CmdResp", 8: "Event", 9: "StartData", 10: "Data", 11: "Cancel", 12: "EndData", 13: "Ping", 14: "Pong"}
+OP_GET_DEVICE_INFO, OP_OPEN_SESSION, OP_CLOSE_SESSION = 0x1001, 0x1002, 0x1003
+OP_GET_OBJECT_INFO, OP_GET_OBJECT = 0x1008, 0x1009
+EV_OBJECT_ADDED = 0x4002
+RC_OK = 0x2001
 
+
+def log(msg):
+    print(time.strftime("%H:%M:%S"), msg, flush=True)
+
+
+# ---- discovery ---------------------------------------------------------------
+
+def run_for(cmd, seconds):
+    """Run a dns-sd command that never exits on its own; return its output."""
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        return p.communicate(timeout=seconds)[0]
+    except subprocess.TimeoutExpired:
+        p.kill()
+        return p.communicate()[0]
+
+
+def discover(seconds=5):
+    """(ip, mode, instance) for the first camera advertising _ptp._tcp, or None."""
+    out = run_for(["dns-sd", "-B", "_ptp._tcp", "local"], seconds)
+    names = re.findall(r"_ptp\._tcp\.\s+(\S+)\s*$", out, flags=re.M)
+    if not names:
+        return None
+    name = names[0]
+    text = run_for(["dns-sd", "-L", name, "_ptp._tcp", "local"], seconds)
+    host = re.search(r"can be reached at (\S+?):(\d+)", text)
+    mode = re.search(r"apps=(\w+)", text)
+    ip = None
+    if host:
+        # Nikon encodes the address in the host name: 38e86a91-010-064-144-040.local.
+        m = re.search(r"-(\d{3})-(\d{3})-(\d{3})-(\d{3})\.local", host.group(1))
+        if m:
+            ip = ".".join(str(int(x)) for x in m.groups())
+        else:
+            try:
+                ip = socket.gethostbyname(host.group(1).rstrip("."))
+            except OSError:
+                ip = None
+    return ip, (mode.group(1) if mode else "?"), name
+
+
+# ---- identity --------------------------------------------------------------------
+
+def load_identity():
+    for path in (ID_FILE, "/Library/ptpitcp.guid"):
+        try:
+            b = open(path, "rb").read()[:16]
+            if len(b) == 16:
+                return b, path
+        except OSError:
+            continue
+    return None, None
+
+
+def save_identity(guid):
+    with open(ID_FILE, "wb") as f:
+        f.write(guid)
+    os.chmod(ID_FILE, 0o600)
+
+
+# ---- transport -------------------------------------------------------------------
 
 def pkt(t, payload=b""):
     return struct.pack("<II", 8 + len(payload), t) + payload
@@ -35,14 +106,14 @@ def read_pkt(s):
     while len(hdr) < 8:
         c = s.recv(8 - len(hdr))
         if not c:
-            raise ConnectionError("closed")
+            raise ConnectionError("camera closed the connection")
         hdr += c
     ln, t = struct.unpack("<II", hdr)
     body = b""
     while len(body) < ln - 8:
-        c = s.recv(min(65536, ln - 8 - len(body)))
+        c = s.recv(min(1 << 16, ln - 8 - len(body)))
         if not c:
-            raise ConnectionError("closed mid-packet")
+            raise ConnectionError("camera closed mid-packet")
         body += c
     return t, body
 
@@ -51,51 +122,47 @@ class Camera:
     def __init__(self, ip, guid, name):
         self.ip, self.guid, self.name = ip, guid, name
         self.tid = 0
-        self.cmd = None
-        self.evt = None
+        self.cmd = self.evt = None
+        self.camera_name = ""
 
     def connect(self):
-        self.cmd = socket.create_connection((self.ip, 15740), timeout=20)
+        self.cmd = socket.create_connection((self.ip, PORT), timeout=20)
         body = self.guid + self.name.encode("utf-16-le") + b"\x00\x00" + struct.pack("<I", 0x00010000)
         self.cmd.sendall(pkt(1, body))
         t, b = read_pkt(self.cmd)
         if t != 2:
             reason = struct.unpack("<I", b[:4])[0] if len(b) >= 4 else -1
-            raise RuntimeError(f"camera refused the hello: {PT.get(t, t)} reason {reason:#x}")
+            raise PermissionError(f"camera refused this identity ({PT.get(t, t)}, reason {reason})")
         conn = struct.unpack("<I", b[:4])[0]
-        cam_name = b[20:].split(b"\x00\x00")[0].decode("utf-16-le", "ignore")
-        print(f"hello accepted · connection {conn} · camera {cam_name!r}")
-        self.evt = socket.create_connection((self.ip, 15740), timeout=20)
+        self.camera_name = b[20:].split(b"\x00\x00")[0].decode("utf-16-le", "ignore")
+        self.evt = socket.create_connection((self.ip, PORT), timeout=20)
         self.evt.sendall(pkt(3, struct.pack("<I", conn)))
         t, _ = read_pkt(self.evt)
         if t != 4:
-            raise RuntimeError(f"event channel refused: {PT.get(t, t)}")
+            raise ConnectionError(f"event channel refused ({PT.get(t, t)})")
         self.evt.settimeout(None)
 
-    def op(self, code, *params, want_data=False):
+    def op(self, code, *params):
+        """Run one operation; returns the data phase bytes (possibly empty)."""
         self.tid += 1
         body = struct.pack("<IHI", 1, code, self.tid) + b"".join(struct.pack("<I", p) for p in params)
         self.cmd.sendall(pkt(6, body))
         data = b""
         while True:
             t, b = read_pkt(self.cmd)
-            if t == 9:
-                total = struct.unpack("<Q", b[4:12])[0]
-            elif t in (10, 12):
+            if t in (10, 12):
                 data += b[4:]
-                if t == 12:
-                    pass
             elif t == 7:
                 rc = struct.unpack("<H", b[:2])[0]
-                if rc != 0x2001:
-                    raise RuntimeError(f"op {code:#06x} failed: {rc:#06x}")
+                if rc != RC_OK:
+                    raise RuntimeError(f"operation {code:#06x} answered {rc:#06x}")
                 return data
-            else:
-                print("  unexpected", PT.get(t, t), len(b))
+            elif t != 9:
+                log(f"unexpected {PT.get(t, t)} on the command channel ({len(b)} bytes)")
 
     def close(self):
         try:
-            self.op(0x1003)
+            self.op(OP_CLOSE_SESSION)
         except Exception:
             pass
         for s in (self.cmd, self.evt):
@@ -105,95 +172,113 @@ class Camera:
                 pass
 
 
+# ---- PTP structures --------------------------------------------------------------
+
 def ptp_string(b, off):
     n = b[off]
-    s = b[off + 1: off + 1 + n * 2].decode("utf-16-le", "ignore").rstrip("\x00")
-    return s, off + 1 + n * 2
+    return b[off + 1: off + 1 + n * 2].decode("utf-16-le", "ignore").rstrip("\x00"), off + 1 + n * 2
 
 
-def parse_device_info(b):
-    # StandardVersion u16, VendorExtensionID u32, VendorExtensionVersion u16, VendorExtensionDesc str,
-    # FunctionalMode u16, OperationsSupported u16[], EventsSupported u16[], DevicePropertiesSupported u16[],
-    # CaptureFormats u16[], ImageFormats u16[], Manufacturer str, Model str, DeviceVersion str, SerialNumber str
+def device_info(b):
     off = 8
     _, off = ptp_string(b, off)
     off += 2
     arrays = []
     for _ in range(5):
         n = struct.unpack("<I", b[off:off + 4])[0]
-        arrays.append(struct.unpack("<%dH" % n, b[off + 4: off + 4 + 2 * n]))
+        arrays.append(set(struct.unpack("<%dH" % n, b[off + 4: off + 4 + 2 * n])))
         off += 4 + 2 * n
     manu, off = ptp_string(b, off)
     model, off = ptp_string(b, off)
-    ver, off = ptp_string(b, off)
-    serial, off = ptp_string(b, off)
-    return manu, model, ver, serial, arrays[0], arrays[1]
+    ver, _ = ptp_string(b, off)
+    return manu, model, ver, arrays[0]
 
 
 def object_info(b):
-    # StorageID u32, ObjectFormat u16, ProtectionStatus u16, ObjectCompressedSize u32, ... Filename str at a fixed offset chain
     size = struct.unpack("<I", b[8:12])[0]
-    off = 52
-    name, _ = ptp_string(b, off)
+    name, _ = ptp_string(b, 52)
     return size, name
 
 
-def main():
-    if len(sys.argv) < 5:
-        print(__doc__)
-        sys.exit(2)
-    ip, guid_hex, name, out = sys.argv[1:5]
-    os.makedirs(out, exist_ok=True)
-    cam = Camera(ip, bytes.fromhex(guid_hex), name)
+# ---- the two modes -------------------------------------------------------------------
+
+def pair(ip, name):
+    guid = uuid.uuid4().bytes
+    cam = Camera(ip, guid, name)
     cam.connect()
-    info = cam.op(0x1001, want_data=True)
-    manu, model, ver, serial, ops, events = parse_device_info(info)
-    print(f"device · {manu} {model} · firmware {ver} · serial {serial}")
-    print(f"  operations: {' '.join(f'{o:#06x}' for o in ops)}")
-    print(f"  events: {' '.join(f'{e:#06x}' for e in events)}")
-    cam.op(0x1002, 1)
-    # What Nikon's utility does next, from the capture: a vendor query
-    # (0x952b, returns 8 bytes) and a vendor set (0x935a with 0x2001), which
-    # is presumably "the computer is ready; send as you shoot".
-    try:
-        r = cam.op(0x952b, want_data=True)
-        print(f"  0x952b -> {r.hex()}")
-    except Exception as e:
-        print(f"  0x952b failed: {e}")
-    try:
-        cam.op(0x935a, 0x2001)
-        print("  0x935a(0x2001) ok")
-    except Exception as e:
-        print(f"  0x935a failed: {e}")
-    print("session open · waiting for frames (Ctrl-C to stop)")
+    manu, model, ver, _ = device_info(cam.op(OP_GET_DEVICE_INFO))
+    log(f"{manu} {model}, firmware {ver}: pairing")
+    cam.op(OP_OPEN_SESSION, 1)
+    # The camera shows the pairing on its own screen and confirms it there.
+    cam.op(0x952b)
+    cam.op(0x935a, 0x2001)
+    save_identity(guid)
+    log(f"paired; identity saved to {ID_FILE}")
+    cam.close()
+
+
+def receive(ip, name, out):
+    guid, source = load_identity()
+    if guid is None:
+        raise SystemExit("no identity yet: put the camera in its connection wizard and run again to pair")
+    cam = Camera(ip, guid, name)
+    cam.connect()
+    manu, model, ver, ops = device_info(cam.op(OP_GET_DEVICE_INFO))
+    log(f"{manu} {model}, firmware {ver} (identity from {source})")
+    if OP_GET_OBJECT not in ops:
+        raise SystemExit("the camera is not in transfer mode; finish the wizard on the camera and run again")
+    cam.op(OP_OPEN_SESSION, 1)
+    log(f"ready; frames go to {out}")
     try:
         while True:
             t, b = read_pkt(cam.evt)
-            if t == 8:
-                code = struct.unpack("<H", b[:2])[0]
-                params = [struct.unpack("<I", b[6 + 4 * i: 10 + 4 * i])[0] for i in range((len(b) - 6) // 4)]
-                print(f"event {code:#06x} {params}")
-                if code == 0x4002 and params:
-                    handle = params[0]
-                    oi = cam.op(0x1008, handle, want_data=True)
-                    size, fname = object_info(oi)
-                    print(f"  new object {handle:#x} {fname} {size} bytes; fetching")
-                    t0 = time.time()
-                    data = cam.op(0x1009, handle, want_data=True)
-                    path = os.path.join(out, fname or f"{handle:08x}.bin")
-                    with open(path, "wb") as f:
-                        f.write(data)
-                    dt = time.time() - t0
-                    print(f"  wrote {path} ({len(data)} bytes, {len(data) / 1e6 / max(dt, 0.001):.1f} MB/s)")
-            elif t == 13:
+            if t == 13:
                 cam.evt.sendall(pkt(14))
-            else:
-                print(f"packet {PT.get(t, t)} len {len(b)} head {b[:24].hex()}")
+                continue
+            if t != 8:
+                continue
+            code = struct.unpack("<H", b[:2])[0]
+            params = [struct.unpack("<I", b[6 + 4 * i: 10 + 4 * i])[0] for i in range((len(b) - 6) // 4)]
+            if code != EV_OBJECT_ADDED or not params:
+                continue
+            handle = params[0]
+            size, fname = object_info(cam.op(OP_GET_OBJECT_INFO, handle))
+            t0 = time.time()
+            data = cam.op(OP_GET_OBJECT, handle)
+            path = os.path.join(out, fname or f"{handle:08x}.bin")
+            tmp = path + ".part"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+            dt = max(time.time() - t0, 0.001)
+            log(f"{fname}: {len(data) / 1e6:.1f} MB in {dt:.1f} s ({len(data) / 1e6 / dt:.1f} MB/s)")
     except KeyboardInterrupt:
-        pass
+        log("stopping")
     finally:
         cam.close()
-        print("closed")
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0].startswith("-"):
+        print(__doc__)
+        sys.exit(2)
+    out = args[0]
+    os.makedirs(out, exist_ok=True)
+    name = args[args.index("--name") + 1] if "--name" in args else "Apature"
+    ip = args[args.index("--camera") + 1] if "--camera" in args else None
+    mode = "?"
+    if ip is None:
+        found = discover()
+        if not found or not found[0]:
+            raise SystemExit("no camera advertising on this network; join the same Wi-Fi and start Connect to PC on the camera")
+        ip, mode, inst = found
+        log(f"found {inst} at {ip}, mode {mode}")
+    if mode == "PAIR":
+        pair(ip, name)
+        log("now finish the wizard on the camera; when it shows connected, run again to receive")
+    else:
+        receive(ip, name, out)
 
 
 if __name__ == "__main__":

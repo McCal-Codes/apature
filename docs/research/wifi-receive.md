@@ -169,3 +169,22 @@ For Apature: read `/Library/ptpitcp.guid` when it exists (so a camera paired
 through the utility accepts Apature at once), discover cameras via Bonjour,
 and implement pairing once the exchange is captured. Prototype:
 `tools/ptpip_spike.py`.
+
+## Update, later on 2026-10-23: Apature paired and received by itself
+
+With the camera in its connection wizard (Bonjour TXT `apps=PAIR`), the
+prototype paired with a fresh identity of its own; the camera confirmed it on
+its screen and switched to transfer mode (`apps=WT`). On reconnect in
+transfer mode the camera advertises the full operation set, including
+GetObjectInfo and GetObject, and announces each new frame with the standard
+ObjectAdded event; the host fetches it. The one failure of the day was the
+prototype repeating the pairing-only step in transfer mode, which the camera
+refuses and reports as an error on its screen. The prototype now pairs only
+when the advertisement says pairing mode, and otherwise only listens and
+fetches; it reads its identity from `~/.apature-camera-id`, falling back to
+the utility's `/Library/ptpitcp.guid`.
+
+Still to measure: throughput of a full-size NEF over the hotspot, and
+whether the session survives the camera's standby. Then the Rust port:
+`crates/apature-camera` with the same three pieces (Bonjour, identity,
+PTP/IP session) feeding Live Ingest directly.
