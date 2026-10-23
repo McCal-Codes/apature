@@ -253,9 +253,18 @@ impl Platform {
         }
         #[cfg(target_os = "windows")]
         {
-            return None;
+            // Shell.Application's Eject verb on the drive, the way the
+            // "Safely Remove Hardware" menu does it.
+            let letter = root.to_string_lossy().trim_end_matches('\\').to_string();
+            std::thread::spawn(move || {
+                let script = format!(
+                    "(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('{letter}').InvokeVerb('Eject')"
+                );
+                let _ = std::process::Command::new("powershell")
+                    .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+                    .output();
+            });
         }
-        #[allow(unreachable_code)]
         Some(root)
     }
 

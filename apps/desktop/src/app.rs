@@ -3572,6 +3572,22 @@ impl App {
                                 self.load_codes(&p);
                                 lines.push("code replacements".to_string());
                             }
+                            if let Some(text) = got.assignment {
+                                if let Some(dir) = crate::prefs::Prefs::path()
+                                    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                                {
+                                    let stem = p
+                                        .file_stem()
+                                        .map(|s| s.to_string_lossy().into_owned())
+                                        .unwrap_or_else(|| "photo-mechanic".into());
+                                    let dest = dir.join(format!("assignment-{stem}.txt"));
+                                    if std::fs::write(&dest, text).is_ok() {
+                                        self.load_assignment(&dest);
+                                        self.prefs.assignment_file = Some(dest);
+                                        lines.push("stationery pad as an assignment".to_string());
+                                    }
+                                }
+                            }
                             self.prefs_dirty = true;
                             self.toast(
                                 ui::toasts::Kind::Info,

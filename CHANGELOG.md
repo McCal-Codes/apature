@@ -5,6 +5,11 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+### Added
+- Settings › Resources: style and ethics (AP Stylebook, NPPA, SPJ, Poynter) and internships, workshops and contests for students, each a checked link that opens in the browser.
+- Photo Mechanic import now turns the stationery pad in an ingest snapshot into an assignment file and loads it.
+- Windows: Eject the card (Shell's Eject verb).
+
 ## [0.1.1] — 2026-10-23
 
 ### Added
