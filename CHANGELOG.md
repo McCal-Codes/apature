@@ -5,6 +5,9 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+### Changed
+- Caption workspace laid out as cards (Assignment, Caption, Keywords, Where, Who, More fields) with Save & next, Save and Revert pinned at the bottom; the code list sits behind a hover.
+
 ### Added
 - Settings › Resources: style and ethics (AP Stylebook, NPPA, SPJ, Poynter) and internships, workshops and contests for students, each a checked link that opens in the browser.
 - Photo Mechanic import now turns the stationery pad in an ingest snapshot into an assignment file and loads it.
