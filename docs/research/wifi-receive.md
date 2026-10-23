@@ -137,3 +137,35 @@ transfer over that path is still undemonstrated. Licence check before any
 reuse. Recommended staging: (1) WTU folder + Live Ingest, (2) a PTP/IP
 spike with the `gphoto2` crate (a libgphoto2 wrapper with `wait_event` and
 `NewFile`), (3) BLE research as its own track.
+
+## Inside Nikon's utility (2026-10-23, read from the binary and one capture)
+
+- The utility is a thin Cocoa app over a private Nikon framework, **Royalmile**,
+  which speaks PTP/IP itself (no Apple ImageCaptureCore).
+- The host identity the camera pairs with is a 16-byte GUID stored
+  system-wide in **`/Library/ptpitcp.guid`** (root-owned, world-readable).
+  The utility's hello is `Init_Command_Request(GUID, "WTU-<computer name>"
+  truncated to 14 characters, version 0x00010000)`. Replaying that hello from
+  a Python script got `Init_Command_Ack` from a Z 6 II three times: the
+  camera does not care who sends it, only that the GUID is the paired one.
+  An unknown GUID gets `Init_Fail` reason 1.
+- The camera advertises itself over Bonjour as `_ptp._tcp.` with a TXT
+  record; the framework reads the record to tell a camera in **pairing mode**
+  from one in **image-transfer mode** (`didDetectPairingCamera` vs
+  `didDetectImageTransferCamera`).
+- After the hello the utility does: GetDeviceInfo (0x1001), OpenSession
+  (0x1002), a Nikon query 0x952b (8 bytes back, `0400000008060506`), a Nikon
+  set 0x935a with parameter 0x2001, then CloseSession, and waits. In this
+  mode the camera advertises only five operations and no GetObject: the
+  camera pushes frames; how is not yet seen on the wire (no frame arrived
+  during the capture).
+- Open: the pairing exchange itself (what happens after the hello while
+  the camera shows "pair computer and camera" and a code), and the push
+  mechanism for frames. Both need one capture of a working utility session
+  with a frame, from a camera in pairing mode: `sudo tcpdump -i en0 -w
+  /tmp/wtu-pair2.pcap port 15740`.
+
+For Apature: read `/Library/ptpitcp.guid` when it exists (so a camera paired
+through the utility accepts Apature at once), discover cameras via Bonjour,
+and implement pairing once the exchange is captured. Prototype:
+`tools/ptpip_spike.py`.
