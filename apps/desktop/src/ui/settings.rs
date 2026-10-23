@@ -94,7 +94,7 @@ struct Def {
 }
 
 const DEFS: &[Def] = &[
-    Def { id: Id::Appearance, page: Page::General, section: "Appearance", label: "Appearance", description: "System follows System Settings › Appearance." },
+    Def { id: Id::Appearance, page: Page::General, section: "Appearance", label: "Appearance", description: "System follows System Settings › Appearance. OLED is Dark on a true black ground." },
     Def { id: Id::Accent, page: Page::General, section: "Appearance", label: "Accent", description: "Selection, links and focus take the accent. Lavender is the Apature default." },
     Def { id: Id::ShowTips, page: Page::General, section: "Learning the loop", label: "Tips as you go", description: "One short tip the first time each workspace opens." },
     Def { id: Id::AdvanceAfterMark, page: Page::General, section: "Behaviour", label: "Advance after marking", description: "Move to the next photo after a rating, class or tag." },
@@ -285,6 +285,7 @@ fn control(app: &mut App, ui: &mut egui::Ui, t: &Theme, id: Id) -> bool {
                 (Appearance::System, "System"),
                 (Appearance::Dark, "Dark"),
                 (Appearance::Light, "Light"),
+                (Appearance::Oled, "OLED"),
             ],
         ),
         Id::Accent => accent_swatches(app, ui, t),

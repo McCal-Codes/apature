@@ -64,6 +64,20 @@ impl Theme {
         select_photo: Color32::from_rgba_premultiplied(180, 180, 180, 180),
     };
 
+    /// Apature OLED: the Dark appearance on a true black ground, for OLED
+    /// screens and dark rooms. Panels stay a step above black so edges read.
+    pub const OLED: Theme = Theme {
+        window: rgb(0x00, 0x00, 0x00),
+        panel: rgb(0x0A, 0x0A, 0x0C),
+        raised: rgb(0x15, 0x15, 0x18),
+        photo: rgb(0x00, 0x00, 0x00),
+        photo_cell: rgb(0x10, 0x10, 0x13),
+        line: rgb(0x1E, 0x1E, 0x23),
+        line_strong: rgb(0x33, 0x32, 0x40),
+        accent_wash: Color32::from_rgba_premultiplied(0x1F, 0x1D, 0x2A, 0xFF),
+        ..Theme::DARK
+    };
+
     /// Apature Light: Mac Studio.
     pub const LIGHT: Theme = Theme {
         dark: false,

@@ -4072,6 +4072,7 @@ impl eframe::App for App {
                 crate::prefs::Appearance::System => egui::ThemePreference::System,
                 crate::prefs::Appearance::Dark => egui::ThemePreference::Dark,
                 crate::prefs::Appearance::Light => egui::ThemePreference::Light,
+                crate::prefs::Appearance::Oled => egui::ThemePreference::Dark,
             });
             self.applied_appearance = Some(self.prefs.appearance);
         }
@@ -4080,6 +4081,9 @@ impl eframe::App for App {
             self.applied_ui_scale = Some(self.prefs.ui_scale);
         }
         let mut t = Theme::for_ctx(ctx);
+        if self.prefs.appearance == crate::prefs::Appearance::Oled {
+            t = Theme::OLED;
+        }
         t = t.with_accent(self.prefs.accent);
         if self.prefs.high_contrast {
             t = t.high_contrast();

@@ -25,6 +25,8 @@ pub enum Appearance {
     System,
     Dark,
     Light,
+    /// Pure black ground for OLED screens and dark rooms.
+    Oled,
 }
 
 /// The accent colour, in a soft palette that stays readable on both

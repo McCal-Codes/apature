@@ -181,6 +181,7 @@ fn page_welcome(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
             (Appearance::System, "System"),
             (Appearance::Dark, "Apature Dark"),
             (Appearance::Light, "Apature Light"),
+            (Appearance::Oled, "OLED"),
         ] {
             if super::icons::chip(ui, t, label, app.prefs.appearance == a).clicked() {
                 app.prefs.appearance = a;
