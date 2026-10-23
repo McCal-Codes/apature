@@ -1460,7 +1460,10 @@ pub fn show_inline(app: &mut App, ctx: &egui::Context, t: &Theme) {
 /// Links for photojournalists, students first: where the style and the
 /// ethics come from, and where the internships are. Curated by hand; every
 /// address was checked when it was added. Opens in the browser.
-const RESOURCES: &[(&str, &[(&str, &str, &str)])] = &[
+/// (name, one line on what it is, address)
+type Link = (&'static str, &'static str, &'static str);
+
+const RESOURCES: &[(&str, &[Link])] = &[
     (
         "Style and ethics",
         &[
