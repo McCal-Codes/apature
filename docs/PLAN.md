@@ -197,3 +197,16 @@ Large (a full session each; start them fresh)
 
 Rules that apply to all of it: easy to read, nothing overlapping (check with
 `--size 1000x650` screenshots), Reduce Motion honoured, every claim measured.
+
+## Status 2026-10-23 (for the next model)
+
+Merged to main since 0.1.0: new icon (modern A) and alternates, accent presets, press kit (PNG+PSD, zip on the release), Linux (AppImage/.deb/tar.gz) and Windows (zip + Inno installer) builds with CI smoke tests, welcome + tips, laid-out DMG. Open: PR #5 `receive-wifi` = FTP receive server + Settings rebuilt on TerraNova's pattern + WTU research.
+
+Rules learned the hard way: headless runs use `APATURE_CONFIG_DIR` (never swap the real prefs.json); every marketing composite ships a PSD; no outlet names in public copy; UI work starts from `docs/design/UI_LINEAGE.md`.
+
+Queued, in Caleb's words, 2026-10-23:
+1. **Import Photo Mechanic metadata into Apature** "so it's easy to go back": read PM's IPTC stationery pad, code replacements, ingest/rename presets and variables (PM keeps them as .TXT/.XML snapshots in ~/Library/Application Support/Photo Mechanic); map to Apature's assignment, codes and templates. Sidecar marks already round-trip.
+2. **UI pass on the other workspaces** (toolbar, inspector, Ingest, Export, Caption) following UI_LINEAGE: fewer controls on the first screen, descriptions as what happens, switches/chips/sliders, cards with eyebrows.
+3. **Wi-Fi without a WT-7**: test the WTU folder + Live Ingest on the Z 6 II; then the PTP/IP spike (`gphoto2` crate, `wait_event`/`NewFile`); BLE (furble, Nikon Smart GPS) as a research track. See docs/research/wifi-receive.md.
+4. Tag v0.1.1 so the Linux and Windows downloads exist; make the repo public (updater, site sync).
+5. Windows: eject and the tray extra; Developer ID signing when Caleb decides.
