@@ -37,6 +37,8 @@ pub struct Launch {
     pub welcome: bool,
     /// Start Receive over Wi-Fi on the ingest source at launch (screenshots, tests).
     pub receive: bool,
+    /// Start Camera over Wi-Fi at launch (screenshots, tests).
+    pub camera: bool,
     /// Run the update check now and log the result (tests).
     pub check_updates: bool,
     /// Window size at launch (for layout checks at small sizes).
@@ -104,6 +106,7 @@ fn parse_args() -> Launch {
             "--about" => l.about = true,
             "--welcome" => l.welcome = true,
             "--receive" => l.receive = true,
+            "--camera" => l.camera = true,
             "--check-updates" => l.check_updates = true,
             "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
             "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),

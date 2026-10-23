@@ -648,6 +648,9 @@ impl App {
         if launch.receive {
             app.dispatch_later = Some(Command::ReceiveToggle);
         }
+        if launch.camera {
+            app.dispatch_later = Some(Command::CameraToggle);
+        }
         if launch.demo && !app.view.is_empty() {
             app.selection.all(&app.view);
             app.cursor = app.view[0];

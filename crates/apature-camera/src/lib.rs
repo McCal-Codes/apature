@@ -32,39 +32,53 @@ pub struct Found {
     pub mode: String,
 }
 
-/// Look for a camera for `wait`. Returns the first one that resolves.
-pub fn discover(wait: Duration) -> Option<Found> {
-    let daemon = mdns_sd::ServiceDaemon::new().ok()?;
-    let rx = daemon.browse("_ptp._tcp.local.").ok()?;
-    let deadline = Instant::now() + wait;
-    let mut found = None;
-    while Instant::now() < deadline {
-        let left = deadline.saturating_duration_since(Instant::now());
-        let Ok(ev) = rx.recv_timeout(left) else { break };
-        if let mdns_sd::ServiceEvent::ServiceResolved(info) = ev {
-            let name = info
-                .get_fullname()
-                .split('.')
-                .next()
-                .unwrap_or("")
-                .to_string();
-            let mode = info.get_property_val_str("apps").unwrap_or("?").to_string();
-            // Nikon encodes the address in the host name (…-010-064-144-040.local.)
-            // and also answers with an A record; take whichever is there.
-            let ip = info
-                .get_addresses()
-                .iter()
-                .map(|a| a.to_ip_addr())
-                .find(|ip| ip.is_ipv4())
-                .or_else(|| ip_from_hostname(info.get_hostname()));
-            if let Some(ip) = ip {
-                found = Some(Found { ip, name, mode });
-                break;
-            }
+/// Run a `dns-sd` command that never exits on its own, for `wait`, and
+/// return what it printed.
+fn dns_sd(args: &[&str], wait: Duration) -> String {
+    use std::process::{Command, Stdio};
+    let Ok(mut child) = Command::new("dns-sd").args(args).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+        return String::new();
+    };
+    let mut out = child.stdout.take();
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(o) = out.as_mut() {
+            let _ = o.read_to_string(&mut buf);
         }
-    }
-    let _ = daemon.shutdown();
-    found
+        let _ = tx.send(buf);
+    });
+    std::thread::sleep(wait);
+    let _ = child.kill();
+    let _ = child.wait();
+    rx.recv_timeout(Duration::from_secs(2)).unwrap_or_default()
+}
+
+/// Look for a camera for about `wait`. Returns the first one that resolves.
+pub fn discover(wait: Duration) -> Option<Found> {
+    let browse = dns_sd(&["-B", "_ptp._tcp", "local"], wait);
+    let name = browse
+        .lines()
+        .filter(|l| l.contains("_ptp._tcp.") && l.contains(" Add "))
+        .filter_map(|l| l.split_whitespace().last())
+        .next()?
+        .to_string();
+    let look = dns_sd(&["-L", &name, "_ptp._tcp", "local"], Duration::from_secs(3));
+    let host = look
+        .lines()
+        .find_map(|l| l.split("can be reached at ").nth(1))
+        .and_then(|rest| rest.split(':').next())
+        .map(|h| h.trim().to_string())?;
+    let mode = look
+        .lines()
+        .find_map(|l| l.split("apps=").nth(1))
+        .map(|r| r.split_whitespace().next().unwrap_or("").to_string())
+        .unwrap_or_else(|| "?".into());
+    let ip = ip_from_hostname(&host).or_else(|| {
+        use std::net::ToSocketAddrs;
+        format!("{}:{PORT}", host.trim_end_matches('.')).to_socket_addrs().ok()?.find(|a| a.is_ipv4()).map(|a| a.ip())
+    })?;
+    Some(Found { ip, name, mode })
 }
 
 fn ip_from_hostname(host: &str) -> Option<IpAddr> {
@@ -128,11 +142,8 @@ impl Identity {
 const OP_GET_DEVICE_INFO: u16 = 0x1001;
 const OP_OPEN_SESSION: u16 = 0x1002;
 const OP_CLOSE_SESSION: u16 = 0x1003;
-const OP_GET_OBJECT_HANDLES: u16 = 0x1007;
 const OP_GET_OBJECT_INFO: u16 = 0x1008;
-const OP_GET_OBJECT: u16 = 0x1009;
 const OP_GET_PARTIAL_OBJECT: u16 = 0x101b;
-const EV_OBJECT_ADDED: u16 = 0x4002;
 const RC_OK: u16 = 0x2001;
 
 fn pkt(t: u32, payload: &[u8]) -> Vec<u8> {
@@ -300,7 +311,7 @@ impl Session {
     }
 
     pub fn open(&mut self) -> Result<(), String> {
-        self.op(OP_OPEN_SESSION, &[1]).map(|_| ())
+        self.op(OP_OPEN_SESSION, &[2]).map(|_| ())
     }
 
     /// Ask the camera in its wizard for the pairing code it is showing.
@@ -354,69 +365,53 @@ impl Session {
         }
     }
 
-    /// Fetch an announced object into `out`, trying the ways a camera in
-    /// transfer mode may allow. Returns the path written.
-    pub fn fetch(
-        &mut self,
-        handle: u32,
-        out: &Path,
-        log: &mut dyn FnMut(String),
-    ) -> Result<PathBuf, String> {
-        std::thread::sleep(Duration::from_millis(800));
-        let mut handle = handle;
-        let info = match self.op(OP_GET_OBJECT_INFO, &[handle]) {
-            Ok(i) => i,
-            Err(e) => {
-                log(format!(
-                    "object info on the announced handle: {e}; listing handles"
-                ));
-                let list = self.op(OP_GET_OBJECT_HANDLES, &[0xFFFF_FFFF, 0, 0])?;
-                let n = u32::from_le_bytes(list[..4].try_into().unwrap()) as usize;
-                let hs: Vec<u32> = list[4..(4 + 4 * n).min(list.len())]
-                    .chunks_exact(4)
-                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                    .collect();
-                let last = *hs.last().ok_or("the camera lists no objects")?;
-                log(format!("{n} objects listed; using the newest, {last:#x}"));
-                handle = last;
-                self.op(OP_GET_OBJECT_INFO, &[handle])?
+    /// Fetch an announced frame into `out`. The vendor utility reads the
+    /// announced handle with GetPartialObject in 64 KB pieces; GetObjectInfo
+    /// may be refused in transfer mode, so the file is named from its
+    /// content when the camera does not give a name.
+    pub fn fetch(&mut self, handle: u32, out: &Path, log: &mut dyn FnMut(String)) -> Result<PathBuf, String> {
+        let mut say = |m: String| {
+            log::info!("camera: {m}");
+            log(m);
+        };
+        say(format!("frame announced, handle {handle:#010x}"));
+        let (mut name, mut size) = (String::new(), 0usize);
+        match self.op(OP_GET_OBJECT_INFO, &[handle]) {
+            Ok(info) if info.len() > 52 => {
+                size = u32::from_le_bytes(info[8..12].try_into().unwrap()) as usize;
+                name = ptp_string(&info, 52).0;
             }
-        };
-        let size = u32::from_le_bytes(info[8..12].try_into().unwrap()) as usize;
-        let (name, _) = ptp_string(&info, 52);
-        let name = if name.is_empty() {
-            format!("{handle:08x}.bin")
-        } else {
-            name
-        };
+            Ok(_) => {}
+            Err(e) => say(format!("object info refused ({e}); reading in parts")),
+        }
         let t0 = Instant::now();
-        let data = match self.op(OP_GET_OBJECT, &[handle]) {
-            Ok(d) => d,
-            Err(e) => {
-                log(format!("whole object refused ({e}); reading in parts"));
-                let mut d = Vec::with_capacity(size);
-                while d.len() < size {
-                    let chunk =
-                        self.op(OP_GET_PARTIAL_OBJECT, &[handle, d.len() as u32, 1 << 20])?;
-                    if chunk.is_empty() {
-                        break;
-                    }
-                    d.extend_from_slice(&chunk);
-                }
-                d
+        let mut data: Vec<u8> = Vec::with_capacity(size.max(1 << 20));
+        const PIECE: u32 = 1 << 16;
+        loop {
+            let chunk = self.op(OP_GET_PARTIAL_OBJECT, &[handle, data.len() as u32, PIECE])?;
+            let n = chunk.len();
+            data.extend_from_slice(&chunk);
+            if n < PIECE as usize || (size > 0 && data.len() >= size) {
+                break;
             }
-        };
+        }
+        if name.is_empty() {
+            let ext = if data.starts_with(&[0xFF, 0xD8]) {
+                "JPG"
+            } else if data.starts_with(b"MM\0*") || data.starts_with(b"II*\0") {
+                "NEF"
+            } else {
+                "bin"
+            };
+            name = format!("WIFI_{:08X}.{ext}", handle & 0xFFFF_FFFF);
+        }
         std::fs::create_dir_all(out).map_err(|e| e.to_string())?;
         let path = out.join(&name);
         let tmp = out.join(format!("{name}.part"));
         std::fs::write(&tmp, &data).map_err(|e| e.to_string())?;
         std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
         let secs = t0.elapsed().as_secs_f64().max(0.001);
-        log(format!(
-            "{name}: {:.1} MB in {secs:.1} s ({:.1} MB/s)",
-            data.len() as f64 / 1e6,
-            data.len() as f64 / 1e6 / secs
-        ));
+        say(format!("{name}: {:.1} MB in {secs:.1} s ({:.1} MB/s)", data.len() as f64 / 1e6, data.len() as f64 / 1e6 / secs));
         Ok(path)
     }
 
@@ -534,7 +529,14 @@ fn worker(
         let Some(found) = discover(Duration::from_secs(4)) else {
             continue;
         };
-        if found.mode == "PAIR" {
+        // A saved pairing is reused even when the camera sits in its wizard:
+        // the camera keeps accepting the identity it paired with, so only an
+        // outright refusal leads to pairing again.
+        let saved_works = found.mode == "PAIR"
+            && Identity::load(&identity_path)
+                .map(|(id, _)| Session::connect(found.ip, id, &host_name).map(|s| s.close()).is_ok())
+                .unwrap_or(false);
+        if found.mode == "PAIR" && !saved_works {
             // Pairing: ask for the code, show it, wait for the person.
             let id = Identity::fresh();
             let mut sess = match Session::connect(found.ip, id, &host_name) {
@@ -597,67 +599,390 @@ fn worker(
             std::thread::sleep(Duration::from_secs(3));
             continue;
         }
-        // Transfer mode: connect with the saved identity and receive.
+        // Transfer mode. The camera does not let a host read frames; it
+        // pushes them to a host that advertises itself and listens. So:
+        // advertise, listen, greet the camera once the way the utility does,
+        // then take what it sends.
         let Some((id, source)) = Identity::load(&identity_path) else {
-            set(&st, |s| {
-                s.state = State::Error(
-                    "Not paired yet. Start Connect to PC on the camera and choose Pair here."
-                        .into(),
-                )
-            });
+            set(&st, |s| s.state = State::Error("Not paired yet. Start Connect to PC on the camera and choose Pair here.".into()));
             std::thread::sleep(Duration::from_secs(5));
             continue;
         };
         set(&st, |s| s.state = State::Connecting);
-        let mut sess = match Session::connect(found.ip, id, &host_name) {
-            Ok(s) => s,
+        let listener = match std::net::TcpListener::bind(("0.0.0.0", PORT)) {
+            Ok(l) => l,
             Err(e) => {
-                note(format!("{e} (identity from {source})"));
+                set(&st, |s| s.state = State::Error(format!("port {PORT} is in use ({e}); quit Nikon's utility")));
+                std::thread::sleep(Duration::from_secs(5));
+                continue;
+            }
+        };
+        let ip = local_ip_towards(found.ip);
+        let mut adv = match advertise(id, &host_name) {
+            Ok(c) => {
+                note(format!("advertising {host_name} on _ptp._tcp at {:?}:{PORT}", ip));
+                Some(c)
+            }
+            Err(e) => {
+                note(format!("could not advertise: {e}"));
+                None
+            }
+        };
+        // Greet the camera as the utility does, and keep that link open.
+        let greet = Session::connect(found.ip, id, &host_name).and_then(|mut sess| {
+            let info = sess.device_info().unwrap_or_default();
+            sess.open()?;
+            let status = sess.op(0x952b, &[]).map(|r| r.iter().map(|b| format!("{b:02x}")).collect::<String>()).unwrap_or_default();
+            sess.op(0x935a, &[0x2001])?;
+            let _ = sess.op(OP_CLOSE_SESSION, &[]);
+            Ok((sess, info, status))
+        });
+        let (keep, camera) = match greet {
+            Ok((sess, info, status)) => {
+                let camera = format!("{} {}", info.manufacturer, info.model).trim().to_string();
+                note(format!("greeted {camera} (status {status}, identity from {source})"));
+                (Some(sess), camera)
+            }
+            Err(e) => {
+                note(format!("{e}"));
                 set(&st, |s| s.state = State::Error(e));
                 std::thread::sleep(Duration::from_secs(5));
                 continue;
             }
         };
-        let info = sess.device_info().unwrap_or_default();
-        let camera = format!("{} {}", info.manufacturer, info.model)
-            .trim()
-            .to_string();
-        if sess.open().is_err() {
-            std::thread::sleep(Duration::from_secs(3));
-            continue;
+        set(&st, |s| s.state = State::Connected { camera: camera.clone() });
+        // The camera sends on the link we opened: answer there as well.
+        if let Some(sess) = keep {
+            let Session { cmd, mut evt, .. } = sess;
+            let st2 = st.clone();
+            let out2 = out.clone();
+            let name2 = host_name.clone();
+            std::thread::spawn(move || {
+                let say = move |m: String| {
+                    log::info!("camera: {m}");
+                    set(&st2, |s| s.log.push(m));
+                };
+                say("answering on the opened link".into());
+                match serve_ops(cmd, &name2, &out2, &say) {
+                    Ok(n) => say(format!("link closed after {n} frame(s)")),
+                    Err(e) => say(format!("link: {e}")),
+                }
+            });
+            let st3 = st.clone();
+            std::thread::spawn(move || {
+                evt.set_read_timeout(None).ok();
+                while let Ok((t, b)) = read_pkt(&mut evt) {
+                    if t == 13 {
+                        let _ = evt.write_all(&pkt(14, &[]));
+                    } else if t == 8 && b.len() >= 6 {
+                        let code = u16::from_le_bytes([b[0], b[1]]);
+                        log::info!("camera: event {code:#06x}");
+                    } else {
+                        log::info!("camera: event-channel packet type {t}, {} bytes", b.len());
+                        set(&st3, |s| s.log.push(format!("event-channel packet type {t}")));
+                    }
+                }
+            });
         }
-        note(format!("connected to {camera}, firmware {}", info.firmware));
-        set(&st, |s| {
-            s.state = State::Connected {
-                camera: camera.clone(),
-            }
-        });
+        listener.set_nonblocking(true).ok();
+        let started = Instant::now();
         loop {
-            if matches!(
-                rx.try_recv(),
-                Ok(Msg::Stop) | Err(std::sync::mpsc::TryRecvError::Disconnected)
-            ) {
-                sess.close();
+            if matches!(rx.try_recv(), Ok(Msg::Stop) | Err(std::sync::mpsc::TryRecvError::Disconnected)) {
+                if let Some(c) = adv.as_mut() { let _ = c.kill(); }
                 set(&st, |s| s.state = State::Stopped);
                 return;
             }
-            match sess.next_event(Duration::from_millis(500)) {
-                Ok(Some((EV_OBJECT_ADDED, params))) if !params.is_empty() => {
+            match listener.accept() {
+                Ok((cmd, peer)) => {
+                    note(format!("incoming connection from {peer}"));
                     let st2 = st.clone();
-                    let mut log = |m: String| set(&st2, |s| s.log.push(m));
-                    match sess.fetch(params[0], &out, &mut log) {
-                        Ok(_) => set(&st, |s| s.frames += 1),
-                        Err(e) => note(format!("frame not fetched: {e}")),
+                    let say = move |m: String| {
+                        log::info!("camera: {m}");
+                        set(&st2, |s| s.log.push(m));
+                    };
+                    match serve_camera(&listener, cmd, id, &host_name, &out, &say) {
+                        Ok(n) => set(&st, |s| s.frames += n),
+                        Err(e) => note(format!("{e}")),
+                    }
+                    listener.set_nonblocking(true).ok();
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(200));
+                    if started.elapsed() > Duration::from_secs(3600) {
+                        break;
                     }
                 }
-                Ok(_) => {}
                 Err(e) => {
-                    note(format!("connection lost: {e}"));
+                    note(format!("listen: {e}"));
                     break;
                 }
             }
         }
+        if let Some(c) = adv.as_mut() { let _ = c.kill(); }
         std::thread::sleep(Duration::from_secs(2));
+    }
+}
+
+
+/* -- the host side: advertise, listen, and take what the camera pushes ---------- */
+
+const OP_GET_STORAGE_IDS: u16 = 0x1004;
+const OP_GET_STORAGE_INFO: u16 = 0x1005;
+const OP_SEND_OBJECT_INFO: u16 = 0x100c;
+const OP_SEND_OBJECT: u16 = 0x100d;
+const RC_OPERATION_NOT_SUPPORTED: u16 = 0x2005;
+
+fn ptp_str(s: &str) -> Vec<u8> {
+    if s.is_empty() {
+        return vec![0];
+    }
+    let units: Vec<u16> = s.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut v = vec![units.len() as u8];
+    for u in units {
+        v.extend_from_slice(&u.to_le_bytes());
+    }
+    v
+}
+
+fn u16_array(items: &[u16]) -> Vec<u8> {
+    let mut v = (items.len() as u32).to_le_bytes().to_vec();
+    for i in items {
+        v.extend_from_slice(&i.to_le_bytes());
+    }
+    v
+}
+
+/// What Apature says it is when the camera asks.
+fn host_device_info(name: &str) -> Vec<u8> {
+    let mut v = Vec::new();
+    v.extend_from_slice(&100u16.to_le_bytes()); // standard version 1.00
+    v.extend_from_slice(&0u32.to_le_bytes()); // vendor extension id
+    v.extend_from_slice(&0u16.to_le_bytes()); // vendor extension version
+    v.extend_from_slice(&ptp_str("")); // vendor extension desc
+    v.extend_from_slice(&0u16.to_le_bytes()); // functional mode
+    v.extend_from_slice(&u16_array(&[
+        OP_GET_DEVICE_INFO,
+        OP_OPEN_SESSION,
+        OP_CLOSE_SESSION,
+        OP_GET_STORAGE_IDS,
+        OP_GET_STORAGE_INFO,
+        OP_SEND_OBJECT_INFO,
+        OP_SEND_OBJECT,
+    ]));
+    v.extend_from_slice(&u16_array(&[])); // events
+    v.extend_from_slice(&u16_array(&[])); // device properties
+    v.extend_from_slice(&u16_array(&[])); // capture formats
+    v.extend_from_slice(&u16_array(&[0x3801, 0x3000, 0x3002])); // JPEG, undefined, TIFF-ish RAW
+    v.extend_from_slice(&ptp_str("Apature"));
+    v.extend_from_slice(&ptp_str(name));
+    v.extend_from_slice(&ptp_str(env!("CARGO_PKG_VERSION")));
+    v.extend_from_slice(&ptp_str("1"));
+    v
+}
+
+/// One storage, so SendObjectInfo has somewhere to point.
+fn host_storage_info() -> Vec<u8> {
+    let mut v = Vec::new();
+    v.extend_from_slice(&0x0004u16.to_le_bytes()); // fixed RAM
+    v.extend_from_slice(&0x0002u16.to_le_bytes()); // generic hierarchical
+    v.extend_from_slice(&0x0000u16.to_le_bytes()); // read-write
+    v.extend_from_slice(&(1u64 << 40).to_le_bytes()); // max capacity
+    v.extend_from_slice(&(1u64 << 40).to_le_bytes()); // free bytes
+    v.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes()); // free objects
+    v.extend_from_slice(&ptp_str("Apature"));
+    v.extend_from_slice(&ptp_str(""));
+    v
+}
+
+/// Read a data phase sent by the camera (Start_Data, Data…, End_Data).
+fn read_data_phase(s: &mut TcpStream) -> std::io::Result<Vec<u8>> {
+    let mut data = Vec::new();
+    loop {
+        let (t, b) = read_pkt(s)?;
+        match t {
+            9 => {}
+            10 => data.extend_from_slice(&b[4.min(b.len())..]),
+            12 => {
+                data.extend_from_slice(&b[4.min(b.len())..]);
+                return Ok(data);
+            }
+            11 => return Err(std::io::Error::other("cancelled by the camera")),
+            _ => {}
+        }
+    }
+}
+
+fn respond(s: &mut TcpStream, code: u16, tid: u32, params: &[u32]) -> std::io::Result<()> {
+    let mut b = Vec::new();
+    b.extend_from_slice(&code.to_le_bytes());
+    b.extend_from_slice(&tid.to_le_bytes());
+    for p in params {
+        b.extend_from_slice(&p.to_le_bytes());
+    }
+    s.write_all(&pkt(7, &b))
+}
+
+fn send_data(s: &mut TcpStream, tid: u32, data: &[u8]) -> std::io::Result<()> {
+    let mut start = tid.to_le_bytes().to_vec();
+    start.extend_from_slice(&(data.len() as u64).to_le_bytes());
+    s.write_all(&pkt(9, &start))?;
+    let mut end = tid.to_le_bytes().to_vec();
+    end.extend_from_slice(data);
+    s.write_all(&pkt(12, &end))
+}
+
+/// Serve one camera that connected to us: the hello, the event channel,
+/// then operations until it goes away. Frames pushed with SendObjectInfo +
+/// SendObject land in `out`.
+fn serve_camera(
+    listener: &std::net::TcpListener,
+    mut cmd: TcpStream,
+    id: Identity,
+    host_name: &str,
+    out: &Path,
+    note: &dyn Fn(String),
+) -> Result<usize, String> {
+    cmd.set_read_timeout(Some(Duration::from_secs(60))).ok();
+    let (t, b) = read_pkt(&mut cmd).map_err(|e| e.to_string())?;
+    if t != 1 || b.len() < 20 {
+        return Err("the connection did not start with a hello".into());
+    }
+    let their_guid = &b[..16];
+    let their_name = {
+        let units: Vec<u16> = b[16..b.len().saturating_sub(4)]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .take_while(|u| *u != 0)
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    note(format!("camera {their_name} connected to Apature (identity {})", their_guid.iter().map(|x| format!("{x:02x}")).collect::<String>()));
+    let mut ack = 1u32.to_le_bytes().to_vec();
+    ack.extend_from_slice(&id.0);
+    ack.extend_from_slice(&utf16z(host_name));
+    ack.extend_from_slice(&0x0001_0000u32.to_le_bytes());
+    cmd.write_all(&pkt(2, &ack)).map_err(|e| e.to_string())?;
+    // The event channel: the camera opens a second connection.
+    listener.set_nonblocking(false).ok();
+    let (mut evt, _) = listener.accept().map_err(|e| e.to_string())?;
+    evt.set_read_timeout(Some(Duration::from_secs(30))).ok();
+    let (t, _) = read_pkt(&mut evt).map_err(|e| e.to_string())?;
+    if t != 3 {
+        return Err("the second connection was not the event channel".into());
+    }
+    evt.write_all(&pkt(4, &[])).map_err(|e| e.to_string())?;
+    note("event channel open; waiting for frames".into());
+    serve_ops(cmd, host_name, out, note)
+}
+
+/// Answer the camera's operations on `cmd` until it goes away: device
+/// info, session, storage, and the frames it pushes with SendObjectInfo +
+/// SendObject, written into `out`. Returns how many frames landed.
+fn serve_ops(mut cmd: TcpStream, host_name: &str, out: &Path, note: &dyn Fn(String)) -> Result<usize, String> {
+    cmd.set_read_timeout(None).ok();
+    let mut frames = 0usize;
+    let mut pending: Option<(String, usize)> = None;
+    let mut next_handle = 1u32;
+    loop {
+        let (t, b) = match read_pkt(&mut cmd) {
+            Ok(x) => x,
+            Err(e) => {
+                note(format!("camera went away: {e}"));
+                return Ok(frames);
+            }
+        };
+        match t {
+            13 => {
+                let _ = cmd.write_all(&pkt(14, &[]));
+            }
+            6 if b.len() >= 10 => {
+                let op = u16::from_le_bytes([b[4], b[5]]);
+                let tid = u32::from_le_bytes([b[6], b[7], b[8], b[9]]);
+                let params: Vec<u32> = b[10..].chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                let r: std::io::Result<()> = match op {
+                    OP_GET_DEVICE_INFO => send_data(&mut cmd, tid, &host_device_info(host_name)).and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
+                    OP_OPEN_SESSION | OP_CLOSE_SESSION => respond(&mut cmd, RC_OK, tid, &[]),
+                    OP_GET_STORAGE_IDS => send_data(&mut cmd, tid, &{
+                        let mut v = 1u32.to_le_bytes().to_vec();
+                        v.extend_from_slice(&0x0001_0001u32.to_le_bytes());
+                        v
+                    })
+                    .and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
+                    OP_GET_STORAGE_INFO => send_data(&mut cmd, tid, &host_storage_info()).and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
+                    OP_SEND_OBJECT_INFO => match read_data_phase(&mut cmd) {
+                        Ok(info) if info.len() > 52 => {
+                            let size = u32::from_le_bytes(info[8..12].try_into().unwrap()) as usize;
+                            let (name, _) = ptp_string(&info, 52);
+                            note(format!("incoming {name}, {:.1} MB", size as f64 / 1e6));
+                            pending = Some((name, size));
+                            let h = next_handle;
+                            next_handle += 1;
+                            respond(&mut cmd, RC_OK, tid, &[0x0001_0001, 0, h])
+                        }
+                        Ok(_) => respond(&mut cmd, 0x2002, tid, &[]),
+                        Err(e) => Err(e),
+                    },
+                    OP_SEND_OBJECT => match read_data_phase(&mut cmd) {
+                        Ok(data) => {
+                            let (name, _) = pending.take().unwrap_or_else(|| (format!("WIFI_{:08X}.bin", next_handle), data.len()));
+                            let name = if name.is_empty() { format!("WIFI_{:08X}.bin", next_handle) } else { name };
+                            let _ = std::fs::create_dir_all(out);
+                            let path = out.join(&name);
+                            let tmp = out.join(format!("{name}.part"));
+                            let w = std::fs::write(&tmp, &data).and_then(|_| std::fs::rename(&tmp, &path));
+                            match w {
+                                Ok(()) => {
+                                    frames += 1;
+                                    note(format!("received {name} ({:.1} MB)", data.len() as f64 / 1e6));
+                                    respond(&mut cmd, RC_OK, tid, &[])
+                                }
+                                Err(e) => {
+                                    note(format!("could not write {name}: {e}"));
+                                    respond(&mut cmd, 0x2002, tid, &[])
+                                }
+                            }
+                        }
+                        Err(e) => Err(e),
+                    },
+                    other => {
+                        note(format!("camera asked for {other:#06x} {params:?}; not supported"));
+                        respond(&mut cmd, RC_OPERATION_NOT_SUPPORTED, tid, &[])
+                    }
+                };
+                if let Err(e) = r {
+                    note(format!("camera went away: {e}"));
+                    return Ok(frames);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Advertise Apature as a `_ptp._tcp` service the camera can connect to.
+/// The system's `dns-sd -R` keeps the registration alive for as long as the
+/// returned child runs.
+fn advertise(id: Identity, host_name: &str) -> Result<std::process::Child, String> {
+    let b = id.0;
+    let guid = format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
+    );
+    std::process::Command::new("dns-sd")
+        .args(["-R", host_name, "_ptp._tcp", "local", &PORT.to_string(), "apps=WT3T", &format!("guid={guid}"), &format!("name={host_name}"), "type=PC", "ver=1"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())
+}
+
+/// The address this machine has on the camera's network.
+fn local_ip_towards(ip: IpAddr) -> Option<std::net::Ipv4Addr> {
+    let s = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    s.connect((ip, PORT)).ok()?;
+    match s.local_addr().ok()?.ip() {
+        IpAddr::V4(v4) => Some(v4),
+        _ => None,
     }
 }
 

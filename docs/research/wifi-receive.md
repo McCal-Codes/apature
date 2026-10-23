@@ -188,3 +188,26 @@ Still to measure: throughput of a full-size NEF over the hotspot, and
 whether the session survives the camera's standby. Then the Rust port:
 `crates/apature-camera` with the same three pieces (Bonjour, identity,
 PTP/IP session) feeding Live Ingest directly.
+
+## State at the end of 2026-10-23 (unfinished)
+
+- Pairing from inside Apature works and the saved pairing is reused; the
+  camera greets, opens a session and announces frames.
+- Every read of an announced frame is refused (0x200f), by Apature and, in
+  the one session captured, by Nikon's utility as well.
+- Nikon's framework publishes a `_ptp._tcp` service and accepts incoming
+  connections, so the camera is expected to push to the host. Apature now
+  advertises (`dns-sd -R`, keys apps/guid/name/type/ver), listens on 15740,
+  answers as a PTP responder (device info, session, storage, SendObjectInfo,
+  SendObject) on the listener and on the link it opened. With that running
+  the camera showed "CAL_2305 is sending", but no bytes arrived on any
+  channel and no inbound connection was seen in the capture.
+- Open: what the camera sends to, in this mode. Suspects: the host's TXT
+  values (unknown; the utility's own record was never observed because it
+  only publishes while transferring), or a step after the greeting that
+  tells the camera the host is ready. One capture of a working utility
+  transfer on a quiet network would settle it; the Python decoder
+  `tools/ptpip_pcap.py` reads it.
+- In-app discovery through `dns-sd` stalled on the last build; the earlier
+  mdns-sd browse and the Python script both found the camera. Revert to
+  mdns-sd for browsing and keep `dns-sd -R` for publishing.
