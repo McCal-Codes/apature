@@ -6,6 +6,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [Unreleased]
 
 ### Added
+- Receive over Wi-Fi: an FTP server inside Apature (Ingest › Plan) that drops files into the source folder and turns Live Ingest on. One account, a six-digit password per session shown in the window. A phone running SnapBridge plus a transfer app stands in for a WT-7; cameras with an FTP client connect directly. `--receive` starts it headless.
 - Welcome on first launch: the loop in four pages (card in, cull, caption, export and send), appearance and accent, a card or folder to start with, the keys for the day. Help › Welcome to Apature… brings it back; Settings › General › Learning the loop.
 - One short tip the first time each workspace opens (Sheet, Preview, Caption, Ingest, Export); Got it or No more tips.
 - Installers: a laid-out DMG (background, drag to Applications) when create-dmg is present; a Debian package beside the AppImage and tar.gz; a Windows installer (Inno Setup) beside the zip, with Start menu entry and uninstaller.

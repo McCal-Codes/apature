@@ -270,6 +270,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                 {
                     cmds.push(Command::LiveToggle);
                 }
+                let rx = app.ingest.receive.is_some();
+                if super::icons::chip(ui, t, if rx { "Receiving over Wi-Fi" } else { "Receive over Wi-Fi" }, rx)
+                    .on_hover_text("Run an FTP server on this computer that drops files into the source folder, for a phone transfer app, a camera with an FTP client or a WT-7 on the same Wi-Fi (a phone hotspot works). Turns Live Ingest on.")
+                    .clicked()
+                {
+                    cmds.push(Command::ReceiveToggle);
+                }
                 if on {
                     let mins = app.ingest.live.since.map(|s| s.elapsed().as_secs() / 60).unwrap_or(0);
                     let waiting = app.ingest.live.pending.len();
@@ -282,6 +289,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
                 }
             });
+            if let Some(r) = &app.ingest.receive {
+                ui.add_space(S1);
+                ui.label(RichText::new(format!("Point the phone or camera at {}  ·  user {}  ·  password {}  ·  {} connected so far", r.url(), apature_receive::USER, r.password, r.logins())).size(11.5).monospace().color(t.text2));
+                ui.label(RichText::new("The phone stands in for a WT-7: SnapBridge sends each frame to the phone, a transfer app on the phone sends it here over the hotspot, Live Ingest does the rest.").size(11.0).color(t.muted));
+            }
+            if let Some(e) = &app.ingest.receive_error {
+                ui.label(RichText::new(e).size(11.5).color(t.reject));
+            }
             ui.add_space(S2);
             if app.ingest.planning {
                 ui.label(RichText::new("reading the card…").size(12.0).color(t.muted));

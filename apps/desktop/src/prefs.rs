@@ -12,6 +12,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_receive_port() -> u16 {
+    apature_receive::DEFAULT_PORT
+}
+
 /// Current saved-format version of prefs.json.
 pub const PREFS_VERSION: u32 = 1;
 
@@ -137,6 +141,9 @@ pub struct Prefs {
     /// Workspace keys whose tip has been dismissed.
     #[serde(default)]
     pub tips_seen: Vec<String>,
+    /// Port for Receive over Wi-Fi (the FTP server).
+    #[serde(default = "default_receive_port")]
+    pub receive_port: u16,
     pub open_tabs: Vec<PathBuf>,
     pub active_tab: usize,
     pub code_delimiter: char,
@@ -224,6 +231,7 @@ impl Default for Prefs {
             onboarded: false,
             show_tips: true,
             tips_seen: Vec::new(),
+            receive_port: apature_receive::DEFAULT_PORT,
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,

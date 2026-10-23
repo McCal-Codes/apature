@@ -97,6 +97,9 @@ pub struct LiveIngest {
 
 #[derive(Default)]
 pub struct IngestState {
+    /// Receive over Wi-Fi: the FTP server dropping into the source folder.
+    pub receive: Option<apature_receive::Receiver>,
+    pub receive_error: Option<String>,
     pub live: LiveIngest,
     pub opts: apature_ingest::Options,
     pub plan: Option<apature_ingest::Plan>,
@@ -625,6 +628,9 @@ impl App {
         }
         if launch.settings {
             app.settings_open = true;
+        }
+        if launch.receive {
+            app.dispatch_later = Some(Command::ReceiveToggle);
         }
         if launch.demo && !app.view.is_empty() {
             app.selection.all(&app.view);
@@ -3504,6 +3510,26 @@ impl App {
                 }
             }
             Command::OpenAbout => self.about_open = true,
+            Command::ReceiveToggle => {
+                if self.ingest.receive.is_some() {
+                    self.ingest.receive = None;
+                    self.status = "Receive over Wi-Fi stopped".into();
+                } else {
+                    let src = self.ingest.opts.source.clone();
+                    match apature_receive::Receiver::start(&src, self.prefs.receive_port) {
+                        Ok(r) => {
+                            self.status =
+                                format!("Receiving at {} into {}", r.url(), src.display());
+                            self.ingest.receive_error = None;
+                            self.ingest.receive = Some(r);
+                            if !self.ingest.live.on {
+                                self.dispatch_later = Some(Command::LiveToggle);
+                            }
+                        }
+                        Err(e) => self.ingest.receive_error = Some(e),
+                    }
+                }
+            }
             Command::OpenWelcome => {
                 self.welcome_open = true;
                 self.welcome_step = 0;

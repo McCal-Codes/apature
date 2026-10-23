@@ -16,6 +16,7 @@ apature-metadata.workspace = true
 apature-ingest.workspace = true
 apature-export.workspace = true
 apature-deliver.workspace = true
+apature-receive = { path = "../../crates/apature-receive" }
 eframe.workspace = true
 egui.workspace = true
 rfd.workspace = true
