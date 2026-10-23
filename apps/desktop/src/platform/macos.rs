@@ -349,6 +349,11 @@ impl MenuBar {
         let help = Submenu::new("Help", true);
         help.append_items(&[
             &item(Command::OpenWelcome, "Welcome to Apature…", None),
+            &item(
+                Command::ImportPhotoMechanic,
+                "Import from Photo Mechanic…",
+                None,
+            ),
             &item(Command::OpenShortcuts, "Keyboard Shortcuts", None),
             &item(Command::RevealLog, "Reveal Log in Finder", None),
             &item(Command::OpenRepo, "Apature on GitHub", None),

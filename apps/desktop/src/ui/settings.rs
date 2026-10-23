@@ -1101,6 +1101,66 @@ fn page_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command
                 ui.add_space(S2);
             });
             section_card(app, ui, t, page, "Code replacements");
+            let mut vars_changed = false;
+            let mut remove: Option<usize> = None;
+            card(ui, t, "Your variables", |ui| {
+                ui.add_space(S2);
+                hint(ui, t, "Use {name} in any template or caption, next to Photo Mechanic's own variables like {iptcmonthnameap}, {city} or {credit}.");
+                ui.add_space(S1);
+                egui::Grid::new("user-vars")
+                    .num_columns(3)
+                    .spacing([S3, S1])
+                    .show(ui, |ui| {
+                        for (i, (name, value)) in app.prefs.variables.iter_mut().enumerate() {
+                            if ui
+                                .add(
+                                    egui::TextEdit::singleline(name)
+                                        .desired_width(140.0)
+                                        .hint_text("name")
+                                        .font(egui::TextStyle::Monospace),
+                                )
+                                .changed()
+                            {
+                                vars_changed = true;
+                            }
+                            if ui
+                                .add(
+                                    egui::TextEdit::singleline(value)
+                                        .desired_width(300.0)
+                                        .hint_text("value"),
+                                )
+                                .changed()
+                            {
+                                vars_changed = true;
+                            }
+                            if ui.small_button("Remove").clicked() {
+                                remove = Some(i);
+                            }
+                            ui.end_row();
+                        }
+                    });
+                if ui.small_button("Add a variable").clicked() {
+                    app.prefs.variables.push((String::new(), String::new()));
+                    vars_changed = true;
+                }
+                ui.add_space(S2);
+            });
+            if let Some(i) = remove {
+                app.prefs.variables.remove(i);
+                vars_changed = true;
+            }
+            if vars_changed {
+                apature_metadata::codes::set_user_vars(app.prefs.variables.clone());
+                app.prefs_dirty = true;
+            }
+            card(ui, t, "Photo Mechanic", |ui| {
+                ui.add_space(S2);
+                hint(ui, t, "Bring your Photo Mechanic setup over: an ingest snapshot (.snap) sets the folder and rename templates; a code replacement file loads as is. The stationery pad comes later.");
+                if ui.small_button("Import from Photo Mechanic…").clicked() {
+                    cmds.push(Command::ImportPhotoMechanic);
+                }
+                ui.add_space(S2);
+            });
         }
         Page::Ingest => {
             for s in sections_of(page) {

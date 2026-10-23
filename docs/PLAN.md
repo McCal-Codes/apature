@@ -210,3 +210,5 @@ Queued, in Caleb's words, 2026-10-23:
 3. **Wi-Fi without a WT-7**: test the WTU folder + Live Ingest on the Z 6 II; then the PTP/IP spike (`gphoto2` crate, `wait_event`/`NewFile`); BLE (furble, Nikon Smart GPS) as a research track. See docs/research/wifi-receive.md.
 4. Tag v0.1.1 so the Linux and Windows downloads exist; make the repo public (updater, site sync).
 5. Windows: eject and the tray extra; Developer ID signing when Caleb decides.
+6. **Resources for photojournalists inside Settings** (Caleb, 2026-10-23): a Resources page with links or embedded guides (AP Stylebook, caption style, ethics codes), researched later. Fits the teaching aim: students without a workflow, no gatekeeping.
+7. **Photo Mechanic import, next steps**: the IPTC stationery pad inside a `.snap` → an assignment file; PM's saved variables and snapshots folder.

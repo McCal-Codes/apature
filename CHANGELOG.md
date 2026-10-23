@@ -5,6 +5,10 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+### Added
+- Variables: captions and code replacements resolve Photo Mechanic's names ({iptcmonthnameap}, {iptcdow}, {city}, {credit}, {copyright}, {creator}, {filename}, …) and plain aliases; Settings › Metadata › Your variables defines your own {name} for any template or caption.
+- Import from Photo Mechanic (File menu, Settings › Metadata, the welcome): an ingest snapshot sets the folder and rename templates verbatim, a code replacement file loads as is.
+
 ### Changed
 - Default ingest rename is now `{yr2}{month0}{day0}{headline}_CAL{frame}` (260505_CAL500), the Photo Mechanic ingest preset, instead of the delivery-style `{headline}{seqn:3}-{month0}{day0}{yr2}`; existing settings are untouched.
 

@@ -194,7 +194,8 @@ pub fn expand(template: &str, facts: &Facts, seq: u32) -> String {
                 .map(|(y, _, _)| format!("{:02}", y.rem_euclid(100)))),
             "tmn0" => Ok(facts.today.map(|(_, m, _)| format!("{m:02}"))),
             "tdy0" => Ok(facts.today.map(|(_, _, d)| format!("{d:02}"))),
-            _ => Err(()),
+            // The photographer's own variables (Settings › Metadata).
+            _ => apature_metadata::codes::user_var(name).map(Some).ok_or(()),
         };
         match value {
             Ok(Some(v)) => out.push_str(&v),

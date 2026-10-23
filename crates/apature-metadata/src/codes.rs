@@ -2,8 +2,9 @@
 //! expands to the replacement, with `{variables}` resolved from the photo.
 //!
 //! File format: `code<TAB>replacement`, `//` comments, blank lines ignored.
-//! Variables supported: `{iptcdow}` `{iptcmonthnameap}` `{iptcmonthname}`
-//! `{iptcday}` `{iptcyear4}` `{credit}` `{headline}`.
+//! Variables: Photo Mechanic's date and IPTC names (`{iptcdow}`,
+//! `{iptcmonthnameap}`, `{credit}`, `{city}`, …), plain aliases, and the
+//! photographer's own variables from `set_user_vars`.
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CodeTable {
@@ -64,6 +65,41 @@ pub struct Vars {
     pub date: Option<(i32, u32, u32)>,
     pub credit: Option<String>,
     pub headline: Option<String>,
+    pub title: Option<String>,
+    pub city: Option<String>,
+    pub state: Option<String>,
+    pub country: Option<String>,
+    pub sublocation: Option<String>,
+    pub source: Option<String>,
+    pub copyright: Option<String>,
+    pub creator: Option<String>,
+    pub caption_writer: Option<String>,
+    pub transmission_reference: Option<String>,
+    pub keywords: Option<String>,
+    pub filename: Option<String>,
+}
+
+/// Variables the photographer defines (Settings › Metadata › Your
+/// variables): `{name}` anywhere a template or a code replacement is
+/// expanded. App-wide, so they live in one place rather than in every
+/// `Vars` and `Facts`.
+static USER_VARS: std::sync::RwLock<Vec<(String, String)>> = std::sync::RwLock::new(Vec::new());
+
+pub fn set_user_vars(vars: Vec<(String, String)>) {
+    if let Ok(mut w) = USER_VARS.write() {
+        *w = vars;
+    }
+}
+
+/// Look a user variable up, case-insensitively, trimming the name.
+pub fn user_var(name: &str) -> Option<String> {
+    let n = name.trim();
+    USER_VARS
+        .read()
+        .ok()?
+        .iter()
+        .find(|(k, _)| k.trim().eq_ignore_ascii_case(n))
+        .map(|(_, v)| v.clone())
 }
 
 pub const AP_MONTHS: [&str; 12] = [
@@ -121,22 +157,79 @@ pub fn parse_date(s: &str) -> Option<(i32, u32, u32)> {
     }
 }
 
+/// Resolve one `{name}` for a caption. `Ok(Some)` = value, `Ok(None)` =
+/// known but empty for this photo (expands to nothing), `Err` = unknown
+/// (left as typed so a typo is visible).
+fn caption_var(name: &str, vars: &Vars) -> Result<Option<String>, ()> {
+    let n = name.trim().to_ascii_lowercase();
+    let date = vars.date;
+    let v = match n.as_str() {
+        "iptcdow" | "dow" | "dayname" => date.map(|(y, m, d)| DAYS[weekday(y, m, d)].to_string()),
+        "iptcdow3" | "dow3" => date.map(|(y, m, d)| DAYS[weekday(y, m, d)][..3].to_string()),
+        "iptcmonthnameap" | "monthnameap" | "apmonth" => {
+            date.map(|(_, m, _)| AP_MONTHS[(m - 1) as usize].to_string())
+        }
+        "iptcmonthname" | "monthname" => date.map(|(_, m, _)| MONTHS[(m - 1) as usize].to_string()),
+        "iptcmonthname3" | "mnn3" | "monthname3" => {
+            date.map(|(_, m, _)| MONTHS[(m - 1) as usize][..3].to_string())
+        }
+        "iptcmonth0" | "month0" | "imn0" => date.map(|(_, m, _)| format!("{m:02}")),
+        "iptcmonth" | "month" => date.map(|(_, m, _)| m.to_string()),
+        "iptcday" | "day" => date.map(|(_, _, d)| d.to_string()),
+        "iptcday0" | "day0" | "idy0" => date.map(|(_, _, d)| format!("{d:02}")),
+        "iptcyear4" | "year4" | "year" | "iyr4" => date.map(|(y, _, _)| y.to_string()),
+        "iptcyear2" | "yr2" | "year2" | "iyr2" => {
+            date.map(|(y, _, _)| format!("{:02}", y.rem_euclid(100)))
+        }
+        "iptcdatesort" | "datesort" => date.map(|(y, m, d)| format!("{y:04}{m:02}{d:02}")),
+        "date" | "iptcdate" => date.map(|(y, m, d)| format!("{y:04}-{m:02}-{d:02}")),
+        "apdate" => date.map(|(y, m, d)| format!("{} {d}, {y}", AP_MONTHS[(m - 1) as usize])),
+        "credit" => vars.credit.clone(),
+        "headline" | "head" | "slug" => vars.headline.clone(),
+        "title" | "objectname" | "object name" => vars.title.clone(),
+        "city" | "iptccity" => vars.city.clone(),
+        "state" | "iptcstate" | "province" => vars.state.clone(),
+        "country" | "iptccountry" => vars.country.clone(),
+        "sublocation" | "location" | "venue" => vars.sublocation.clone(),
+        "source" => vars.source.clone(),
+        "copyright" | "copyrightnotice" => vars.copyright.clone(),
+        "creator" | "byline" | "photographer" => vars.creator.clone(),
+        "captionwriter" | "writer" => vars.caption_writer.clone(),
+        "transref" | "transmissionreference" | "jobid" => vars.transmission_reference.clone(),
+        "keywords" => vars.keywords.clone(),
+        "filename" | "filenamebase" => vars.filename.clone(),
+        _ => return user_var(name).map(Some).ok_or(()),
+    };
+    Ok(v)
+}
+
+/// Expand every `{variable}` in `s`. Known variables resolve from `vars`
+/// (Photo Mechanic's names and plain ones both work), then from the user's
+/// own variables; anything else stays as typed.
 pub fn expand_variables(s: &str, vars: &Vars) -> String {
-    let mut out = s.to_string();
-    if let Some((y, m, d)) = vars.date {
-        out = out
-            .replace("{iptcdow}", DAYS[weekday(y, m, d)])
-            .replace("{iptcmonthnameap}", AP_MONTHS[(m - 1) as usize])
-            .replace("{iptcmonthname}", MONTHS[(m - 1) as usize])
-            .replace("{iptcday}", &d.to_string())
-            .replace("{iptcyear4}", &y.to_string());
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(start) = rest.find('{') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('}') else {
+            out.push_str(&rest[start..]);
+            rest = "";
+            break;
+        };
+        let token = &after[..end];
+        match caption_var(token, vars) {
+            Ok(Some(v)) => out.push_str(&v),
+            Ok(None) => {}
+            Err(()) => {
+                out.push('{');
+                out.push_str(token);
+                out.push('}');
+            }
+        }
+        rest = &after[end + 1..];
     }
-    if let Some(c) = &vars.credit {
-        out = out.replace("{credit}", c);
-    }
-    if let Some(h) = &vars.headline {
-        out = out.replace("{headline}", h);
-    }
+    out.push_str(rest);
     out
 }
 
@@ -202,6 +295,7 @@ mod tests {
             date: Some((2026, 10, 6)),
             credit: Some("Caleb McCartney/Special to the Eagle".into()),
             headline: None,
+            ..Default::default()
         };
         let s = expand(r"\cf\ tees off on No. 1\tail\", &t, &vars, '\\');
         assert_eq!(s, "North Catholic's Christopher Faber tees off on No. 1 in the WPIAL Class 2A Boys Individual Golf Championship held Tuesday, Oct. 6, 2026, at Oakmont Country Club. Caleb McCartney/Special to the Eagle");

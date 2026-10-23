@@ -12,6 +12,7 @@ mod export_job;
 mod filter;
 mod ingest_job;
 mod platform;
+mod pm_import;
 mod prefs;
 mod selection;
 mod ui;

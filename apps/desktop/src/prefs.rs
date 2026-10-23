@@ -141,6 +141,9 @@ pub struct Prefs {
     /// Workspace keys whose tip has been dismissed.
     #[serde(default)]
     pub tips_seen: Vec<String>,
+    /// The photographer's own `{variables}` for templates and captions.
+    #[serde(default)]
+    pub variables: Vec<(String, String)>,
     /// Port for Receive over Wi-Fi (the FTP server).
     #[serde(default = "default_receive_port")]
     pub receive_port: u16,
@@ -232,6 +235,7 @@ impl Default for Prefs {
             show_tips: true,
             tips_seen: Vec::new(),
             receive_port: apature_receive::DEFAULT_PORT,
+            variables: Vec::new(),
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,

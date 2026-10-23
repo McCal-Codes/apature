@@ -435,6 +435,8 @@ pub struct App {
     /// The welcome (onboarding) modal and its page.
     pub welcome_open: bool,
     pub welcome_step: usize,
+    /// Set by the welcome's Import button; handled after the modal closes.
+    pub welcome_import: bool,
     /// Preview is showing in its own window (prefs.preview_in_window).
     pub preview_window: bool,
     update_checker: Option<crate::updater::Checker>,
@@ -497,6 +499,7 @@ impl App {
             .favorites
             .retain(|p| p.exists() || Platform::is_volume(p));
         let onboarded = prefs.onboarded;
+        apature_metadata::codes::set_user_vars(prefs.variables.clone());
         let platform = Platform::new();
         let mut app = App {
             folder: None,
@@ -564,6 +567,7 @@ impl App {
             settings_query: String::new(),
             welcome_open: launch.welcome || (!onboarded && launch.screenshot.is_none()),
             welcome_step: 0,
+            welcome_import: false,
             preview_window: false,
             update_checker: None,
             update_manual: false,
@@ -1727,7 +1731,9 @@ impl App {
         }
     }
 
-    fn caption_vars(&self, draft: &Draft) -> Vars {
+    pub(crate) fn caption_vars(&self, draft: &Draft) -> Vars {
+        let f = &draft.fields;
+        let opt = |s: &String| if s.is_empty() { None } else { Some(s.clone()) };
         Vars {
             date: draft
                 .date_created
@@ -1739,16 +1745,25 @@ impl App {
                         .and_then(|e| e.date_time_original.as_deref())
                         .and_then(codes::parse_date)
                 }),
-            credit: if draft.fields.credit.is_empty() {
-                self.assignment.as_ref().and_then(|a| a.credit_line())
-            } else {
-                Some(draft.fields.credit.clone())
-            },
-            headline: if draft.fields.headline.is_empty() {
-                None
-            } else {
-                Some(draft.fields.headline.clone())
-            },
+            credit: opt(&f.credit)
+                .or_else(|| self.assignment.as_ref().and_then(|a| a.credit_line())),
+            headline: opt(&f.headline),
+            title: opt(&f.title),
+            city: opt(&f.city),
+            state: opt(&f.state),
+            country: opt(&f.country),
+            sublocation: opt(&f.sublocation),
+            source: opt(&f.source),
+            copyright: opt(&f.copyright),
+            creator: opt(&f.creator),
+            caption_writer: opt(&f.caption_writer),
+            transmission_reference: opt(&f.transmission_reference),
+            keywords: opt(&f.keywords),
+            filename: self
+                .view
+                .get(draft.idx)
+                .and_then(|&i| self.items.get(i))
+                .map(|it| it.display_name()),
         }
     }
 
@@ -3530,6 +3545,47 @@ impl App {
                             }
                         }
                         Err(e) => self.ingest.receive_error = Some(e),
+                    }
+                }
+            }
+            Command::ImportPhotoMechanic => {
+                if let Some(p) = rfd::FileDialog::new()
+                    .add_filter(
+                        "Photo Mechanic snapshot or code replacements",
+                        &["snap", "txt"],
+                    )
+                    .pick_file()
+                {
+                    match crate::pm_import::import(&p) {
+                        Ok(got) => {
+                            let mut lines = Vec::new();
+                            if let Some((folder, rename)) = got.ingest {
+                                let mut o = self.ingest.opts.clone();
+                                o.folder_template = folder;
+                                o.rename_template = rename;
+                                self.ingest.opts = o.clone();
+                                self.prefs.ingest = Some(o);
+                                lines.push("ingest folder and rename templates".to_string());
+                            }
+                            if got.codes {
+                                self.prefs.codes_file = Some(p.clone());
+                                self.load_codes(&p);
+                                lines.push("code replacements".to_string());
+                            }
+                            self.prefs_dirty = true;
+                            self.toast(
+                                ui::toasts::Kind::Info,
+                                if lines.is_empty() {
+                                    "Nothing Apature could use in that file yet.".to_string()
+                                } else {
+                                    format!("Imported from Photo Mechanic: {}", lines.join(", "))
+                                },
+                            );
+                        }
+                        Err(e) => self.toast(
+                            ui::toasts::Kind::Error,
+                            format!("Photo Mechanic import: {e}"),
+                        ),
                     }
                 }
             }

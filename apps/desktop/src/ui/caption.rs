@@ -3,7 +3,7 @@
 
 use egui::{Color32, CornerRadius, Key, Pos2, Rect, RichText, Vec2};
 
-use apature_metadata::codes::{self, Vars};
+use apature_metadata::codes;
 use apature_metadata::Iptc;
 
 use super::tokens::{Theme, S1, S2, S3, S4, S5};
@@ -302,6 +302,7 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 ui.separator();
                 ui.add_space(S2);
 
+                let vars_now = app.caption_draft.as_ref().map(|d| app.caption_vars(d)).unwrap_or_default();
                 let Some(draft) = app.caption_draft.as_mut() else {
                     ui.label(RichText::new("No photo focused").color(t.muted));
                     return;
@@ -311,11 +312,7 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 // Expand \code\ pairs as soon as the closing delimiter is typed.
                 let delim = app.prefs.code_delimiter;
                 if app.prefs.codes_enabled && draft.fields.caption != before && draft.fields.caption.matches(delim).count() % 2 == 0 && draft.fields.caption.contains(delim) {
-                    let vars = Vars {
-                        date: draft.date_created.as_deref().and_then(codes::parse_date).or_else(|| app.exif[draft.idx].as_ref().and_then(|e| e.date_time_original.as_deref()).and_then(codes::parse_date)),
-                        credit: if draft.fields.credit.is_empty() { app.assignment.as_ref().and_then(|a| a.credit_line()) } else { Some(draft.fields.credit.clone()) },
-                        headline: if draft.fields.headline.is_empty() { None } else { Some(draft.fields.headline.clone()) },
-                    };
+                    let vars = vars_now.clone();
                     let expanded = codes::expand(&draft.fields.caption, &app.codes, &vars, delim);
                     if expanded != draft.fields.caption {
                         draft.fields.caption = expanded;

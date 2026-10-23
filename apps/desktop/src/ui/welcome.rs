@@ -87,6 +87,16 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
             app.prefs_dirty = true;
         }
     }
+    if app.welcome_import {
+        app.welcome_import = false;
+        app.welcome_open = false;
+        app.welcome_step = 0;
+        if !app.prefs.onboarded {
+            app.prefs.onboarded = true;
+            app.prefs_dirty = true;
+        }
+        app.dispatch(ctx, Command::ImportPhotoMechanic);
+    }
     for c in cmds {
         app.dispatch(ctx, c);
     }
@@ -122,8 +132,8 @@ fn step_row(ui: &mut egui::Ui, t: &Theme, n: &str, name: &str, what: &str) {
 }
 
 fn page_welcome(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
-    title(ui, t, "Let's get you in focus.");
-    body(ui, t, "Apature runs the loop you already run: card in, cull, caption, send. Four steps. No manual.");
+    title(ui, t, "Welcome to your daily ingesting of files");
+    body(ui, t, "This can seem daunting, but don't worry, we can learn this one step at a time. It is similar to how Lightroom or Capture One copies your files from your card to its catalog, but this is faster, and it is easier to see the JPEGs, caption, tag and cull what you need and don't need (and a few other things too).");
     ui.add_space(S2);
     step_row(
         ui,
@@ -153,6 +163,17 @@ fn page_welcome(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
         "Send",
         "A preset makes the JPEGs; delivery takes them to the desk.",
     );
+    ui.add_space(S2);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Already using Photo Mechanic? Feel free to skip this and import your workflow from there.").size(12.0).color(t.text2));
+    });
+    if ui
+        .button("Import from Photo Mechanic…")
+        .on_hover_text("An ingest snapshot (.snap) or a code replacement file")
+        .clicked()
+    {
+        app.welcome_import = true;
+    }
     ui.add_space(S3);
     super::eyebrow(ui, t, "Appearance");
     ui.horizontal(|ui| {
@@ -303,23 +324,23 @@ fn page_keys(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
 }
 
 fn page_done(ui: &mut egui::Ui, t: &Theme) {
-    title(ui, t, "You're all set. Go shoot.");
+    title(ui, t, "Why this exists");
     body(
         ui,
         t,
-        "Open a folder or plug in a card. Everything else is a shortcut away.",
+        "Photo Mechanic usually needs someone in the industry to teach it to you, and not many students learn it unless they land an internship. This is where this app comes in. It is free, for life. Yes, I am one person, still learning all of this and researching it actively.",
     );
     ui.add_space(S2);
     body(
         ui,
         t,
-        "Where things go (FTP, SFTP, a folder) and export presets live in Settings.",
+        "I took it on mainly because the alternative isn't cheap, and I was inspired by others. I feel that gatekeeping in the industry is wrong, and this is my way of making what I like and helping those who need the help. When I was throwing my SD cards into my desktop with no proper workflow, no backups, none of that, I get it. So I want to teach and learn continuously, so more photojournalists can have good practices.",
     );
     ui.add_space(S2);
     body(
         ui,
         t,
-        "Want this again? Help › Welcome to Apature. Something broke? Help › Apature on GitHub.",
+        "Open a folder or plug in a card to start. Want this again? Help › Welcome to Apature. Something broke? Help › Apature on GitHub.",
     );
 }
 
