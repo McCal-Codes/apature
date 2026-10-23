@@ -122,13 +122,37 @@ fn step_row(ui: &mut egui::Ui, t: &Theme, n: &str, name: &str, what: &str) {
 }
 
 fn page_welcome(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
-    title(ui, t, "Welcome to Apature");
-    body(ui, t, "Apature runs the loop a working photojournalist runs on every assignment. It will teach you the loop as you use it, the same loop you would run in Photo Mechanic, so the job and the tool come together.");
+    title(ui, t, "Let's get you in focus.");
+    body(ui, t, "Apature runs the loop you already run: card in, cull, caption, send. Four steps. No manual.");
     ui.add_space(S2);
-    step_row(ui, t, "1", "Card in", "Ingest copies the card, verifies every file with a hash, names them from your template and remembers the card so it is never copied twice.");
-    step_row(ui, t, "2", "Cull", "Rate and class on the sheet with the number keys, compare frames, open the loupe. The three that matter rise to the top.");
-    step_row(ui, t, "3", "Caption", "Write once with the assignment pad and the variables; save to the whole selection. Everything lives in a sidecar beside the file.");
-    step_row(ui, t, "4", "Export and send", "A preset per outlet makes the JPEGs; delivery sends them to a folder or a server and keeps a ledger of what went.");
+    step_row(
+        ui,
+        t,
+        "1",
+        "Card in",
+        "Copies and checks every file. A card never goes in twice.",
+    );
+    step_row(
+        ui,
+        t,
+        "2",
+        "Cull",
+        "Number keys rate, Enter previews. Keep the keepers.",
+    );
+    step_row(
+        ui,
+        t,
+        "3",
+        "Caption",
+        "Write it once, save it to the whole selection.",
+    );
+    step_row(
+        ui,
+        t,
+        "4",
+        "Send",
+        "A preset makes the JPEGs; delivery takes them to the desk.",
+    );
     ui.add_space(S3);
     super::eyebrow(ui, t, "Appearance");
     ui.horizontal(|ui| {
@@ -169,8 +193,8 @@ fn page_photos(
     cmds: &mut Vec<Command>,
     close: &mut bool,
 ) {
-    title(ui, t, "Your photos");
-    body(ui, t, "Apature works on folders. It never moves or rewrites an original: ratings, captions and crops go in an XMP sidecar next to each file, the way Photo Mechanic and Lightroom read it.");
+    title(ui, t, "Where are the pictures?");
+    body(ui, t, "Apature works on folders and never edits an original. Marks and captions live in a sidecar next to each file.");
     ui.add_space(S2);
     let cards: Vec<(String, std::path::PathBuf)> = app
         .volumes
@@ -179,7 +203,7 @@ fn page_photos(
         .cloned()
         .collect();
     if cards.is_empty() {
-        body(ui, t, "No memory card is plugged in right now. Plug one in and the sidebar lists it under Drives & cards; Ingest opens with it as the source.");
+        body(ui, t, "No card plugged in yet. When one shows up, it lands in the sidebar and Ingest is one click away.");
     } else {
         super::eyebrow(ui, t, "Card detected");
         for (name, path) in &cards {
@@ -215,13 +239,17 @@ fn page_photos(
     body(
         ui,
         t,
-        "Tip: drop a folder on the window at any time. Several folders open as tabs.",
+        "Drop a folder on the window any time. More folders open as tabs.",
     );
 }
 
 fn page_keys(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
-    title(ui, t, "Keys you will use today");
-    body(ui, t, "Apature is keyboard-first. These are the ones that carry a shoot; Help › Keyboard Shortcuts has the rest.");
+    title(ui, t, "Keys that pay the rent");
+    body(
+        ui,
+        t,
+        "Hands on the keys, eyes on the frame. The rest is under Help › Keyboard Shortcuts.",
+    );
     ui.add_space(S2);
     let rating_first = app.prefs.number_keys == NumberKeys::Rating;
     super::eyebrow(ui, t, "Number keys");
@@ -266,7 +294,7 @@ fn page_keys(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
     if ui
         .checkbox(
             &mut app.prefs.show_tips,
-            "Teach me as I go: one short tip the first time each workspace opens",
+            "Teach me as I go: one tip the first time each screen opens",
         )
         .changed()
     {
@@ -275,12 +303,24 @@ fn page_keys(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
 }
 
 fn page_done(ui: &mut egui::Ui, t: &Theme) {
-    title(ui, t, "That is the loop");
-    body(ui, t, "Open a folder or plug in a card, rate the keepers, caption them, export with a preset, send. Apature keeps a ledger of every card ingested and every photo sent, and never touches an original.");
+    title(ui, t, "You're all set. Go shoot.");
+    body(
+        ui,
+        t,
+        "Open a folder or plug in a card. Everything else is a shortcut away.",
+    );
     ui.add_space(S2);
-    body(ui, t, "Delivery targets (FTP, SFTP, a folder) and export presets live in Settings; passwords go to the system keychain, never to the prefs file.");
+    body(
+        ui,
+        t,
+        "Where things go (FTP, SFTP, a folder) and export presets live in Settings.",
+    );
     ui.add_space(S2);
-    body(ui, t, "This welcome comes back from Help › Welcome to Apature…. Tell me what breaks and what you would want next: Help › Apature on GitHub.");
+    body(
+        ui,
+        t,
+        "Want this again? Help › Welcome to Apature. Something broke? Help › Apature on GitHub.",
+    );
 }
 
 /// The tip for a workspace: a short card the first time it opens.

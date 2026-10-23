@@ -253,7 +253,8 @@ impl Default for Prefs {
 pub fn default_ingest_options() -> apature_ingest::Options {
     apature_ingest::Options {
         folder_template: "{year4}/{month0} {monthname}/{mnn3} {day0} {headline}".into(),
-        rename_template: "{headline}{seqn:3}-{month0}{day0}{yr2}".into(),
+        // Caleb's Photo Mechanic ingest: 260505_CAL500.JPG style, the frame number kept.
+        rename_template: "{yr2}{month0}{day0}{headline}_CAL{frame}".into(),
         ..Default::default()
     }
 }

@@ -5,6 +5,9 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+### Changed
+- Default ingest rename is now `{yr2}{month0}{day0}{headline}_CAL{frame}` (260505_CAL500), the Photo Mechanic ingest preset, instead of the delivery-style `{headline}{seqn:3}-{month0}{day0}{yr2}`; existing settings are untouched.
+
 ### Added
 - Settings rebuilt the way TerraNova's are: a search box that finds any setting and shows where it lives, a category rail with a count of what differs from the default, uniform rows (label and description left, control right), a Reset per changed row and per page, switches instead of checkboxes.
 - Receive over Wi-Fi: an FTP server inside Apature (Ingest › Plan) that drops files into the source folder and turns Live Ingest on. One account, a six-digit password per session shown in the window. A phone running SnapBridge plus a transfer app stands in for a WT-7; cameras with an FTP client connect directly. `--receive` starts it headless.
