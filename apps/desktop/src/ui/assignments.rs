@@ -126,13 +126,6 @@ pub fn fill_from_sheet(d: &mut Draft) {
                 .trim_start_matches("...")
                 .trim()
                 .to_string();
-        } else if upper.starts_with("WHEN:")
-            || upper.starts_with("REPORTER:")
-            || upper.starts_with("DEADLINE:")
-            || upper.starts_with("ASSIGNED:")
-            || upper.starts_with("OVERVIEW:")
-        {
-            notes.push(line.to_string());
         } else if !line.starts_with("http") {
             notes.push(line.to_string());
         }
