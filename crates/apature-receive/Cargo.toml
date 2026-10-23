@@ -1,0 +1,18 @@
+[package]
+name = "apature-receive"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "An FTP server that receives photos into a folder, for cameras and phones on the same Wi-Fi"
+
+[dependencies]
+libunftp = "0.23"
+unftp-sbe-fs = "0.4"
+unftp-core = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync", "time"] }
+async-trait = "0.1"
+log.workspace = true
+rand = "0.8"
+
+[dev-dependencies]
+suppaftp = "6"

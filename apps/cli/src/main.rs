@@ -813,6 +813,14 @@ fn caption(
                 .clone()
                 .or_else(|| a.as_ref().and_then(|a| a.credit_line())),
             headline: current.headline.clone(),
+            city: current.city.clone(),
+            state: current.state.clone(),
+            country: current.country.clone(),
+            sublocation: current.sublocation.clone(),
+            source: current.source.clone(),
+            copyright: current.copyright.clone(),
+            creator: current.creator.as_ref().and_then(|c| c.first().cloned()),
+            ..Default::default()
         };
         let expanded = codes::expand(text, &codes_table, &vars, '\\');
         let fields = apature_metadata::Iptc {

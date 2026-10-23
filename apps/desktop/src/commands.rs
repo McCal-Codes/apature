@@ -84,6 +84,10 @@ pub enum Command {
     OpenShortcuts,
     OpenAbout,
     OpenWelcome,
+    /// Pick a Photo Mechanic snapshot (.snap) or code file and take what Apature understands.
+    ImportPhotoMechanic,
+    /// Start or stop the FTP receive server on the ingest source folder.
+    ReceiveToggle,
     /// Updates: check now (menu), open the newest release's DMG.
     CheckUpdates,
     OpenUpdate,
@@ -217,6 +221,8 @@ impl Command {
             Command::OpenShortcuts => "help.shortcuts".into(),
             Command::OpenAbout => "app.about".into(),
             Command::OpenWelcome => "help.welcome".into(),
+            Command::ImportPhotoMechanic => "file.import_pm".into(),
+            Command::ReceiveToggle => "ingest.receive".into(),
             Command::CheckUpdates => "app.updates".into(),
             Command::RevealLog => "help.log".into(),
             Command::OpenRepo => "help.repo".into(),
@@ -241,6 +247,8 @@ impl Command {
             "help.shortcuts" => Command::OpenShortcuts,
             "app.about" => Command::OpenAbout,
             "help.welcome" => Command::OpenWelcome,
+            "file.import_pm" => Command::ImportPhotoMechanic,
+            "ingest.receive" => Command::ReceiveToggle,
             "app.updates" => Command::CheckUpdates,
             "help.log" => Command::RevealLog,
             "help.repo" => Command::OpenRepo,

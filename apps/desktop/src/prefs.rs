@@ -12,6 +12,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_receive_port() -> u16 {
+    apature_receive::DEFAULT_PORT
+}
+
 /// Current saved-format version of prefs.json.
 pub const PREFS_VERSION: u32 = 1;
 
@@ -137,6 +141,12 @@ pub struct Prefs {
     /// Workspace keys whose tip has been dismissed.
     #[serde(default)]
     pub tips_seen: Vec<String>,
+    /// The photographer's own `{variables}` for templates and captions.
+    #[serde(default)]
+    pub variables: Vec<(String, String)>,
+    /// Port for Receive over Wi-Fi (the FTP server).
+    #[serde(default = "default_receive_port")]
+    pub receive_port: u16,
     pub open_tabs: Vec<PathBuf>,
     pub active_tab: usize,
     pub code_delimiter: char,
@@ -224,6 +234,8 @@ impl Default for Prefs {
             onboarded: false,
             show_tips: true,
             tips_seen: Vec::new(),
+            receive_port: apature_receive::DEFAULT_PORT,
+            variables: Vec::new(),
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,
@@ -245,7 +257,8 @@ impl Default for Prefs {
 pub fn default_ingest_options() -> apature_ingest::Options {
     apature_ingest::Options {
         folder_template: "{year4}/{month0} {monthname}/{mnn3} {day0} {headline}".into(),
-        rename_template: "{headline}{seqn:3}-{month0}{day0}{yr2}".into(),
+        // Caleb's Photo Mechanic ingest: 260505_CAL500.JPG style, the frame number kept.
+        rename_template: "{yr2}{month0}{day0}{headline}_CAL{frame}".into(),
         ..Default::default()
     }
 }

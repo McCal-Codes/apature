@@ -112,6 +112,14 @@ scripts/package-linux.sh        # Linux: AppImage, .deb and .tar.gz under target
 cargo build --release -p apature  # Windows: target\release\apature.exe
 ```
 
+## Variables
+
+Templates and captions take `{variables}`. Photo Mechanic's names work as they are (`{iptcyear4}`, `{iptcmonthnameap}`,
+`{iptcdow}`, `{head}`, `{frame}`, `{seqn:3}`, `{city}`, `{credit}`, `{copyright}`, `{creator}`), so an ingest snapshot or a
+code replacement file from Photo Mechanic imports without editing (File › Import from Photo Mechanic…). Plain aliases exist
+for all of them (`{year4}`, `{monthname}`, `{headline}`, `{date}`, `{time}`, `{camera}`, `{lens}`, `{iso}`, `{shutter}`,
+`{aperture}`, `{focal}`, `{today}`), and Settings › Metadata › Your variables adds your own `{name}` for anything else.
+
 ## Keys
 
 Arrows move, Enter or Space opens Preview, Esc returns. `1`–`5` rate, `0` clears, `⌘1`–`⌘8` set a colour class (or

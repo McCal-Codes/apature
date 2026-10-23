@@ -235,6 +235,7 @@ mod tests {
             date: Some((2026, 10, 6)),
             credit: i.credit.clone(),
             headline: None,
+            ..Default::default()
         };
         let caption = crate::codes::expand(r"\cf\ tees off on No. 1\tail\", &codes, &vars, '\\');
         assert!(
