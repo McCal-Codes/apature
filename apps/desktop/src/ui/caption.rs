@@ -142,16 +142,6 @@ impl Draft {
     }
 }
 
-fn field(
-    ui: &mut egui::Ui,
-    t: &Theme,
-    label: &str,
-    value: &mut String,
-    multiline: bool,
-) -> egui::Response {
-    field_h(ui, t, label, value, multiline, &[])
-}
-
 /// A field with a ▾ menu of recent values (newest first) when there are any.
 fn field_h(
     ui: &mut egui::Ui,
@@ -266,204 +256,68 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
     egui::SidePanel::right("caption_fields")
         .resizable(true)
         .default_width(FIELDS_W)
-        .width_range(320.0..=520.0)
-        .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::same(S4 as i8)).stroke(egui::Stroke::NONE))
+        .width_range(340.0..=560.0)
+        .frame(egui::Frame::NONE.fill(t.panel).stroke(egui::Stroke::NONE))
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = S2;
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                // Assignment header + stationery actions.
-                match &app.assignment {
-                    Some(a) => {
-                        ui.label(RichText::new(&a.slug).size(15.0).color(t.text));
-                        if let Some(d) = a.text_date() {
-                            ui.label(RichText::new(d).size(11.0).color(t.muted));
-                        }
-                    }
-                    None => {
-                        ui.label(RichText::new("No assignment loaded").size(13.0).color(t.text2));
-                        ui.label(RichText::new("Load an assignment file for the pad and codes.").size(11.0).color(t.muted));
-                    }
-                }
-                ui.horizontal_wrapped(|ui| {
-                    if ui.button("Load assignment…").clicked() {
-                        cmds.push(Command::LoadAssignment);
-                    }
-                    let n = app.selection.targets(app.cursor).len();
-                    let apply = ui.add_enabled(app.assignment.is_some(), egui::Button::new(format!("Apply pad to {n}"))).on_disabled_hover_text("Load an assignment first");
-                    if apply.clicked() {
-                        cmds.push(Command::ApplyStationery);
-                    }
-                    let tpl = ui.add_enabled(app.assignment.is_some(), egui::Button::new("Insert template")).on_disabled_hover_text("Load an assignment first");
-                    if tpl.clicked() {
-                        cmds.push(Command::InsertCaptionTemplate);
-                    }
-                });
-                ui.add_space(S3);
-                ui.separator();
-                ui.add_space(S2);
-
-                let vars_now = app.caption_draft.as_ref().map(|d| app.caption_vars(d)).unwrap_or_default();
-                let Some(draft) = app.caption_draft.as_mut() else {
-                    ui.label(RichText::new("No photo focused").color(t.muted));
-                    return;
-                };
-                let before = draft.fields.caption.clone();
-                let cap = field(ui, t, "Caption", &mut draft.fields.caption, true);
-                // Expand \code\ pairs as soon as the closing delimiter is typed.
-                let delim = app.prefs.code_delimiter;
-                if app.prefs.codes_enabled && draft.fields.caption != before && draft.fields.caption.matches(delim).count() % 2 == 0 && draft.fields.caption.contains(delim) {
-                    let vars = vars_now.clone();
-                    let expanded = codes::expand(&draft.fields.caption, &app.codes, &vars, delim);
-                    if expanded != draft.fields.caption {
-                        draft.fields.caption = expanded;
-                        // Keep the caret at the end after an expansion.
-                        if let Some(mut st) = egui::TextEdit::load_state(ui.ctx(), cap.id) {
-                            let end = egui::text::CCursor::new(draft.fields.caption.chars().count());
-                            st.cursor.set_char_range(Some(egui::text::CCursorRange::one(end)));
-                            st.store(ui.ctx(), cap.id);
-                        }
-                    }
-                }
-                // Autocomplete hint: codes that start with what follows the last open delimiter.
-                let delim = app.prefs.code_delimiter;
-                if let Some(open) = draft.fields.caption.rfind(delim) {
-                    if draft.fields.caption.matches(delim).count() % 2 == 1 {
-                        let prefix = &draft.fields.caption[open + 1..];
-                        let hits: Vec<String> = app.codes.starting_with(prefix).take(6).map(|(c, r)| format!("{c} → {}", r.chars().take(28).collect::<String>())).collect();
-                        if !hits.is_empty() {
-                            ui.label(RichText::new(hits.join("   ")).monospace().size(10.0).color(t.accent));
-                        }
-                    }
-                }
-                let hist = |k: &str| -> Vec<String> { app.prefs.caption_history.get(k).cloned().unwrap_or_default() };
-                field_h(ui, t, "Headline", &mut draft.fields.headline, false, &hist("headline"));
-                // Keywords: chips with ×, an add box, and recent keywords to click in.
-                ui.label(RichText::new("KEYWORDS").monospace().size(9.5).color(t.muted));
-                let mut kws: Vec<String> = draft.fields.keywords.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-                let mut changed = false;
-                ui.horizontal_wrapped(|ui| {
-                    let mut remove: Option<usize> = None;
-                    for (i, k) in kws.iter().enumerate() {
-                        if super::icons::chip(ui, t, &format!("{k}  ×"), false).on_hover_text("Remove").clicked() {
-                            remove = Some(i);
-                        }
-                    }
-                    if let Some(i) = remove {
-                        kws.remove(i);
-                        changed = true;
-                    }
-                    let add = ui.add(egui::TextEdit::singleline(&mut app.caption_kw_draft).desired_width(140.0).hint_text("add keyword ⏎"));
-                    if add.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                        for k in app.caption_kw_draft.split([';', ',']).map(|s| s.trim()).filter(|s| !s.is_empty()) {
-                            if !kws.iter().any(|x| x.eq_ignore_ascii_case(k)) {
-                                kws.push(k.to_string());
-                                changed = true;
-                            }
-                        }
-                        app.caption_kw_draft.clear();
-                        add.request_focus();
-                    }
-                });
-                let recent: Vec<String> = hist("keywords")
-                    .iter()
-                    .flat_map(|h| h.split(';').map(|s| s.trim().to_string()).collect::<Vec<_>>())
-                    .filter(|k| !k.is_empty() && !kws.iter().any(|x| x.eq_ignore_ascii_case(k)))
-                    .fold(Vec::new(), |mut acc: Vec<String>, k| { if !acc.contains(&k) { acc.push(k); } acc })
-                    .into_iter()
-                    .take(12)
-                    .collect();
-                if !recent.is_empty() {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(RichText::new("recent").size(10.5).color(t.muted));
-                        for k in recent {
-                            if ui.small_button(&k).clicked() {
-                                kws.push(k.clone());
-                                changed = true;
-                            }
-                        }
-                    });
-                }
-                if changed {
-                    draft.fields.keywords = kws.join("; ");
-                }
-                ui.add_space(S1);
-                ui.columns(2, |cols| {
-                    field_h(&mut cols[0], t, "Sublocation", &mut draft.fields.sublocation, false, &hist("sublocation"));
-                    field_h(&mut cols[1], t, "City", &mut draft.fields.city, false, &hist("city"));
-                });
-                ui.columns(2, |cols| {
-                    field_h(&mut cols[0], t, "State", &mut draft.fields.state, false, &hist("state"));
-                    field_h(&mut cols[1], t, "Country", &mut draft.fields.country, false, &hist("country"));
-                });
-                field_h(ui, t, "Creator", &mut draft.fields.creator, false, &hist("creator"));
-                field_h(ui, t, "Credit", &mut draft.fields.credit, false, &hist("credit"));
-                ui.columns(2, |cols| {
-                    field_h(&mut cols[0], t, "Copyright", &mut draft.fields.copyright, false, &hist("copyright"));
-                    field_h(&mut cols[1], t, "Source", &mut draft.fields.source, false, &hist("source"));
-                });
-                // The rest of Photo Mechanic's IPTC Info dialog, folded away
-                // until a desk asks for them.
-                let more_used = !(draft.fields.title.is_empty()
-                    && draft.fields.caption_writer.is_empty()
-                    && draft.fields.instructions.is_empty()
-                    && draft.fields.transmission_reference.is_empty());
-                egui::CollapsingHeader::new(RichText::new("More fields").size(11.0).color(t.text2))
-                    .default_open(more_used)
-                    .show(ui, |ui| {
-                        ui.columns(2, |cols| {
-                            field_h(&mut cols[0], t, "Title", &mut draft.fields.title, false, &hist("title"));
-                            field_h(&mut cols[1], t, "Caption writer", &mut draft.fields.caption_writer, false, &hist("caption_writer"));
-                        });
-                        field_h(ui, t, "Instructions", &mut draft.fields.instructions, false, &hist("instructions"));
-                        field_h(ui, t, "Transmission reference", &mut draft.fields.transmission_reference, false, &hist("transmission_reference"));
-                        ui.label(RichText::new("GPS (DECIMAL DEGREES)").monospace().size(9.5).color(t.muted));
-                        ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut draft.fields.gps_lat).desired_width(120.0).hint_text("40.4461"));
-                            ui.add(egui::TextEdit::singleline(&mut draft.fields.gps_lon).desired_width(120.0).hint_text("-79.8955"));
-                            if (!draft.fields.gps_lat.is_empty() || !draft.fields.gps_lon.is_empty()) && ui.small_button("Clear").clicked() {
-                                draft.fields.gps_lat.clear();
-                                draft.fields.gps_lon.clear();
-                            }
-                        });
-                        ui.label(RichText::new("Written as exif:GPSLatitude/Longitude in the sidecar; Lightroom and PM read it. Both fields or neither.").size(10.5).color(t.muted));
-                    });
-                let delim = app.prefs.code_delimiter;
-                if !app.codes.codes.is_empty() {
-                    ui.horizontal_wrapped(|ui| {
-                        if ui.checkbox(&mut app.prefs.codes_enabled, "Expand codes").on_hover_text("Off: delimiters are typed literally, nothing expands").changed() {
-                            app.prefs_dirty = true;
-                        }
-                        let list: Vec<String> = app.codes.codes.iter().take(12).map(|(c, _)| format!("{delim}{c}{delim}")).collect();
-                        ui.label(RichText::new(list.join(" ")).monospace().size(10.0).color(if app.prefs.codes_enabled { t.muted } else { t.line_strong }));
-                    });
-                }
-                ui.add_space(S2);
-                ui.horizontal(|ui| {
+            // Actions stay put at the bottom; the fields scroll above them.
+            egui::TopBottomPanel::bottom("caption_actions")
+                .frame(
+                    egui::Frame::NONE
+                        .fill(t.panel)
+                        .inner_margin(egui::Margin::symmetric(S4 as i8, S3 as i8)),
+                )
+                .show_inside(ui, |ui| {
+                    let r = ui.available_rect_before_wrap();
+                    ui.painter()
+                        .hline(r.x_range(), r.top() - S3, egui::Stroke::new(1.0, t.line));
+                    let Some(draft) = app.caption_draft.as_ref() else {
+                        return;
+                    };
                     let dirty = draft.dirty();
-                    let save = ui.add_enabled(dirty, egui::Button::new("Save & next  ⌘⏎"));
-                    if save.clicked() {
-                        cmds.push(Command::SaveCaptionAndNext);
-                    }
-                    if ui.add_enabled(dirty, egui::Button::new("Save")).clicked() {
-                        cmds.push(Command::SaveCaption);
-                    }
                     let n = app.selection.targets(app.cursor).len();
-                    if n > 1
-                        && ui
-                            .add_enabled(dirty, egui::Button::new(format!("Save to {n} selected")))
-                            .on_hover_text("Writes only the fields you changed to every selected photo")
-                            .clicked()
-                    {
-                        cmds.push(Command::SaveCaptionToSelection);
-                    }
-                    if ui.add_enabled(dirty, egui::Button::new("Revert")).clicked() {
-                        cmds.push(Command::RevertCaption);
-                    }
-                    if dirty {
-                        ui.label(RichText::new("unsaved").size(10.5).color(t.star));
-                    }
+                    ui.horizontal(|ui| {
+                        let primary = egui::Button::new(RichText::new("Save & next").strong())
+                            .fill(if dirty { t.accent_wash } else { t.raised });
+                        if ui.add_enabled(dirty, primary).on_hover_text("⌘⏎").clicked() {
+                            cmds.push(Command::SaveCaptionAndNext);
+                        }
+                        if n > 1
+                            && ui
+                                .add_enabled(dirty, egui::Button::new(format!("Save to {n}")))
+                                .on_hover_text(
+                                    "Writes only the fields you changed to every selected photo",
+                                )
+                                .clicked()
+                        {
+                            cmds.push(Command::SaveCaptionToSelection);
+                        }
+                        if ui.add_enabled(dirty, egui::Button::new("Save")).clicked() {
+                            cmds.push(Command::SaveCaption);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.add_enabled(dirty, egui::Button::new("Revert")).clicked() {
+                                cmds.push(Command::RevertCaption);
+                            }
+                            if dirty {
+                                ui.label(RichText::new("unsaved").size(10.5).color(t.star));
+                            }
+                        });
+                    });
                 });
-            });
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::NONE
+                        .fill(t.panel)
+                        .inner_margin(egui::Margin::symmetric(S4 as i8, S2 as i8)),
+                )
+                .show_inside(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = S2;
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            fields_body(app, ui, t, &mut cmds);
+                        });
+                });
         });
     // ⌘⏎ anywhere in the fields saves and advances; Esc leaves the field.
     let (save_next, esc) = ctx.input(|i| {
@@ -481,4 +335,348 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
     for c in cmds {
         app.dispatch(ctx, c);
     }
+}
+
+/// The scrolling part: assignment, the caption, then where and who, then
+/// the rest folded away. One card per group, in the order a caption is
+/// written.
+fn fields_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command>) {
+    // ---- Assignment ----
+    super::card(ui, t, "Assignment", |ui| {
+        match &app.assignment {
+            Some(a) => {
+                ui.label(RichText::new(&a.slug).size(14.0).color(t.text));
+                if let Some(d) = a.text_date() {
+                    ui.label(RichText::new(d).size(11.0).color(t.muted));
+                }
+            }
+            None => {
+                ui.label(
+                    RichText::new("No assignment loaded")
+                        .size(13.0)
+                        .color(t.text),
+                );
+                ui.label(
+                    RichText::new("An assignment file fills the pad and the codes for a shoot.")
+                        .size(11.0)
+                        .color(t.muted),
+                );
+            }
+        }
+        ui.add_space(S1);
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .small_button(if app.assignment.is_some() {
+                    "Change…"
+                } else {
+                    "Load assignment…"
+                })
+                .clicked()
+            {
+                cmds.push(Command::LoadAssignment);
+            }
+            if app.assignment.is_some() {
+                let n = app.selection.targets(app.cursor).len();
+                if ui
+                    .small_button(format!("Apply pad to {n}"))
+                    .on_hover_text(
+                        "Fills the IPTC fields of the selected photos from the assignment",
+                    )
+                    .clicked()
+                {
+                    cmds.push(Command::ApplyStationery);
+                }
+                if ui.small_button("Insert caption template").clicked() {
+                    cmds.push(Command::InsertCaptionTemplate);
+                }
+            }
+        });
+    });
+
+    let vars_now = app
+        .caption_draft
+        .as_ref()
+        .map(|d| app.caption_vars(d))
+        .unwrap_or_default();
+    let Some(draft) = app.caption_draft.as_mut() else {
+        ui.add_space(S3);
+        ui.label(RichText::new("No photo focused").color(t.muted));
+        return;
+    };
+    let hist = |k: &str| -> Vec<String> {
+        app.prefs
+            .caption_history
+            .get(k)
+            .cloned()
+            .unwrap_or_default()
+    };
+
+    // ---- Caption ----
+    super::card(ui, t, "Caption", |ui| {
+        let before = draft.fields.caption.clone();
+        let cap = ui.add(
+            egui::TextEdit::multiline(&mut draft.fields.caption)
+                .desired_rows(6)
+                .desired_width(f32::INFINITY)
+                .hint_text("Who, what, where, when. Type a \\code\\ to expand it.")
+                .font(egui::TextStyle::Body),
+        );
+        let delim = app.prefs.code_delimiter;
+        if app.prefs.codes_enabled
+            && draft.fields.caption != before
+            && draft.fields.caption.matches(delim).count() % 2 == 0
+            && draft.fields.caption.contains(delim)
+        {
+            let expanded = codes::expand(&draft.fields.caption, &app.codes, &vars_now, delim);
+            if expanded != draft.fields.caption {
+                draft.fields.caption = expanded;
+                if let Some(mut st) = egui::TextEdit::load_state(ui.ctx(), cap.id) {
+                    let end = egui::text::CCursor::new(draft.fields.caption.chars().count());
+                    st.cursor
+                        .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                    st.store(ui.ctx(), cap.id);
+                }
+            }
+        }
+        if let Some(open) = draft.fields.caption.rfind(delim) {
+            if draft.fields.caption.matches(delim).count() % 2 == 1 {
+                let prefix = &draft.fields.caption[open + 1..];
+                let hits: Vec<String> = app
+                    .codes
+                    .starting_with(prefix)
+                    .take(6)
+                    .map(|(c, r)| format!("{c} → {}", r.chars().take(28).collect::<String>()))
+                    .collect();
+                if !hits.is_empty() {
+                    ui.label(
+                        RichText::new(hits.join("   "))
+                            .monospace()
+                            .size(10.0)
+                            .color(t.accent),
+                    );
+                }
+            }
+        }
+        ui.add_space(S1);
+        field_h(
+            ui,
+            t,
+            "Headline",
+            &mut draft.fields.headline,
+            false,
+            &hist("headline"),
+        );
+        // Codes: one quiet line, the list behind a hover.
+        if !app.codes.codes.is_empty() {
+            ui.horizontal(|ui| {
+                if ui
+                    .checkbox(
+                        &mut app.prefs.codes_enabled,
+                        RichText::new(format!("Expand codes ({})", app.codes.codes.len()))
+                            .size(11.0),
+                    )
+                    .on_hover_text("Off: delimiters are typed literally, nothing expands")
+                    .changed()
+                {
+                    app.prefs_dirty = true;
+                }
+                let list: Vec<String> = app
+                    .codes
+                    .codes
+                    .iter()
+                    .take(40)
+                    .map(|(c, r)| format!("{delim}{c}{delim}  {r}"))
+                    .collect();
+                ui.label(RichText::new("which?").size(11.0).color(t.accent))
+                    .on_hover_text(list.join("\n"));
+            });
+        }
+    });
+
+    // ---- Keywords ----
+    super::card(ui, t, "Keywords", |ui| {
+        let mut kws: Vec<String> = draft
+            .fields
+            .keywords
+            .split(';')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut changed = false;
+        ui.horizontal_wrapped(|ui| {
+            let mut remove: Option<usize> = None;
+            for (i, k) in kws.iter().enumerate() {
+                if super::icons::chip(ui, t, &format!("{k}  ×"), false)
+                    .on_hover_text("Remove")
+                    .clicked()
+                {
+                    remove = Some(i);
+                }
+            }
+            if let Some(i) = remove {
+                kws.remove(i);
+                changed = true;
+            }
+            let add = ui.add(
+                egui::TextEdit::singleline(&mut app.caption_kw_draft)
+                    .desired_width(150.0)
+                    .hint_text("add keyword ⏎"),
+            );
+            if add.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                for k in app
+                    .caption_kw_draft
+                    .split([';', ','])
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                {
+                    if !kws.iter().any(|x| x.eq_ignore_ascii_case(k)) {
+                        kws.push(k.to_string());
+                        changed = true;
+                    }
+                }
+                app.caption_kw_draft.clear();
+                add.request_focus();
+            }
+        });
+        let recent: Vec<String> = hist("keywords")
+            .iter()
+            .flat_map(|h| {
+                h.split(';')
+                    .map(|s| s.trim().to_string())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|k| !k.is_empty() && !kws.iter().any(|x| x.eq_ignore_ascii_case(k)))
+            .fold(Vec::new(), |mut acc: Vec<String>, k| {
+                if !acc.contains(&k) {
+                    acc.push(k);
+                }
+                acc
+            })
+            .into_iter()
+            .take(10)
+            .collect();
+        if !recent.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("recent").size(10.5).color(t.muted));
+                for k in recent {
+                    if ui.small_button(&k).clicked() {
+                        kws.push(k.clone());
+                        changed = true;
+                    }
+                }
+            });
+        }
+        if changed {
+            draft.fields.keywords = kws.join("; ");
+        }
+    });
+
+    // ---- Where ----
+    super::card(ui, t, "Where", |ui| {
+        ui.columns(2, |cols| {
+            field_h(
+                &mut cols[0],
+                t,
+                "Sublocation",
+                &mut draft.fields.sublocation,
+                false,
+                &hist("sublocation"),
+            );
+            field_h(
+                &mut cols[1],
+                t,
+                "City",
+                &mut draft.fields.city,
+                false,
+                &hist("city"),
+            );
+        });
+        ui.columns(2, |cols| {
+            field_h(
+                &mut cols[0],
+                t,
+                "State",
+                &mut draft.fields.state,
+                false,
+                &hist("state"),
+            );
+            field_h(
+                &mut cols[1],
+                t,
+                "Country",
+                &mut draft.fields.country,
+                false,
+                &hist("country"),
+            );
+        });
+    });
+
+    // ---- Who ----
+    super::card(ui, t, "Who", |ui| {
+        ui.columns(2, |cols| {
+            field_h(
+                &mut cols[0],
+                t,
+                "Creator",
+                &mut draft.fields.creator,
+                false,
+                &hist("creator"),
+            );
+            field_h(
+                &mut cols[1],
+                t,
+                "Credit",
+                &mut draft.fields.credit,
+                false,
+                &hist("credit"),
+            );
+        });
+        ui.columns(2, |cols| {
+            field_h(
+                &mut cols[0],
+                t,
+                "Source",
+                &mut draft.fields.source,
+                false,
+                &hist("source"),
+            );
+            field_h(
+                &mut cols[1],
+                t,
+                "Copyright",
+                &mut draft.fields.copyright,
+                false,
+                &hist("copyright"),
+            );
+        });
+    });
+
+    // ---- More, folded until a desk asks for it ----
+    let more_used = !(draft.fields.title.is_empty()
+        && draft.fields.caption_writer.is_empty()
+        && draft.fields.instructions.is_empty()
+        && draft.fields.transmission_reference.is_empty()
+        && draft.fields.gps_lat.is_empty());
+    ui.add_space(S2);
+    egui::CollapsingHeader::new(RichText::new("More fields").size(11.5).color(t.text2))
+        .default_open(more_used)
+        .show(ui, |ui| {
+            ui.columns(2, |cols| {
+                field_h(&mut cols[0], t, "Title", &mut draft.fields.title, false, &hist("title"));
+                field_h(&mut cols[1], t, "Caption writer", &mut draft.fields.caption_writer, false, &hist("caption_writer"));
+            });
+            field_h(ui, t, "Instructions", &mut draft.fields.instructions, false, &hist("instructions"));
+            field_h(ui, t, "Transmission reference", &mut draft.fields.transmission_reference, false, &hist("transmission_reference"));
+            ui.label(RichText::new("GPS (DECIMAL DEGREES)").monospace().size(9.5).color(t.muted));
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut draft.fields.gps_lat).desired_width(120.0).hint_text("40.4461"));
+                ui.add(egui::TextEdit::singleline(&mut draft.fields.gps_lon).desired_width(120.0).hint_text("-79.8955"));
+                if (!draft.fields.gps_lat.is_empty() || !draft.fields.gps_lon.is_empty()) && ui.small_button("Clear").clicked() {
+                    draft.fields.gps_lat.clear();
+                    draft.fields.gps_lon.clear();
+                }
+            });
+            ui.label(RichText::new("Written as exif:GPSLatitude/Longitude in the sidecar; Lightroom and Photo Mechanic read it. Both fields or neither.").size(10.5).color(t.muted));
+        });
+    ui.add_space(S4);
 }

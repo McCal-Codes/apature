@@ -7,8 +7,9 @@
 //!   are taken verbatim.
 //! - A code replacement file (`code<TAB>replacement` lines) is used as is.
 //!
-//! The IPTC stationery pad inside a snapshot is not imported yet; it maps
-//! onto an assignment file, which is a later step.
+//! - The IPTC stationery pad inside an ingest snapshot becomes an Apature
+//!   assignment file (city, state, credit, source, copyright, creator,
+//!   keywords), saved beside the settings and loaded.
 
 use std::path::Path;
 
@@ -18,6 +19,97 @@ pub struct Imported {
     pub ingest: Option<(String, String)>,
     /// The file is a code replacement table.
     pub codes: bool,
+    /// The IPTC stationery pad inside a snapshot, as Apature assignment-file
+    /// text (`key: value` lines), when it had anything in it.
+    pub assignment: Option<String>,
+}
+
+/// One attribute or element value out of the (HTML-escaped) XMP pad.
+fn xmp_attr(xmp: &str, name: &str) -> Option<String> {
+    let key = format!("{name}=\"");
+    let i = xmp.find(&key)? + key.len();
+    let rest = &xmp[i..];
+    let end = rest.find('"')?;
+    let v = unescape(&rest[..end]);
+    (!v.trim().is_empty()).then(|| v.trim().to_string())
+}
+
+/// The `rdf:li` items under an element such as `dc:subject`.
+fn xmp_list(xmp: &str, name: &str) -> Vec<String> {
+    let open = format!("<{name}>");
+    let close = format!("</{name}>");
+    let Some(i) = xmp.find(&open) else {
+        return Vec::new();
+    };
+    let rest = &xmp[i..];
+    let Some(j) = rest.find(&close) else {
+        return Vec::new();
+    };
+    let block = &rest[..j];
+    let mut out = Vec::new();
+    let mut r = block;
+    while let Some(a) = r.find("<rdf:li") {
+        let after = &r[a..];
+        let Some(gt) = after.find('>') else { break };
+        let body = &after[gt + 1..];
+        let Some(e) = body.find("</rdf:li>") else {
+            break;
+        };
+        let v = unescape(body[..e].trim());
+        if !v.is_empty() {
+            out.push(v);
+        }
+        r = &body[e + 9..];
+    }
+    out
+}
+
+fn unescape(s: &str) -> String {
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+}
+
+/// The stationery pad of a snapshot as assignment-file lines.
+fn pad_to_assignment(text: &str) -> Option<String> {
+    let pad = text
+        .split("<IPTCStationeryPadData>")
+        .nth(1)
+        .and_then(|s| s.split("</IPTCStationeryPadData>").next())?;
+    let xmp = unescape(pad);
+    let mut lines: Vec<String> = Vec::new();
+    let mut put = |k: &str, v: Option<String>| {
+        if let Some(v) = v {
+            lines.push(format!("{k}: {v}"));
+        }
+    };
+    put("slug", xmp_attr(&xmp, "photoshop:Headline"));
+    put("city", xmp_attr(&xmp, "photoshop:City"));
+    put("state", xmp_attr(&xmp, "photoshop:State"));
+    put("country", xmp_attr(&xmp, "photoshop:Country"));
+    put("country_code", xmp_attr(&xmp, "Iptc4xmpCore:CountryCode"));
+    put("venue", xmp_attr(&xmp, "Iptc4xmpCore:Location"));
+    put("credit", xmp_attr(&xmp, "photoshop:Credit"));
+    put("source", xmp_attr(&xmp, "photoshop:Source"));
+    put("creator_title", xmp_attr(&xmp, "photoshop:AuthorsPosition"));
+    put("caption_writer", xmp_attr(&xmp, "photoshop:CaptionWriter"));
+    let creators = xmp_list(&xmp, "dc:creator");
+    put("creator", creators.first().cloned());
+    put("copyright", xmp_list(&xmp, "dc:rights").into_iter().next());
+    let kw = xmp_list(&xmp, "dc:subject");
+    if !kw.is_empty() {
+        lines.push(format!("keywords: {}", kw.join("; ")));
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    let mut out = String::from("# Imported from a Photo Mechanic snapshot by Apature.\n");
+    out.push_str(&lines.join("\n"));
+    out.push('\n');
+    Some(out)
 }
 
 pub fn import(path: &Path) -> Result<Imported, String> {
@@ -48,6 +140,7 @@ pub fn import(path: &Path) -> Result<Imported, String> {
                 .unwrap_or_else(|| "{year4}/{month0} {monthname}/{mnn3} {day0} {headline}".into()),
             rename.unwrap_or_else(|| "{filename}".into()),
         ));
+        got.assignment = pad_to_assignment(&text);
         return Ok(got);
     }
     let table = apature_metadata::codes::CodeTable::parse(&text);
@@ -88,5 +181,15 @@ mod tests {
             "260505groundbreak_CAL0500"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reads_the_stationery_pad_as_an_assignment() {
+        let snap = "<IngestSettings><SerializedState>IngestRenameEdit\t{frame}</SerializedState><IPTCStationeryPadData>&lt;rdf:Description photoshop:City=\"Sewickley\" photoshop:State=\"PA\" photoshop:Credit=\"Caleb McCartney\" photoshop:Source=\"The Globe\"&gt;&lt;dc:creator&gt;&lt;rdf:Seq&gt;&lt;rdf:li&gt;Caleb McCartney&lt;/rdf:li&gt;&lt;/rdf:Seq&gt;&lt;/dc:creator&gt;&lt;dc:subject&gt;&lt;rdf:Bag&gt;&lt;rdf:li&gt;news&lt;/rdf:li&gt;&lt;rdf:li&gt;Sewickley&lt;/rdf:li&gt;&lt;/rdf:Bag&gt;&lt;/dc:subject&gt;&lt;/rdf:Description&gt;</IPTCStationeryPadData></IngestSettings>";
+        let a = pad_to_assignment(snap).unwrap();
+        assert!(a.contains("city: Sewickley"));
+        assert!(a.contains("credit: Caleb McCartney"));
+        assert!(a.contains("creator: Caleb McCartney"));
+        assert!(a.contains("keywords: news; Sewickley"));
     }
 }

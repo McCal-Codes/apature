@@ -5,6 +5,15 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+### Changed
+- Export workspace laid out in the order of Photo Mechanic's Save Photos As dialog: Preset, Photos, Destination and naming with an example, Image (format, size, quality, RAW decode), Metadata, Then (open folder, send to); switches instead of checkboxes; the Export button pinned at the bottom.
+- Caption workspace laid out as cards (Assignment, Caption, Keywords, Where, Who, More fields) with Save & next, Save and Revert pinned at the bottom; the code list sits behind a hover.
+
+### Added
+- Settings › Resources: style and ethics (AP Stylebook, NPPA, SPJ, Poynter) and internships, workshops and contests for students, each a checked link that opens in the browser.
+- Photo Mechanic import now turns the stationery pad in an ingest snapshot into an assignment file and loads it.
+- Windows: Eject the card (Shell's Eject verb).
+
 ## [0.1.1] — 2026-10-23
 
 ### Added

@@ -31,6 +31,29 @@ pub fn rating_text(r: Rating) -> String {
     }
 }
 
+/// A quiet card: eyebrow title, panel fill, hairline, rounded. The grouping
+/// unit every workspace and Settings share (see docs/design/UI_LINEAGE.md).
+pub fn card<R>(
+    ui: &mut egui::Ui,
+    t: &tokens::Theme,
+    title: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    ui.add_space(tokens::S2);
+    eyebrow(ui, t, title);
+    ui.add_space(tokens::S1);
+    egui::Frame::NONE
+        .fill(t.raised)
+        .stroke(egui::Stroke::new(1.0, t.line))
+        .corner_radius(egui::CornerRadius::same(8))
+        .inner_margin(egui::Margin::same(tokens::S3 as i8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            add(ui)
+        })
+        .inner
+}
+
 pub fn eyebrow(ui: &mut egui::Ui, t: &tokens::Theme, text: &str) {
     ui.label(
         egui::RichText::new(text.to_uppercase())

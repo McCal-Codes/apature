@@ -29,9 +29,10 @@ pub enum Page {
     Delivery,
     Cache,
     Shortcuts,
+    Resources,
 }
 
-const PAGES: [(Page, &str); 8] = [
+const PAGES: [(Page, &str); 9] = [
     (Page::General, "General"),
     (Page::Classes, "Colour classes"),
     (Page::Metadata, "Metadata"),
@@ -40,6 +41,7 @@ const PAGES: [(Page, &str); 8] = [
     (Page::Delivery, "Delivery"),
     (Page::Cache, "Cache & diagnostics"),
     (Page::Shortcuts, "Shortcuts"),
+    (Page::Resources, "Resources"),
 ];
 
 fn page_label(p: Page) -> &'static str {
@@ -158,6 +160,16 @@ const PANELS: &[(Page, &str, &str)] = &[
         "cache clear size thumbnails",
     ),
     (Page::Shortcuts, "All shortcuts", "keyboard keys shortcuts"),
+    (
+        Page::Resources,
+        "Style and ethics",
+        "ap stylebook caption ethics nppa spj",
+    ),
+    (
+        Page::Resources,
+        "Internships, workshops and contests",
+        "internship job workshop student eddie adams missouri cpoy dow jones chips quinn",
+    ),
 ];
 
 fn ingest_opts(app: &App) -> apature_ingest::Options {
@@ -403,7 +415,7 @@ fn control(app: &mut App, ui: &mut egui::Ui, t: &Theme, id: Id) -> bool {
 /* -- Controls -------------------------------------------------------------- */
 
 /// A switch: a pill that slides, the way System Settings draws one.
-fn toggle(ui: &mut egui::Ui, t: &Theme, on: &mut bool) -> bool {
+pub(crate) fn toggle(ui: &mut egui::Ui, t: &Theme, on: &mut bool) -> bool {
     let size = egui::vec2(34.0, 20.0);
     let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
     let mut changed = false;
@@ -1236,6 +1248,7 @@ fn page_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command
                 ui.add_space(S2);
             });
         }
+        Page::Resources => resources_page(ui, t),
         Page::Shortcuts => {
             section_card(app, ui, t, page, "Number keys");
             let (num_keys, num_row, cmd_keys, cmd_row): (&str, &str, &str, &str) =
@@ -1441,5 +1454,74 @@ pub fn show_inline(app: &mut App, ctx: &egui::Context, t: &Theme) {
     body(app, ctx, &t, &mut cmds);
     for c in cmds {
         app.dispatch(ctx, c);
+    }
+}
+
+/// Links for photojournalists, students first: where the style and the
+/// ethics come from, and where the internships are. Curated by hand; every
+/// address was checked when it was added. Opens in the browser.
+/// (name, one line on what it is, address)
+type Link = (&'static str, &'static str, &'static str);
+
+const RESOURCES: &[(&str, &[Link])] = &[
+    (
+        "Style and ethics",
+        &[
+            ("AP Stylebook", "The newsroom style every caption follows: names, titles, dates, numbers.", "https://www.apstylebook.com/"),
+            ("NPPA resources", "The National Press Photographers Association: its Code of Ethics, advocacy and member resources.", "https://nppa.org/resources"),
+            ("SPJ Code of Ethics", "Seek truth, minimise harm, act independently, be accountable. The baseline for every newsroom.", "https://www.spj.org/ethicscode.asp"),
+            ("Poynter", "Reporting, ethics and craft from the Poynter Institute, with free courses.", "https://www.poynter.org/"),
+        ],
+    ),
+    (
+        "Internships, workshops and contests",
+        &[
+            ("Dow Jones News Fund", "Paid summer internships for students, with training before the newsroom.", "https://www.dowjonesnewsfund.org/"),
+            ("Chips Quinn Scholars", "The Freedom Forum's fellowship for student journalists of colour, with a newsroom placement.", "https://www.freedomforum.org/chips-quinn-reporter-fellowship/"),
+            ("The New York Times Student Journalism Institute", "A free, intensive newsroom for student journalists, photography included.", "https://nytimes-institute.com/"),
+            ("AP internships", "The Associated Press's internship and early-career programmes.", "https://www.ap.org/careers/internships/"),
+            ("Eddie Adams Workshop", "Four days, tuition-free, for 100 emerging photographers chosen by portfolio.", "https://eddieadamsworkshop.org/"),
+            ("Missouri Photo Workshop", "A week documenting a small town with working editors, since 1949.", "https://mophotoworkshop.org/"),
+            ("College Photographer of the Year", "The student contest run by the Missouri School of Journalism.", "https://cpoy.org/"),
+            ("World Press Photo", "The contest, the exhibition and the education programmes.", "https://www.worldpressphoto.org/"),
+            ("NPPF", "The National Press Photographers Foundation: scholarships for students in photojournalism.", "https://nppf.org/"),
+        ],
+    ),
+];
+
+fn resources_page(ui: &mut egui::Ui, t: &Theme) {
+    hint(ui, t, "The industry is competitive and nobody hands you the map. These are the places to start; send a note on GitHub if one should be here and is not.");
+    for (section, links) in RESOURCES {
+        card(ui, t, section, |ui| {
+            let n = links.len();
+            for (i, (name, what, url)) in links.iter().enumerate() {
+                ui.add_space(S2);
+                ui.horizontal_top(|ui| {
+                    ui.add_space(S1);
+                    ui.vertical(|ui| {
+                        ui.set_max_width((ui.available_width() - 90.0).max(160.0));
+                        ui.label(RichText::new(*name).size(13.0).color(t.text));
+                        ui.add(
+                            egui::Label::new(RichText::new(*what).size(11.0).color(t.muted)).wrap(),
+                        );
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                        ui.add_space(S1);
+                        if ui.small_button("Open").on_hover_text(*url).clicked() {
+                            crate::platform::Platform::open_url(url);
+                        }
+                    });
+                });
+                ui.add_space(S2);
+                if i + 1 < n {
+                    let r = ui.available_rect_before_wrap();
+                    ui.painter().hline(
+                        r.x_range(),
+                        ui.cursor().top(),
+                        egui::Stroke::new(1.0, t.line),
+                    );
+                }
+            }
+        });
     }
 }

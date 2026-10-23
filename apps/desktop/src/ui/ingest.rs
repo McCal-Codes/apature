@@ -249,7 +249,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     if app.assignment.is_some() {
                         ui.checkbox(&mut app.ingest.apply_pad, "Apply the loaded assignment pad to the copies");
                     }
-                    ui.add(egui::Label::new(RichText::new("tokens: {filename} {ext} {frame} {seqn:3} {headline} {date} {datesort} {yymmdd} {year4} {yr2} {month0} {monthname} {mnn3} {day0} {dow3} {time} {hour} {hour12}{ampm} {camera} {lens} {iso} {aperture} {shutter} {focal} {folder} {today} {todaysort}").monospace().size(9.5).color(t.muted)).wrap());
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Variables: Photo Mechanic's names and plain ones both work.").size(10.5).color(t.muted));
+                        ui.label(RichText::new("All of them").size(10.5).color(t.accent)).on_hover_text("{filename} {ext} {frame} {seqn:3} {headline} {date} {datesort} {yymmdd} {year4} {yr2} {month0} {monthname} {mnn3} {day0} {dow3} {time} {hour} {hour12}{ampm} {camera} {lens} {iso} {aperture} {shutter} {focal} {folder} {today} {todaysort}, Photo Mechanic's {iptcyear4} {imn0} {idy0} {head}, and your own from Settings › Metadata › Your variables.");
+                    });
                 });
             });
         });
