@@ -32,6 +32,9 @@ fn kv(ui: &mut egui::Ui, t: &Theme, rows: &[(&str, String)]) {
         });
 }
 
+/// A collapsible section drawn as a card: eyebrow header with a trailing
+/// note, the body on the raised fill with a hairline, the same shape every
+/// workspace uses.
 fn section<R>(
     ui: &mut egui::Ui,
     t: &Theme,
@@ -49,14 +52,16 @@ fn section<R>(
         });
     });
     header.body(|ui| {
-        ui.add_space(S1);
-        add(ui);
+        egui::Frame::NONE
+            .fill(t.raised)
+            .stroke(egui::Stroke::new(1.0, t.line))
+            .corner_radius(CornerRadius::same(8))
+            .inner_margin(egui::Margin::same(S3 as i8))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                add(ui);
+            });
     });
-    ui.add_space(S2);
-    // Hairline between sections, like the sheet frames.
-    let r = ui.available_rect_before_wrap();
-    ui.painter()
-        .hline(r.x_range(), r.top(), egui::Stroke::new(1.0, t.line));
     ui.add_space(S2);
 }
 
@@ -89,7 +94,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                     let (rect, _) =
                         ui.allocate_exact_size(Vec2::new(w, w * 2.0 / 3.0), egui::Sense::hover());
                     ui.painter()
-                        .rect_filled(rect, CornerRadius::ZERO, t.photo_cell);
+                        .rect_filled(rect, CornerRadius::same(8), t.photo_cell);
                     let tex = app
                         .previews
                         .get(&idx)
@@ -274,13 +279,14 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                 .halign(egui::Align::LEFT),
                             );
                             let mut tagged = m.tagged;
-                            if ui
-                                .checkbox(&mut tagged, if tag_mixed { "mixed" } else { "" })
-                                .on_hover_text("Toggle tag (T)")
-                                .changed()
-                            {
+                            if super::settings::toggle(ui, t, &mut tagged) {
                                 cmds.push(Command::ToggleTag);
                             }
+                            ui.label(
+                                RichText::new(if tag_mixed { "mixed" } else { "T toggles" })
+                                    .size(10.0)
+                                    .color(t.muted),
+                            );
                         });
                     });
 

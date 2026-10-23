@@ -77,7 +77,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                             egui::Frame::popup(ui.style())
                                 .fill(t.raised)
                                 .show(ui, |ui| {
-                                    ui.set_width(260.0);
+                                    ui.set_width(300.0);
                                     ui.spacing_mut().item_spacing.y = S2;
                                     super::eyebrow(ui, t, "Rating at least");
                                     ui.horizontal(|ui| {
@@ -88,19 +88,30 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                             } else {
                                                 "★".repeat(r as usize)
                                             };
-                                            if ui.selectable_label(on, label).clicked() {
+                                            if super::icons::chip(ui, t, &label, on).clicked() {
                                                 draft.min_rating =
                                                     if r == 0 { None } else { Some(r) };
                                                 changed = true;
                                             }
                                         }
                                     });
-                                    if ui
-                                        .checkbox(&mut draft.hide_rejected, "Hide rejected")
-                                        .changed()
-                                    {
-                                        changed = true;
-                                    }
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new("Hide rejected").size(12.0).color(t.text),
+                                        );
+                                        ui.with_layout(
+                                            Layout::right_to_left(Align::Center),
+                                            |ui| {
+                                                if super::settings::toggle(
+                                                    ui,
+                                                    t,
+                                                    &mut draft.hide_rejected,
+                                                ) {
+                                                    changed = true;
+                                                }
+                                            },
+                                        );
+                                    });
                                     ui.add_space(S2);
                                     super::eyebrow(ui, t, "Color class");
                                     ui.horizontal_wrapped(|ui| {
@@ -119,14 +130,46 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                                         .unwrap_or(t.muted),
                                                 )
                                             };
-                                            if ui
-                                                .selectable_label(
-                                                    on,
-                                                    RichText::new(format!("● {label}"))
-                                                        .color(color),
-                                                )
-                                                .clicked()
-                                            {
+                                            let (rect, resp) = ui.allocate_exact_size(
+                                                egui::vec2(
+                                                    14.0 + 7.0 * label.len() as f32 + 16.0,
+                                                    22.0,
+                                                ),
+                                                egui::Sense::click(),
+                                            );
+                                            let p = ui.painter();
+                                            if on {
+                                                p.rect_filled(
+                                                    rect,
+                                                    egui::CornerRadius::same(6),
+                                                    t.accent_wash,
+                                                );
+                                                p.rect_stroke(
+                                                    rect,
+                                                    egui::CornerRadius::same(6),
+                                                    egui::Stroke::new(1.0, t.accent),
+                                                    egui::StrokeKind::Inside,
+                                                );
+                                            } else if resp.hovered() {
+                                                p.rect_filled(
+                                                    rect,
+                                                    egui::CornerRadius::same(6),
+                                                    t.raised,
+                                                );
+                                            }
+                                            p.circle_filled(
+                                                rect.left_center() + egui::vec2(10.0, 0.0),
+                                                4.0,
+                                                color,
+                                            );
+                                            p.text(
+                                                rect.left_center() + egui::vec2(20.0, 0.0),
+                                                egui::Align2::LEFT_CENTER,
+                                                &label,
+                                                egui::FontId::proportional(12.0),
+                                                if on { t.text } else { t.text2 },
+                                            );
+                                            if resp.clicked() {
                                                 if on {
                                                     draft.classes.remove(&c);
                                                 } else {
@@ -144,8 +187,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                             (Some(true), "tagged"),
                                             (Some(false), "untagged"),
                                         ] {
-                                            if ui
-                                                .selectable_label(draft.tagged == v, label)
+                                            if super::icons::chip(ui, t, label, draft.tagged == v)
                                                 .clicked()
                                             {
                                                 draft.tagged = v;
@@ -153,21 +195,39 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                             }
                                         }
                                     });
-                                    if ui
-                                        .checkbox(&mut draft.pairs_only, "RAW+JPEG pairs only")
-                                        .changed()
-                                    {
-                                        changed = true;
-                                    }
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new("RAW+JPEG pairs only")
+                                                .size(12.0)
+                                                .color(t.text),
+                                        );
+                                        ui.with_layout(
+                                            Layout::right_to_left(Align::Center),
+                                            |ui| {
+                                                if super::settings::toggle(
+                                                    ui,
+                                                    t,
+                                                    &mut draft.pairs_only,
+                                                ) {
+                                                    changed = true;
+                                                }
+                                            },
+                                        );
+                                    });
                                     ui.add_space(S2);
                                     ui.horizontal(|ui| {
-                                        if ui.button("Clear").clicked() {
+                                        if ui.small_button("Clear").clicked() {
                                             draft = Filter::default();
                                             changed = true;
                                         }
-                                        if ui.button("Done").clicked() {
-                                            app.filter_popup_open = false;
-                                        }
+                                        ui.with_layout(
+                                            Layout::right_to_left(Align::Center),
+                                            |ui| {
+                                                if ui.small_button("Done").clicked() {
+                                                    app.filter_popup_open = false;
+                                                }
+                                            },
+                                        );
                                     });
                                 });
                         });

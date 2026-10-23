@@ -5,6 +5,9 @@ All notable, user-visible changes. Versions follow semantic versioning;
 
 ## [Unreleased]
 
+### Changed
+- Inspector sections drawn as cards; the tag is a switch. The filter popup uses chips and switches, with colour classes as dotted chips.
+
 ### Added
 - Appearance › OLED: the Dark appearance on a true black ground, for OLED screens and dark rooms.
 
