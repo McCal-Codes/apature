@@ -1,5 +1,6 @@
 //! The thin native layer. Everything egui cannot do itself lives here:
-//! the menu bar and system accessibility preferences. Nothing in `ui/`
+//! the menu bar, volumes, opening things, secrets and accessibility
+//! preferences, for macOS, Linux and Windows. Nothing in `ui/`
 //! or the core crates imports from this module except through `Platform`.
 
 use crate::commands::Command;
@@ -96,31 +97,132 @@ impl Platform {
         let _ = names;
     }
 
-    /// System "Reduce Motion", read once at startup.
+    /// System "Reduce Motion", read once at startup (macOS accessibility
+    /// setting; GNOME's "enable animations" on Linux).
     pub fn reduce_motion() -> bool {
         #[cfg(target_os = "macos")]
         {
             macos::reduce_motion()
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("gsettings")
+                .args(["get", "org.gnome.desktop.interface", "enable-animations"])
+                .output()
+                .ok()
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "false")
+                .unwrap_or(false)
+        }
+        #[cfg(target_os = "windows")]
         {
             false
         }
     }
 
-    /// Unmount the volume that holds `path` (macOS: `diskutil unmount`),
-    /// off the UI thread; only volumes under /Volumes qualify. Returns
-    /// the volume root that was asked to unmount, if any.
-    pub fn eject(path: &std::path::Path) -> Option<std::path::PathBuf> {
-        let mut comps = path.components();
-        let root: std::path::PathBuf = match (comps.next(), comps.next(), comps.next()) {
-            (Some(std::path::Component::RootDir), Some(v), Some(name))
-                if v.as_os_str() == "Volumes" =>
-            {
-                std::path::PathBuf::from("/Volumes").join(name.as_os_str())
+    /// Where removable volumes appear: `/Volumes` on macOS; the user's
+    /// `/media` and `/run/media` folders plus `/media` and `/mnt` on Linux;
+    /// every drive root except the system drive on Windows.
+    pub fn volume_roots() -> Vec<std::path::PathBuf> {
+        #[cfg(target_os = "macos")]
+        {
+            vec![std::path::PathBuf::from("/Volumes")]
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let mut v = Vec::new();
+            if let Ok(user) = std::env::var("USER") {
+                v.push(std::path::PathBuf::from("/media").join(&user));
+                v.push(std::path::PathBuf::from("/run/media").join(&user));
             }
-            _ => return None,
-        };
+            v.push(std::path::PathBuf::from("/media"));
+            v.push(std::path::PathBuf::from("/mnt"));
+            v
+        }
+        #[cfg(target_os = "windows")]
+        {
+            Vec::new()
+        }
+    }
+
+    /// The mounted volumes to list in the sidebar: (display name, root).
+    /// System volumes are filtered by the caller through `volume_kind`.
+    pub fn volumes() -> Vec<(String, std::path::PathBuf)> {
+        let mut v = Vec::new();
+        #[cfg(target_os = "windows")]
+        {
+            let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+            for letter in b'A'..=b'Z' {
+                let root = format!("{}:\\", letter as char);
+                if root.trim_end_matches('\\').eq_ignore_ascii_case(&system) {
+                    continue;
+                }
+                let p = std::path::PathBuf::from(&root);
+                if p.is_dir() {
+                    v.push((format!("{}:", letter as char), p));
+                }
+            }
+            return v;
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            for root in Self::volume_roots() {
+                let Ok(rd) = std::fs::read_dir(&root) else {
+                    continue;
+                };
+                for e in rd.flatten() {
+                    let p = e.path();
+                    let name = e.file_name().to_string_lossy().into_owned();
+                    if p.is_dir() && !name.starts_with('.') && !v.iter().any(|(_, q)| *q == p) {
+                        v.push((name, p));
+                    }
+                }
+            }
+            v
+        }
+    }
+
+    /// True when `path` is on a removable volume (so it may be ejected, and
+    /// stays in the sidebar while unplugged).
+    pub fn is_volume(path: &std::path::Path) -> bool {
+        Self::volume_root_of(path).is_some()
+    }
+
+    /// The volume root that holds `path`, if it is under one of the roots.
+    pub fn volume_root_of(path: &std::path::Path) -> Option<std::path::PathBuf> {
+        #[cfg(target_os = "windows")]
+        {
+            let mut comps = path.components();
+            if let Some(std::path::Component::Prefix(p)) = comps.next() {
+                let root = std::path::PathBuf::from(p.as_os_str()).join("\\");
+                let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+                if p.as_os_str()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&system)
+                {
+                    return None;
+                }
+                return Some(root);
+            }
+            None
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            for root in Self::volume_roots() {
+                if let Ok(rest) = path.strip_prefix(&root) {
+                    if let Some(name) = rest.components().next() {
+                        return Some(root.join(name.as_os_str()));
+                    }
+                }
+            }
+            None
+        }
+    }
+
+    /// Unmount the volume that holds `path`, off the UI thread (macOS:
+    /// `diskutil unmount`; Linux: `gio mount -e`, then `udisksctl`). Returns
+    /// the volume root that was asked to unmount, if any. Windows: none yet.
+    pub fn eject(path: &std::path::Path) -> Option<std::path::PathBuf> {
+        let root = Self::volume_root_of(path)?;
         #[cfg(target_os = "macos")]
         {
             let r = root.clone();
@@ -131,9 +233,34 @@ impl Platform {
                     .output();
             });
         }
+        #[cfg(target_os = "linux")]
+        {
+            let r = root.clone();
+            std::thread::spawn(move || {
+                let ok = std::process::Command::new("gio")
+                    .args(["mount", "-e"])
+                    .arg(&r)
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false);
+                if !ok {
+                    let _ = std::process::Command::new("udisksctl")
+                        .args(["unmount", "-b"])
+                        .arg(&r)
+                        .output();
+                }
+            });
+        }
+        #[cfg(target_os = "windows")]
+        {
+            return None;
+        }
+        #[allow(unreachable_code)]
         Some(root)
     }
 
+    /// Show `path` in the system file manager, selected where the platform
+    /// supports it (Finder, Explorer); otherwise its folder.
     pub fn reveal(path: &std::path::Path) {
         #[cfg(target_os = "macos")]
         {
@@ -142,8 +269,78 @@ impl Platform {
                 .arg(path)
                 .spawn();
         }
-        #[cfg(not(target_os = "macos"))]
-        let _ = path;
+        #[cfg(target_os = "windows")]
+        {
+            let _ = std::process::Command::new("explorer")
+                .arg(format!("/select,{}", path.display()))
+                .spawn();
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let dir = if path.is_dir() {
+                path.to_path_buf()
+            } else {
+                path.parent().map(|p| p.to_path_buf()).unwrap_or_default()
+            };
+            let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
+        }
+    }
+
+    /// Open a folder or file with its default application.
+    #[allow(dead_code)]
+    pub fn open_path(path: &std::path::Path) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("open").arg(path).spawn();
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let _ = std::process::Command::new("explorer").arg(path).spawn();
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+        }
+    }
+
+    /// Open a URL in the default browser.
+    pub fn open_url(url: &str) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("open").arg(url).spawn();
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let _ = std::process::Command::new("cmd")
+                .args(["/C", "start", "", url])
+                .spawn();
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+        }
+    }
+
+    /// The name of the system file manager, for button labels.
+    pub fn file_manager() -> &'static str {
+        if cfg!(target_os = "macos") {
+            "Finder"
+        } else if cfg!(target_os = "windows") {
+            "Explorer"
+        } else {
+            "file manager"
+        }
+    }
+
+    /// Where delivery passwords live, for Settings copy.
+    pub fn secret_store() -> &'static str {
+        if cfg!(target_os = "macos") {
+            "the Keychain"
+        } else if cfg!(target_os = "windows") {
+            "Windows Credential Manager"
+        } else {
+            "the system keyring"
+        }
     }
 }
 
@@ -210,7 +407,9 @@ impl Platform {
 const SECRET_SERVICE: &str = "dev.mccal.Apature.delivery";
 
 impl Platform {
-    /// Read a delivery password from the macOS Keychain. Elsewhere: none.
+    /// Read a delivery password from the macOS Keychain; elsewhere from the
+    /// platform store through `keyring` (Secret Service on Linux, Credential
+    /// Manager on Windows).
     pub fn secret_get(account: &str) -> Option<String> {
         #[cfg(target_os = "macos")]
         {
@@ -220,8 +419,9 @@ impl Platform {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            let _ = account;
-            None
+            keyring::Entry::new(SECRET_SERVICE, account)
+                .ok()
+                .and_then(|e| e.get_password().ok())
         }
     }
 
@@ -238,8 +438,9 @@ impl Platform {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            let _ = (account, secret);
-            Err("no keychain on this platform".into())
+            keyring::Entry::new(SECRET_SERVICE, account)
+                .and_then(|e| e.set_password(secret))
+                .map_err(|e| e.to_string())
         }
     }
 
@@ -250,7 +451,9 @@ impl Platform {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            let _ = account;
+            if let Ok(e) = keyring::Entry::new(SECRET_SERVICE, account) {
+                let _ = e.delete_credential();
+            }
         }
     }
 }

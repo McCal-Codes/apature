@@ -32,6 +32,8 @@ pub struct Launch {
     pub live: bool,
     /// Open the About window at launch (screenshots).
     pub about: bool,
+    /// Open the welcome (onboarding) at start (screenshots).
+    pub welcome: bool,
     /// Run the update check now and log the result (tests).
     pub check_updates: bool,
     /// Window size at launch (for layout checks at small sizes).
@@ -97,6 +99,7 @@ fn parse_args() -> Launch {
             "--crop" => l.crop = true,
             "--live" => l.live = true,
             "--about" => l.about = true,
+            "--welcome" => l.welcome = true,
             "--check-updates" => l.check_updates = true,
             "--ingest-source" => l.ingest_source = args.next().map(PathBuf::from),
             "--ingest-dest" => l.ingest_dest = args.next().map(PathBuf::from),

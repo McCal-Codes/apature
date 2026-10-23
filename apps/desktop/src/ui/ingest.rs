@@ -408,7 +408,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                         if ok && ui.button("Open the ingested folder").clicked() {
                             cmds.push(Command::IngestOpenResult);
                         }
-                        if ok && app.ingest.opts.source.starts_with("/Volumes") && ui.button("Eject the card").clicked() {
+                        if ok && crate::platform::Platform::is_volume(&app.ingest.opts.source) && ui.button("Eject the card").clicked() {
                             cmds.push(Command::IngestEject);
                         }
                     });

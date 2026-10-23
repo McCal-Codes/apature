@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Apature
+GenericName=Photo workflow
+Comment=Contact sheet, culling, captions, export and delivery for photojournalists
+Exec=apature %F
+Icon=dev.mccal.Apature
+Terminal=false
+Categories=Graphics;Photography;
+MimeType=image/jpeg;image/x-nikon-nef;image/x-canon-cr2;image/x-canon-cr3;image/x-sony-arw;inode/directory;
+StartupWMClass=apature

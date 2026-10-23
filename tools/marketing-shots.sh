@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Capture the screenshot set used by the README, the site and the marketing
-# composites, from a folder of photos. Runs the real app headless, with a
-# clean temporary prefs file so the sidebar shows only that folder.
+# composites, from a folder of photos. Runs the real app headless with a
+# temporary settings folder (APATURE_CONFIG_DIR), so the sidebar shows only
+# that folder and your own prefs.json is untouched.
 #
 #   tools/marketing-shots.sh "/path/to/Jun 14 Storm damage" out/
 #
@@ -12,11 +13,10 @@ set -euo pipefail
 SRC=${1:?folder of photos}
 OUT=${2:-docs/screenshots}
 mkdir -p "$OUT"
-PREFS="$HOME/Library/Application Support/dev.mccal.Apature/prefs.json"
-BACKUP=$(mktemp)
-[ -f "$PREFS" ] && cp "$PREFS" "$BACKUP"
-restore() { [ -s "$BACKUP" ] && cp "$BACKUP" "$PREFS"; rm -f "$BACKUP"; }
-trap restore EXIT
+# A throwaway settings folder: the real prefs.json is never read or written.
+export APATURE_CONFIG_DIR=$(mktemp -d)
+PREFS="$APATURE_CONFIG_DIR/prefs.json"
+trap 'rm -rf "$APATURE_CONFIG_DIR"' EXIT
 cargo build -q --release -p apature
 shot() { # name appearance cell args...
   local name=$1 app=$2 cell=$3; shift 3

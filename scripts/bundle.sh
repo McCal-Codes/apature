@@ -78,7 +78,17 @@ if [[ "${1:-}" == "--dmg" || "${2:-}" == "--dmg" || "${1:-}" == "--notarize" || 
   rm -rf "$STAGE" "$DMG"; mkdir -p "$STAGE"
   cp -R "$APP" "$STAGE/Apature.app"
   ln -s /Applications "$STAGE/Applications"
-  hdiutil create -quiet -volname "Apature $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+  if command -v create-dmg >/dev/null 2>&1; then
+    # A laid-out disk image: background, the app on the left, Applications on
+    # the right, window sized to the artwork (create-dmg drives Finder).
+    rm -f "$DMG"
+    create-dmg --volname "Apature $VERSION" --volicon apps/desktop/assets/Apature.icns \
+      --background apps/desktop/assets/dmg-background.png --window-size 660 400 --icon-size 128 \
+      --icon "Apature.app" 165 215 --app-drop-link 495 215 --hide-extension "Apature.app" \
+      --no-internet-enable "$DMG" "$STAGE" >/dev/null || hdiutil create -quiet -volname "Apature $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+  else
+    hdiutil create -quiet -volname "Apature $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+  fi
   rm -rf "$STAGE"
   if [[ -n "$IDENTITY" ]]; then codesign --force --timestamp --sign "$IDENTITY" "$DMG"; fi
   echo "disk image: $DMG ($(du -h "$DMG" | cut -f1))"

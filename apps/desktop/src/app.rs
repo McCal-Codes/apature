@@ -427,6 +427,9 @@ pub struct App {
     next_generation: u64,
     pub settings_open: bool,
     pub about_open: bool,
+    /// The welcome (onboarding) modal and its page.
+    pub welcome_open: bool,
+    pub welcome_step: usize,
     /// Preview is showing in its own window (prefs.preview_in_window).
     pub preview_window: bool,
     update_checker: Option<crate::updater::Checker>,
@@ -484,10 +487,11 @@ impl App {
         let mut prefs = prefs;
         prefs
             .recent
-            .retain(|p| p.exists() || p.starts_with("/Volumes"));
+            .retain(|p| p.exists() || Platform::is_volume(p));
         prefs
             .favorites
-            .retain(|p| p.exists() || p.starts_with("/Volumes"));
+            .retain(|p| p.exists() || Platform::is_volume(p));
+        let onboarded = prefs.onboarded;
         let platform = Platform::new();
         let mut app = App {
             folder: None,
@@ -552,6 +556,8 @@ impl App {
             next_generation: 1,
             settings_open: false,
             about_open: launch.about,
+            welcome_open: launch.welcome || (!onboarded && launch.screenshot.is_none()),
+            welcome_step: 0,
             preview_window: false,
             update_checker: None,
             update_manual: false,
@@ -2074,19 +2080,13 @@ impl App {
 
     fn refresh_volumes(&mut self) {
         let mut v = Vec::new();
-        if let Ok(rd) = std::fs::read_dir("/Volumes") {
-            for e in rd.flatten() {
-                let p = e.path();
-                let name = e.file_name().to_string_lossy().into_owned();
-                if p.is_dir() && !name.starts_with('.') {
-                    let kind = *self
-                        .volume_kinds
-                        .entry(p.clone())
-                        .or_insert_with(|| Platform::volume_kind(&p));
-                    if kind != crate::platform::VolumeKind::System {
-                        v.push((name, p));
-                    }
-                }
+        for (name, p) in Platform::volumes() {
+            let kind = *self
+                .volume_kinds
+                .entry(p.clone())
+                .or_insert_with(|| Platform::volume_kind(&p));
+            if kind != crate::platform::VolumeKind::System {
+                v.push((name, p));
             }
         }
         v.sort();
@@ -3406,7 +3406,12 @@ impl App {
             }
             Command::IngestChooseSource => {
                 if let Some(p) = rfd::FileDialog::new()
-                    .set_directory("/Volumes")
+                    .set_directory(
+                        Platform::volume_roots()
+                            .into_iter()
+                            .find(|r| r.is_dir())
+                            .unwrap_or_else(|| PathBuf::from("/")),
+                    )
                     .pick_folder()
                 {
                     self.ingest.opts.source = p;
@@ -3499,15 +3504,26 @@ impl App {
                 }
             }
             Command::OpenAbout => self.about_open = true,
+            Command::OpenWelcome => {
+                self.welcome_open = true;
+                self.welcome_step = 0;
+            }
             Command::CheckUpdates => self.start_update_check(ctx, true),
             Command::OpenUpdate => {
                 if let Some(u) = &self.update_available {
-                    let url = u.dmg.clone().unwrap_or_else(|| u.page.clone());
-                    let _ = std::process::Command::new("open").arg(&url).spawn();
-                    self.status = format!(
-                        "Downloading Apature {} · drag it to Applications when it opens",
-                        u.version
-                    );
+                    let url = u.asset.clone().unwrap_or_else(|| u.page.clone());
+                    Platform::open_url(&url);
+                    self.status = if cfg!(target_os = "macos") {
+                        format!(
+                            "Downloading Apature {} · drag it to Applications when it opens",
+                            u.version
+                        )
+                    } else {
+                        format!(
+                            "Downloading Apature {} · replace the current build when it lands",
+                            u.version
+                        )
+                    };
                 }
             }
             Command::TrashConfirm => self.trash_confirm(),
@@ -3523,16 +3539,11 @@ impl App {
             }
             Command::RevealLog => {
                 if let Some(d) = directories::ProjectDirs::from("dev", "mccal", "Apature") {
-                    let _ = std::process::Command::new("open")
-                        .arg("-R")
-                        .arg(d.data_dir().join("apature.log"))
-                        .spawn();
+                    Platform::reveal(&d.data_dir().join("apature.log"));
                 }
             }
             Command::OpenRepo => {
-                let _ = std::process::Command::new("open")
-                    .arg("https://github.com/McCal-Codes/apature")
-                    .spawn();
+                Platform::open_url("https://github.com/McCal-Codes/apature");
             }
             Command::ShowMainWindow => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
@@ -4070,6 +4081,8 @@ impl eframe::App for App {
         }
         ui::settings::show(self, ctx, &t);
         ui::dialogs::show(self, ctx, &t);
+        ui::welcome::show(self, ctx, &t);
+        ui::welcome::tips(self, ctx, &t);
         ui::status::show(self, ctx, &t);
         ui::toasts::show(self, ctx, &t);
         ui::sidebar::show(self, ctx, &t);
