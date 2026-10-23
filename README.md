@@ -36,7 +36,7 @@
 > **Status:** 0.1.0, the first shareable build. It runs my own assignments end to end, but it is early: expect rough
 > edges, and tell me about them. Developed on a Mac with a Nikon Z 6 II. See what's changed in [CHANGELOG.md](CHANGELOG.md).
 
-**Contents:** [Why I made this](#why-i-made-this) · [Screenshots](#screenshots) · [What it does](#what-it-does) ·
+**Contents:** [Why I made this](#why-i-made-this) · [How I work](#how-i-work) · [Screenshots](#screenshots) · [What it does](#what-it-does) ·
 [What you need](#what-you-need) · [Install](#install) · [Keys](#keys) · [Promises](#promises) · [Get involved](#get-involved) ·
 [Artists wanted](#artists-and-animators-wanted) · [Contact](#contact) · [License](#license)
 
@@ -55,6 +55,16 @@ in, and to show that it isn't that hard. Sometimes it's the software and the exp
 
 Who knows where it goes from here. This is the first version, I'm still learning Rust, and it shows in places. Don't
 go crazy about it; tell me what breaks and what you'd want next.
+
+## How I work
+
+I use AI for debugging and understanding, but all the commits are my own. I use it because I am one person without a
+team to pay, and most indie devs are. I don't use it for design or marketing.
+
+It's hard to tell AI slop apart from well put together work that artists make, and artists often don't have a
+background in coding. I learn and research, and sometimes things don't stick. I have been learning programming for
+about a year, mainly web-based projects, and my understanding has gotten better over time. I keep documenting what I
+can so others can learn too.
 
 ## Screenshots
 
