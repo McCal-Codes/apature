@@ -100,6 +100,10 @@ pub struct IngestState {
     /// Receive over Wi-Fi: the FTP server dropping into the source folder.
     pub receive: Option<apature_receive::Receiver>,
     pub receive_error: Option<String>,
+    /// Camera over Wi-Fi: the PTP/IP receiver (Bonjour, pairing, frames).
+    pub camera: Option<apature_camera::Receiver>,
+    /// The code typed for pairing, as it is being typed.
+    pub camera_code: String,
     pub live: LiveIngest,
     pub opts: apature_ingest::Options,
     pub plan: Option<apature_ingest::Plan>,
@@ -3596,6 +3600,51 @@ impl App {
                 }
             }
             Command::OpenAbout => self.about_open = true,
+            Command::CameraToggle => {
+                if self.ingest.camera.is_some() {
+                    self.ingest.camera = None;
+                    self.status = "Camera over Wi-Fi stopped".into();
+                } else {
+                    let out = self.wireless_inbox().unwrap_or_else(|| {
+                        directories::UserDirs::new()
+                            .and_then(|u| u.picture_dir().map(|p| p.join("Apature Inbox")))
+                            .unwrap_or_else(|| PathBuf::from("Apature Inbox"))
+                    });
+                    let _ = std::fs::create_dir_all(&out);
+                    let id_path = crate::prefs::Prefs::path()
+                        .and_then(|p| p.parent().map(|d| d.join("camera-identity")))
+                        .unwrap_or_else(|| PathBuf::from("camera-identity"));
+                    self.ingest.opts.source = out.clone();
+                    self.ingest.opts.include_subfolders = true;
+                    self.ingest.camera = Some(apature_camera::Receiver::start(
+                        id_path,
+                        out,
+                        "Apature".into(),
+                    ));
+                    if !self.ingest.live.on {
+                        self.dispatch_later = Some(Command::LiveToggle);
+                    }
+                    self.status = "Looking for a camera over Wi-Fi…".into();
+                }
+            }
+            Command::CameraPair => {
+                if let Some(c) = &self.ingest.camera {
+                    c.pair_with_code(&self.ingest.camera_code);
+                    self.ingest.camera_code.clear();
+                }
+            }
+            Command::CameraForget => {
+                if let Some(p) = crate::prefs::Prefs::path()
+                    .and_then(|p| p.parent().map(|d| d.join("camera-identity")))
+                {
+                    let _ = std::fs::remove_file(p);
+                }
+                self.ingest.camera = None;
+                self.toast(
+                    ui::toasts::Kind::Info,
+                    "Pairing forgotten. Start Connect to PC on the camera to pair again.",
+                );
+            }
             Command::ReceiveToggle => {
                 if self.ingest.receive.is_some() {
                     self.ingest.receive = None;

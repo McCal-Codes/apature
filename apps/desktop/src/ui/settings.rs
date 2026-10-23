@@ -1284,6 +1284,9 @@ fn page_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command
                         app.prefs.wireless_inbox = None;
                         app.prefs_dirty = true;
                     }
+                    if ui.small_button("Forget pairing").on_hover_text("Drops the identity the camera paired with; the camera will ask to pair again").clicked() {
+                        cmds.push(Command::CameraForget);
+                    }
                 });
                 ui.add_space(S2);
             });

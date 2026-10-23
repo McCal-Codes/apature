@@ -10,6 +10,7 @@ members = [
     "apps/desktop",
     "crates/apature-deliver",
     "crates/apature-receive",
+    "crates/apature-camera",
 ]
 
 [workspace.package]

@@ -1,0 +1,11 @@
+[package]
+name = "apature-camera"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A camera over Wi-Fi: Bonjour discovery, PTP/IP pairing with the code the camera shows, and receiving frames as they are shot"
+
+[dependencies]
+mdns-sd = "0.21"
+log.workspace = true
+rand = "0.8"

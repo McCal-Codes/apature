@@ -273,6 +273,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                 {
                     cmds.push(Command::LiveToggle);
                 }
+                let cam_on = app.ingest.camera.is_some();
+                if super::icons::chip(ui, t, if cam_on { "Camera over Wi-Fi on" } else { "Camera over Wi-Fi" }, cam_on)
+                    .on_hover_text("Find a Nikon on this Wi-Fi, pair with the code it shows, and receive frames as they are shot. No transmitter accessory, no vendor utility.")
+                    .clicked()
+                {
+                    cmds.push(Command::CameraToggle);
+                }
                 let rx = app.ingest.receive.is_some();
                 if super::icons::chip(ui, t, if rx { "Receiving over Wi-Fi" } else { "Receive over Wi-Fi" }, rx)
                     .on_hover_text("Run an FTP server on this computer that drops files into the source folder, for a phone transfer app, a camera with an FTP client or a WT-7 on the same Wi-Fi (a phone hotspot works). Turns Live Ingest on.")
@@ -292,6 +299,40 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
                 }
             });
+            if let Some(cam) = &app.ingest.camera {
+                let st = cam.status();
+                ui.add_space(S1);
+                match &st.state {
+                    apature_camera::State::Searching => {
+                        ui.label(RichText::new("Looking for a camera on this Wi-Fi… On the camera: Connect to PC. Both on the same network.").size(11.5).color(t.text2));
+                    }
+                    apature_camera::State::NeedsPairing { code: _, camera } => {
+                        ui.label(RichText::new(format!("{camera} wants to pair. Type the code shown on the camera's screen:")).size(12.0).color(t.text));
+                        ui.horizontal(|ui| {
+                            let r = ui.add(egui::TextEdit::singleline(&mut app.ingest.camera_code).desired_width(90.0).hint_text("code").font(egui::TextStyle::Monospace));
+                            let go = (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || ui.button("Pair").clicked();
+                            if go && !app.ingest.camera_code.trim().is_empty() {
+                                cmds.push(Command::CameraPair);
+                            }
+                        });
+                        ui.label(RichText::new("Nothing is confirmed to the camera unless the code matches.").size(10.5).color(t.muted));
+                    }
+                    apature_camera::State::Connecting => {
+                        ui.label(RichText::new("Connecting…").size(11.5).color(t.text2));
+                    }
+                    apature_camera::State::Connected { camera } => {
+                        ui.label(RichText::new(format!("{camera} connected · {} frame{} received", st.frames, if st.frames == 1 { "" } else { "s" })).size(11.5).color(t.text2));
+                    }
+                    apature_camera::State::Error(e) => {
+                        ui.label(RichText::new(e).size(11.5).color(t.reject));
+                    }
+                    apature_camera::State::Stopped => {}
+                }
+                if let Some(last) = st.log.last() {
+                    ui.label(RichText::new(last).size(10.5).monospace().color(t.muted));
+                }
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+            }
             if let Some(r) = &app.ingest.receive {
                 ui.add_space(S1);
                 ui.label(RichText::new(format!("Point the phone or camera at {}  ·  user {}  ·  password {}  ·  {} connected so far", r.url(), apature_receive::USER, r.password, r.logins())).size(11.5).monospace().color(t.text2));

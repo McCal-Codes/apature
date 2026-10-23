@@ -17,6 +17,7 @@ apature-ingest.workspace = true
 apature-export.workspace = true
 apature-deliver.workspace = true
 apature-receive = { path = "../../crates/apature-receive" }
+apature-camera = { path = "../../crates/apature-camera" }
 eframe.workspace = true
 egui.workspace = true
 rfd.workspace = true

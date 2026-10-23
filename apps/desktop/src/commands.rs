@@ -92,6 +92,12 @@ pub enum Command {
     ImportPhotoMechanic,
     /// Start or stop the FTP receive server on the ingest source folder.
     ReceiveToggle,
+    /// Start or stop the camera-over-Wi-Fi receiver (Bonjour, pairing, frames).
+    CameraToggle,
+    /// The person typed the pairing code the camera shows.
+    CameraPair,
+    /// Drop the saved camera identity.
+    CameraForget,
     /// Updates: check now (menu), open the newest release's DMG.
     CheckUpdates,
     OpenUpdate,
@@ -228,6 +234,7 @@ impl Command {
             Command::NewAssignment => "file.assignment.new".into(),
             Command::ImportPhotoMechanic => "file.import_pm".into(),
             Command::ReceiveToggle => "ingest.receive".into(),
+            Command::CameraToggle => "ingest.camera".into(),
             Command::CheckUpdates => "app.updates".into(),
             Command::RevealLog => "help.log".into(),
             Command::OpenRepo => "help.repo".into(),
@@ -255,6 +262,7 @@ impl Command {
             "file.assignment.new" => Command::NewAssignment,
             "file.import_pm" => Command::ImportPhotoMechanic,
             "ingest.receive" => Command::ReceiveToggle,
+            "ingest.camera" => Command::CameraToggle,
             "app.updates" => Command::CheckUpdates,
             "help.log" => Command::RevealLog,
             "help.repo" => Command::OpenRepo,
