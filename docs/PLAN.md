@@ -1,5 +1,19 @@
 # Plan for the next sessions (written 2026-10-15, budget-aware)
 
+## Next up (2026-10-23, after the Norwin–Seneca Valley game)
+
+Ranked from the Photo Mechanic menu audit (docs/research/pm-feature-gap.md §6):
+1. Copy/Move Photos with verification, placeholder fallback, ask-before-trash.
+2. A "transferred" mark (exported/delivered) with select/clear.
+3. Select menu: rating, class, tagged, cropped, transferred, invert; save/load selection.
+4. Export picks in one step (last preset, subfolder named from the slug).
+5. In-app crop + straighten tool using `apature-cli level`; show them in the preview.
+6. Find / Find and Replace in captions.
+7. Edit Photos with… (Capture One, Photoshop).
+8. Adjust capture dates and times.
+Also: show straighten in the preview; push the unpushed commits; replace the
+stale /Applications/Apature.app (ask first); install the rebuilt bundle.
+
 ## Handoff 2026-10-15 evening (for the next model; Fable budget nearly spent)
 - Cloud PRs #1 (ingest companions, preserve folders, CLI timing, CI) and #2
   (rotate + crop in the sidecar, applied on export) are MERGED into main and

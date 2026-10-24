@@ -127,3 +127,46 @@ real demand: code-replacement switch, bigger tag badge, camera ratings on
 ingest, view-only exposure boost, (4) crop tool with ratios/overlays and AF
 point, (5) AI keywording is the most-wanted thing we do not plan; a local
 model later, never cloud by default.
+
+## 6. Menu audit against the installed Photo Mechanic (2026-10-23)
+
+Source: *observed*. The menu bar of the Photo Mechanic installed on the
+owner's Mac, read through accessibility (File, Edit, Image, View, Tools; no
+settings dialogs opened, nothing changed). Ranked by what the Norwin–Seneca
+Valley game (deadline: 2–4 print photos in 75 minutes) actually needed.
+
+**Have, at parity or close:** ingest and Live Ingest, rename photos with
+variables, Save Photos as (export) with prior settings, FTP/SFTP delivery,
+metadata template and copy/paste snapshot, rotate, tag, colour class, rating,
+filters, favorites, remove-to-Trash, JPEG preview extraction (CLI), crop
+stored in the sidecar.
+
+### Needed next, in this order
+
+| # | Photo Mechanic | Why tonight | Apature |
+|---|---|---|---|
+| 1 | **Copy/Move Photos…** (and "with prior settings") | Moving a day's RAWs from Google Drive to the archive drive was a hand-rolled script: verify each file, never delete without asking, survive Drive's online-only placeholders | missing: verified copy/move between folders with a ledger, a "source is a placeholder, use the card" fallback, and an explicit "now trash the source?" step |
+| 2 | **Transferred** state: Clear Transferred, Select Transferred | Which frames went into the print set and which into the gallery was kept in my head | missing: mark a frame when it is exported or delivered, show a badge, select/clear by it |
+| 3 | **Select** menu: Rating, Color Class, Tagged, Rotated, Cropped, Transferred, RAW, Date Range, Others (invert), Load/Save Selection | "the 34 five-stars" meant grepping sidecars | missing: select by rating/class/state, invert, save and load a selection file; then Export uses the selection |
+| 4 | **Save Photos as… (prior settings)** and the Export button on the selection | He asked for "make the export easier" | partial: one-click Export picks with the last preset and the destination subfolder named from the slug |
+| 5 | **Remove Crops…**, Select Cropped, crop ratios and overlays, auto roll alignment (a top feature request) | Most wide frames were ~2° tilted and loosely framed; crops had to be redone by hand | partial: crop and straighten are in the sidecar and export (CLI); needs the in-app tool: draw, ratio presets (3:2, 4:5, 16:9), straighten handle, level suggestion from `apature-cli level`, preview that shows them |
+| 6 | **Find… / Find and Replace…** across captions | Names and play descriptions were corrected after the fact (118 became a kick) | missing |
+| 7 | **Edit Photos with…** (open in Capture One, Photoshop) | Capture One is installed; some frames need real edits | missing |
+| 8 | **Adjust Capture Dates and Times…** | Camera clock offsets after travel; sequences from two bodies | missing |
+| 9 | **Keywords Panel / Structured Keywords** | Keywords were pasted from the assignment sheet | missing; assignment keywords work |
+| 10 | **Set GPS / Import GPS Coordinates / Reverse Geocode** | Not used tonight | missing |
+| 11 | **Update IPTC/XMP…**, Delete Metadata, Mask/Unmask, Apply Rotation to JPEGs, Embed ICC Profile, Change Resolution | Housekeeping tools | missing; low |
+| 12 | **View**: Info Tooltips choices, Make Arrangement, Cursor mode, Customize Toolbar, Unknown Files as Proxies | Comfort | partial |
+| 13 | **Send via email…**, Upload… (cloud), Export… | Delivery variety | FTP/SFTP only |
+| — | Burn to disc, Print, Page Setup, Slide Show, Live Slide Show, Convert RAW to DNG, Convert IPTC encodings, Remap, Trim data, Revert TIFF-based RAW | Not part of the daily loop | not planned |
+
+### Lessons from using it on a real deadline
+
+* A feature that cannot be undone or explained in the status bar costs more
+  than it saves; Delete is now immediate and ⌘Z restores from the Trash.
+* Bare-key shortcuts must be handled in the app's own view on macOS; a menu
+  accelerator without ⌘ is only a label.
+* Files on a cloud drive can be online-only placeholders; any batch needs to
+  detect that and fall back or fail fast instead of hanging.
+* Always look at the output (a contact sheet of the export) before saying it
+  is done.
