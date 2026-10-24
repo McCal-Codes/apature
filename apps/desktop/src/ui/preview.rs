@@ -287,6 +287,46 @@ fn draw_pane(
 
         // ---- interaction ----
         let size_pts = size / ppp * app.pv.zoom;
+        // Pinch on the trackpad: pinching out from Fit enters 1:1 at the
+        // pointer, then it sets the shared magnification (100–400 %); pinching
+        // back past 100 % returns to Fit.
+        if resp.hovered() && !cropping && (focused || !compare) {
+            let pinch: f32 = ui.input(|i| {
+                i.events
+                    .iter()
+                    .filter_map(|e| {
+                        if let egui::Event::Zoom(z) = e {
+                            Some(*z)
+                        } else {
+                            None
+                        }
+                    })
+                    .product()
+            });
+            if (pinch - 1.0).abs() > 0.001 {
+                if app.pv.mode == ZoomMode::Fit {
+                    if pinch > 1.0 {
+                        let at = resp
+                            .hover_pos()
+                            .map(|pos| {
+                                Vec2::new(
+                                    (pos.x - shown.min.x) / shown.width(),
+                                    (pos.y - shown.min.y) / shown.height(),
+                                )
+                            })
+                            .unwrap_or(Vec2::splat(0.5));
+                        app.toggle_zoom(Some(at), Some(shown));
+                    }
+                } else {
+                    let z = app.pv.zoom * pinch;
+                    if z < 0.95 {
+                        app.toggle_zoom(None, Some(shown));
+                    } else {
+                        app.pv.zoom = z.clamp(1.0, 4.0);
+                    }
+                }
+            }
+        }
         // ⌘-scroll changes the shared magnification (1:1 and loupe).
         if resp.hovered() && ui.input(|i| i.modifiers.command) {
             let scroll = ui.input(|i| i.raw_scroll_delta.y);
