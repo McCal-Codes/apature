@@ -674,6 +674,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
             .with_inner_size([760.0, 600.0])
             .with_min_inner_size([620.0, 460.0]),
         |ctx, _class| {
+            app.apply_pending_edit(ctx, false);
             if ctx.input(|i| i.viewport().close_requested()) {
                 close = true;
             }

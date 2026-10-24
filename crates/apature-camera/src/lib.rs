@@ -36,7 +36,12 @@ pub struct Found {
 /// return what it printed.
 fn dns_sd(args: &[&str], wait: Duration) -> String {
     use std::process::{Command, Stdio};
-    let Ok(mut child) = Command::new("dns-sd").args(args).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+    let Ok(mut child) = Command::new("dns-sd")
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
         return String::new();
     };
     let mut out = child.stdout.take();
@@ -76,7 +81,11 @@ pub fn discover(wait: Duration) -> Option<Found> {
         .unwrap_or_else(|| "?".into());
     let ip = ip_from_hostname(&host).or_else(|| {
         use std::net::ToSocketAddrs;
-        format!("{}:{PORT}", host.trim_end_matches('.')).to_socket_addrs().ok()?.find(|a| a.is_ipv4()).map(|a| a.ip())
+        format!("{}:{PORT}", host.trim_end_matches('.'))
+            .to_socket_addrs()
+            .ok()?
+            .find(|a| a.is_ipv4())
+            .map(|a| a.ip())
     })?;
     Some(Found { ip, name, mode })
 }
@@ -369,7 +378,12 @@ impl Session {
     /// announced handle with GetPartialObject in 64 KB pieces; GetObjectInfo
     /// may be refused in transfer mode, so the file is named from its
     /// content when the camera does not give a name.
-    pub fn fetch(&mut self, handle: u32, out: &Path, log: &mut dyn FnMut(String)) -> Result<PathBuf, String> {
+    pub fn fetch(
+        &mut self,
+        handle: u32,
+        out: &Path,
+        log: &mut dyn FnMut(String),
+    ) -> Result<PathBuf, String> {
         let mut say = |m: String| {
             log::info!("camera: {m}");
             log(m);
@@ -411,7 +425,11 @@ impl Session {
         std::fs::write(&tmp, &data).map_err(|e| e.to_string())?;
         std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
         let secs = t0.elapsed().as_secs_f64().max(0.001);
-        say(format!("{name}: {:.1} MB in {secs:.1} s ({:.1} MB/s)", data.len() as f64 / 1e6, data.len() as f64 / 1e6 / secs));
+        say(format!(
+            "{name}: {:.1} MB in {secs:.1} s ({:.1} MB/s)",
+            data.len() as f64 / 1e6,
+            data.len() as f64 / 1e6 / secs
+        ));
         Ok(path)
     }
 
@@ -534,7 +552,11 @@ fn worker(
         // outright refusal leads to pairing again.
         let saved_works = found.mode == "PAIR"
             && Identity::load(&identity_path)
-                .map(|(id, _)| Session::connect(found.ip, id, &host_name).map(|s| s.close()).is_ok())
+                .map(|(id, _)| {
+                    Session::connect(found.ip, id, &host_name)
+                        .map(|s| s.close())
+                        .is_ok()
+                })
                 .unwrap_or(false);
         if found.mode == "PAIR" && !saved_works {
             // Pairing: ask for the code, show it, wait for the person.
@@ -604,7 +626,12 @@ fn worker(
         // advertise, listen, greet the camera once the way the utility does,
         // then take what it sends.
         let Some((id, source)) = Identity::load(&identity_path) else {
-            set(&st, |s| s.state = State::Error("Not paired yet. Start Connect to PC on the camera and choose Pair here.".into()));
+            set(&st, |s| {
+                s.state = State::Error(
+                    "Not paired yet. Start Connect to PC on the camera and choose Pair here."
+                        .into(),
+                )
+            });
             std::thread::sleep(Duration::from_secs(5));
             continue;
         };
@@ -612,7 +639,10 @@ fn worker(
         let listener = match std::net::TcpListener::bind(("0.0.0.0", PORT)) {
             Ok(l) => l,
             Err(e) => {
-                set(&st, |s| s.state = State::Error(format!("port {PORT} is in use ({e}); quit Nikon's utility")));
+                set(&st, |s| {
+                    s.state =
+                        State::Error(format!("port {PORT} is in use ({e}); quit Nikon's utility"))
+                });
                 std::thread::sleep(Duration::from_secs(5));
                 continue;
             }
@@ -620,7 +650,10 @@ fn worker(
         let ip = local_ip_towards(found.ip);
         let mut adv = match advertise(id, &host_name) {
             Ok(c) => {
-                note(format!("advertising {host_name} on _ptp._tcp at {:?}:{PORT}", ip));
+                note(format!(
+                    "advertising {host_name} on _ptp._tcp at {:?}:{PORT}",
+                    ip
+                ));
                 Some(c)
             }
             Err(e) => {
@@ -632,15 +665,22 @@ fn worker(
         let greet = Session::connect(found.ip, id, &host_name).and_then(|mut sess| {
             let info = sess.device_info().unwrap_or_default();
             sess.open()?;
-            let status = sess.op(0x952b, &[]).map(|r| r.iter().map(|b| format!("{b:02x}")).collect::<String>()).unwrap_or_default();
+            let status = sess
+                .op(0x952b, &[])
+                .map(|r| r.iter().map(|b| format!("{b:02x}")).collect::<String>())
+                .unwrap_or_default();
             sess.op(0x935a, &[0x2001])?;
             let _ = sess.op(OP_CLOSE_SESSION, &[]);
             Ok((sess, info, status))
         });
         let (keep, camera) = match greet {
             Ok((sess, info, status)) => {
-                let camera = format!("{} {}", info.manufacturer, info.model).trim().to_string();
-                note(format!("greeted {camera} (status {status}, identity from {source})"));
+                let camera = format!("{} {}", info.manufacturer, info.model)
+                    .trim()
+                    .to_string();
+                note(format!(
+                    "greeted {camera} (status {status}, identity from {source})"
+                ));
                 (Some(sess), camera)
             }
             Err(e) => {
@@ -650,7 +690,11 @@ fn worker(
                 continue;
             }
         };
-        set(&st, |s| s.state = State::Connected { camera: camera.clone() });
+        set(&st, |s| {
+            s.state = State::Connected {
+                camera: camera.clone(),
+            }
+        });
         // The camera sends on the link we opened: answer there as well.
         if let Some(sess) = keep {
             let Session { cmd, mut evt, .. } = sess;
@@ -679,7 +723,9 @@ fn worker(
                         log::info!("camera: event {code:#06x}");
                     } else {
                         log::info!("camera: event-channel packet type {t}, {} bytes", b.len());
-                        set(&st3, |s| s.log.push(format!("event-channel packet type {t}")));
+                        set(&st3, |s| {
+                            s.log.push(format!("event-channel packet type {t}"))
+                        });
                     }
                 }
             });
@@ -687,8 +733,13 @@ fn worker(
         listener.set_nonblocking(true).ok();
         let started = Instant::now();
         loop {
-            if matches!(rx.try_recv(), Ok(Msg::Stop) | Err(std::sync::mpsc::TryRecvError::Disconnected)) {
-                if let Some(c) = adv.as_mut() { let _ = c.kill(); }
+            if matches!(
+                rx.try_recv(),
+                Ok(Msg::Stop) | Err(std::sync::mpsc::TryRecvError::Disconnected)
+            ) {
+                if let Some(c) = adv.as_mut() {
+                    let _ = c.kill();
+                }
                 set(&st, |s| s.state = State::Stopped);
                 return;
             }
@@ -718,11 +769,12 @@ fn worker(
                 }
             }
         }
-        if let Some(c) = adv.as_mut() { let _ = c.kill(); }
+        if let Some(c) = adv.as_mut() {
+            let _ = c.kill();
+        }
         std::thread::sleep(Duration::from_secs(2));
     }
 }
-
 
 /* -- the host side: advertise, listen, and take what the camera pushes ---------- */
 
@@ -856,7 +908,13 @@ fn serve_camera(
             .collect();
         String::from_utf16_lossy(&units)
     };
-    note(format!("camera {their_name} connected to Apature (identity {})", their_guid.iter().map(|x| format!("{x:02x}")).collect::<String>()));
+    note(format!(
+        "camera {their_name} connected to Apature (identity {})",
+        their_guid
+            .iter()
+            .map(|x| format!("{x:02x}"))
+            .collect::<String>()
+    ));
     let mut ack = 1u32.to_le_bytes().to_vec();
     ack.extend_from_slice(&id.0);
     ack.extend_from_slice(&utf16z(host_name));
@@ -878,7 +936,12 @@ fn serve_camera(
 /// Answer the camera's operations on `cmd` until it goes away: device
 /// info, session, storage, and the frames it pushes with SendObjectInfo +
 /// SendObject, written into `out`. Returns how many frames landed.
-fn serve_ops(mut cmd: TcpStream, host_name: &str, out: &Path, note: &dyn Fn(String)) -> Result<usize, String> {
+fn serve_ops(
+    mut cmd: TcpStream,
+    host_name: &str,
+    out: &Path,
+    note: &dyn Fn(String),
+) -> Result<usize, String> {
     cmd.set_read_timeout(None).ok();
     let mut frames = 0usize;
     let mut pending: Option<(String, usize)> = None;
@@ -898,9 +961,13 @@ fn serve_ops(mut cmd: TcpStream, host_name: &str, out: &Path, note: &dyn Fn(Stri
             6 if b.len() >= 10 => {
                 let op = u16::from_le_bytes([b[4], b[5]]);
                 let tid = u32::from_le_bytes([b[6], b[7], b[8], b[9]]);
-                let params: Vec<u32> = b[10..].chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                let params: Vec<u32> = b[10..]
+                    .chunks_exact(4)
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
                 let r: std::io::Result<()> = match op {
-                    OP_GET_DEVICE_INFO => send_data(&mut cmd, tid, &host_device_info(host_name)).and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
+                    OP_GET_DEVICE_INFO => send_data(&mut cmd, tid, &host_device_info(host_name))
+                        .and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
                     OP_OPEN_SESSION | OP_CLOSE_SESSION => respond(&mut cmd, RC_OK, tid, &[]),
                     OP_GET_STORAGE_IDS => send_data(&mut cmd, tid, &{
                         let mut v = 1u32.to_le_bytes().to_vec();
@@ -908,7 +975,8 @@ fn serve_ops(mut cmd: TcpStream, host_name: &str, out: &Path, note: &dyn Fn(Stri
                         v
                     })
                     .and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
-                    OP_GET_STORAGE_INFO => send_data(&mut cmd, tid, &host_storage_info()).and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
+                    OP_GET_STORAGE_INFO => send_data(&mut cmd, tid, &host_storage_info())
+                        .and_then(|_| respond(&mut cmd, RC_OK, tid, &[])),
                     OP_SEND_OBJECT_INFO => match read_data_phase(&mut cmd) {
                         Ok(info) if info.len() > 52 => {
                             let size = u32::from_le_bytes(info[8..12].try_into().unwrap()) as usize;
@@ -924,16 +992,26 @@ fn serve_ops(mut cmd: TcpStream, host_name: &str, out: &Path, note: &dyn Fn(Stri
                     },
                     OP_SEND_OBJECT => match read_data_phase(&mut cmd) {
                         Ok(data) => {
-                            let (name, _) = pending.take().unwrap_or_else(|| (format!("WIFI_{:08X}.bin", next_handle), data.len()));
-                            let name = if name.is_empty() { format!("WIFI_{:08X}.bin", next_handle) } else { name };
+                            let (name, _) = pending.take().unwrap_or_else(|| {
+                                (format!("WIFI_{:08X}.bin", next_handle), data.len())
+                            });
+                            let name = if name.is_empty() {
+                                format!("WIFI_{:08X}.bin", next_handle)
+                            } else {
+                                name
+                            };
                             let _ = std::fs::create_dir_all(out);
                             let path = out.join(&name);
                             let tmp = out.join(format!("{name}.part"));
-                            let w = std::fs::write(&tmp, &data).and_then(|_| std::fs::rename(&tmp, &path));
+                            let w = std::fs::write(&tmp, &data)
+                                .and_then(|_| std::fs::rename(&tmp, &path));
                             match w {
                                 Ok(()) => {
                                     frames += 1;
-                                    note(format!("received {name} ({:.1} MB)", data.len() as f64 / 1e6));
+                                    note(format!(
+                                        "received {name} ({:.1} MB)",
+                                        data.len() as f64 / 1e6
+                                    ));
                                     respond(&mut cmd, RC_OK, tid, &[])
                                 }
                                 Err(e) => {
@@ -945,7 +1023,9 @@ fn serve_ops(mut cmd: TcpStream, host_name: &str, out: &Path, note: &dyn Fn(Stri
                         Err(e) => Err(e),
                     },
                     other => {
-                        note(format!("camera asked for {other:#06x} {params:?}; not supported"));
+                        note(format!(
+                            "camera asked for {other:#06x} {params:?}; not supported"
+                        ));
                         respond(&mut cmd, RC_OPERATION_NOT_SUPPORTED, tid, &[])
                     }
                 };
@@ -969,7 +1049,18 @@ fn advertise(id: Identity, host_name: &str) -> Result<std::process::Child, Strin
         b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
     );
     std::process::Command::new("dns-sd")
-        .args(["-R", host_name, "_ptp._tcp", "local", &PORT.to_string(), "apps=WT3T", &format!("guid={guid}"), &format!("name={host_name}"), "type=PC", "ver=1"])
+        .args([
+            "-R",
+            host_name,
+            "_ptp._tcp",
+            "local",
+            &PORT.to_string(),
+            "apps=WT3T",
+            &format!("guid={guid}"),
+            &format!("name={host_name}"),
+            "type=PC",
+            "ver=1",
+        ])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()

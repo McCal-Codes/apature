@@ -93,9 +93,9 @@ impl MenuBar {
             &item(Command::Undo, "Undo", acc(cmd, Code::KeyZ)),
             &item(Command::Redo, "Redo", acc(cmd_shift, Code::KeyZ)),
             &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::cut(None),
-            &PredefinedMenuItem::copy(None),
-            &PredefinedMenuItem::paste(None),
+            &item(Command::EditCut, "Cut", acc(cmd, Code::KeyX)),
+            &item(Command::EditCopy, "Copy", acc(cmd, Code::KeyC)),
+            &item(Command::EditPaste, "Paste", acc(cmd, Code::KeyV)),
             &PredefinedMenuItem::separator(),
             &item(
                 Command::CopyMetadata,

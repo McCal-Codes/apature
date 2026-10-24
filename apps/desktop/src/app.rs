@@ -441,6 +441,8 @@ pub struct App {
     pub welcome_step: usize,
     /// Set by the welcome's Import button; handled after the modal closes.
     pub welcome_import: bool,
+    /// An Edit-menu action waiting for the window that has the focus.
+    pending_edit: Option<(Edit, Instant)>,
     /// The New assignment sheet.
     pub assignment_sheet_open: bool,
     pub assignment_draft: ui::assignments::Draft,
@@ -575,6 +577,7 @@ impl App {
             welcome_open: launch.welcome || (!onboarded && launch.screenshot.is_none()),
             welcome_step: 0,
             welcome_import: false,
+            pending_edit: None,
             assignment_sheet_open: false,
             assignment_draft: Default::default(),
             preview_window: false,
@@ -1264,6 +1267,7 @@ impl App {
             .with_inner_size([1120.0, 800.0])
             .with_min_inner_size([820.0, 600.0]);
         ctx.show_viewport_immediate(id, builder, |ctx, class| {
+            self.apply_pending_edit(ctx, false);
             let close = ctx.input(|i| i.viewport().close_requested())
                 || (ctx.input(|i| i.key_pressed(egui::Key::Escape))
                     && ctx.memory(|m| m.focused().is_none()));
@@ -2475,6 +2479,61 @@ impl App {
     }
 
     /// The launch-time screenshot target, when one was requested.
+    /// Run an Edit-menu action in the window that has the focus. A text field
+    /// (or selected text) takes it as the keystroke egui expects; when none
+    /// has the keyboard, Select All, Undo and Redo act on the photos and only
+    /// from the main window.
+    pub fn apply_pending_edit(&mut self, ctx: &egui::Context, is_root: bool) {
+        let Some((edit, at)) = self.pending_edit.clone() else {
+            return;
+        };
+        if at.elapsed() > std::time::Duration::from_millis(500) {
+            self.pending_edit = None;
+            return;
+        }
+        if ctx.input(|i| i.viewport().focused) != Some(true) {
+            return;
+        }
+        self.pending_edit = None;
+        let text_focus = ctx.wants_keyboard_input();
+        let key = |k: egui::Key, shift: bool| {
+            let mut m = egui::Modifiers::COMMAND | egui::Modifiers::MAC_CMD;
+            if shift {
+                m = m | egui::Modifiers::SHIFT;
+            }
+            egui::Event::Key {
+                key: k,
+                physical_key: Some(k),
+                pressed: true,
+                repeat: false,
+                modifiers: m,
+            }
+        };
+        let push = |e: egui::Event| ctx.input_mut(|i| i.events.push(e));
+        match edit {
+            Edit::Cut if text_focus => push(egui::Event::Cut),
+            Edit::Copy => push(egui::Event::Copy),
+            Edit::Paste(text) if text_focus => push(egui::Event::Paste(text)),
+            Edit::SelectAll if text_focus => push(key(egui::Key::A, false)),
+            Edit::Undo if text_focus => push(key(egui::Key::Z, false)),
+            Edit::Redo if text_focus => push(key(egui::Key::Z, true)),
+            Edit::SelectAll if is_root => self.selection.all(&self.view),
+            Edit::Undo if is_root => {
+                if let Some((label, apply)) = self.undo.undo() {
+                    self.apply_marks(&apply);
+                    self.status = format!("Undid {label}");
+                }
+            }
+            Edit::Redo if is_root => {
+                if let Some((label, apply)) = self.undo.redo() {
+                    self.apply_marks(&apply);
+                    self.status = format!("Redid {label}");
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn screenshot_path(&self) -> Option<PathBuf> {
         self.launch.screenshot.clone()
     }
@@ -3248,20 +3307,15 @@ impl App {
             }
             Command::Home => self.focus_to_pos(0, Mods::default()),
             Command::End => self.focus_to_pos(self.view.len().saturating_sub(1), Mods::default()),
-            Command::SelectAll => self.selection.all(&self.view),
+            Command::EditCut => self.pending_edit = Some((Edit::Cut, Instant::now())),
+            Command::EditCopy => self.pending_edit = Some((Edit::Copy, Instant::now())),
+            Command::EditPaste => {
+                self.pending_edit = Some((Edit::Paste(clipboard_text()), Instant::now()))
+            }
+            Command::SelectAll => self.pending_edit = Some((Edit::SelectAll, Instant::now())),
             Command::SelectNone => self.selection.clear(),
-            Command::Undo => {
-                if let Some((label, apply)) = self.undo.undo() {
-                    self.apply_marks(&apply);
-                    self.status = format!("Undid {label}");
-                }
-            }
-            Command::Redo => {
-                if let Some((label, apply)) = self.undo.redo() {
-                    self.apply_marks(&apply);
-                    self.status = format!("Redid {label}");
-                }
-            }
+            Command::Undo => self.pending_edit = Some((Edit::Undo, Instant::now())),
+            Command::Redo => self.pending_edit = Some((Edit::Redo, Instant::now())),
             Command::SetFilter(f) => {
                 self.filter = f;
                 self.rebuild_view();
@@ -4186,6 +4240,7 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.apply_pending_edit(ctx, true);
         let dt_ms = ctx.input(|i| i.stable_dt) * 1000.0;
         if dt_ms > 0.0 && dt_ms < 1000.0 {
             self.stats.frame_ms_ema = if self.stats.frame_ms_ema == 0.0 {
@@ -4456,5 +4511,31 @@ mod crop_tests {
         assert_eq!(parse_latlon("40.4461 -79.8955"), Some((40.4461, -79.8955)));
         assert_eq!(parse_latlon("91, 0"), None);
         assert_eq!(parse_latlon("abc"), None);
+    }
+}
+
+/// An Edit-menu action, carried to whichever window has the focus.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Edit {
+    Cut,
+    Copy,
+    Paste(String),
+    SelectAll,
+    Undo,
+    Redo,
+}
+
+/// The system clipboard's text (the macOS menu owns ⌘V, so the app reads it).
+fn clipboard_text() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("pbpaste")
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        String::new()
     }
 }
