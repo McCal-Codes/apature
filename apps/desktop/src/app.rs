@@ -4172,7 +4172,11 @@ impl App {
             if pressed(Key::Escape) {
                 out.push(Command::Escape);
             }
-            if !has_menu {
+            // Bare keys (1–5, T, X, Z, …) are handled here even with a native
+            // menu: AppKit offers a key to the menu only as a ⌘-shortcut, and
+            // never for a bare one while the app's own view has the keyboard,
+            // so a menu accelerator without a modifier is only a hint.
+            if !cmd && !alt {
                 let bare_rates = self.prefs.number_keys == crate::prefs::NumberKeys::Rating;
                 for (n, k) in NUM_KEYS.iter().enumerate() {
                     if pressed(*k) {
