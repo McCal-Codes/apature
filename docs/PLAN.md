@@ -212,3 +212,11 @@ Queued, in Caleb's words, 2026-10-23:
 5. Windows: eject and the tray extra; Developer ID signing when Caleb decides.
 6. **Resources for photojournalists inside the app** (Caleb, 2026-10-23): a Resources page with links or embedded guides (AP Stylebook, caption style, NPPA ethics code) and an **Internships & jobs** area (NPPA, AP, newspaper and wire internship listings, student programs), since the industry is competitive and students rarely know where to look. Research the sources first; keep it a curated list, not a scraper.
 7. **Photo Mechanic import, next steps**: the IPTC stationery pad inside a `.snap` → an assignment file; PM's saved variables and snapshots folder.
+
+## Added 2026-10-23, late (Caleb)
+
+- **Zoom to the focus point**, as Capture One does (Z jumps to the AF point): the Z 6 II writes the AF area into the NEF's maker notes (AFAreaXPosition/YPosition and size); read it in apature-metadata, draw it as an overlay in Preview, and let Z centre the 1:1 view on it. Later: zoom to the face in focus.
+- **Release after the football run**: Caleb's "update this to 1.2" most likely means 0.1.2; confirm, then bump and tag.
+- **Onboarding clean-up** and a **more colourful, muted pastel accent set** (not cutesy): revise `Accent::ALL` and `Theme::with_accent` in `ui/tokens.rs`.
+- **Photo Mechanic's rename and other features** beyond the ingest rename: the in-place Rename dialog exists (Rename Photos); look at PM's Rename dialog for variables, a live preview and undo.
+- Rosters: the football assignment file carries number-to-name codes from MaxPreps (SV updated 2026-10-14, Norwin 2026-10-04). A roster importer (MaxPreps / school site → codes) is worth building; names must always be checked against the game program.
