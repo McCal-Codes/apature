@@ -64,6 +64,108 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                             app.cell_accessible_name(idx),
                         )
                     });
+                    // Right-click: the clicked photo joins the selection if it is
+                    // not in it (as in Finder), then the menu acts on the selection.
+                    if resp.secondary_clicked() && !app.selection.contains(idx) {
+                        cmds.push(Command::Click {
+                            idx,
+                            shift: false,
+                            command: false,
+                        });
+                    }
+                    let in_sel = app.selection.contains(idx);
+                    let n_sel = if in_sel {
+                        app.selection.targets(app.cursor).len().max(1)
+                    } else {
+                        1
+                    };
+                    resp.context_menu(|ui| {
+                        ui.set_min_width(210.0);
+                        let head = if n_sel > 1 {
+                            format!("{n_sel} photos")
+                        } else {
+                            app.items[idx].display_name()
+                        };
+                        ui.label(egui::RichText::new(head).size(11.0).color(t.muted));
+                        ui.separator();
+                        if ui.button("Preview").clicked() {
+                            cmds.push(Command::SetWorkspace(Workspace::Preview));
+                            ui.close();
+                        }
+                        ui.menu_button("Rating", |ui| {
+                            for r in (1..=5i8).rev() {
+                                let label = format!(
+                                    "{}  {}",
+                                    "★".repeat(r as usize),
+                                    if r == 1 { "Star" } else { "Stars" }
+                                );
+                                if ui.button(label).clicked() {
+                                    cmds.push(Command::SetRating(r));
+                                    ui.close();
+                                }
+                            }
+                            if ui.button("Unrated").clicked() {
+                                cmds.push(Command::SetRating(0));
+                                ui.close();
+                            }
+                            if ui.button("Reject").clicked() {
+                                cmds.push(Command::SetRating(-1));
+                                ui.close();
+                            }
+                        });
+                        ui.menu_button("Color class", |ui| {
+                            if ui.button("None").clicked() {
+                                cmds.push(Command::SetClass(0));
+                                ui.close();
+                            }
+                            for i in 1..=8u8 {
+                                let c = apature_core::ColorClass(i);
+                                let name = app.scheme.name(c).unwrap_or("");
+                                let col = t.class_color(&app.scheme, c).unwrap_or(t.muted);
+                                let txt = egui::RichText::new(format!("●  {i} {name}")).color(col);
+                                if ui.button(txt).clicked() {
+                                    cmds.push(Command::SetClass(i));
+                                    ui.close();
+                                }
+                            }
+                        });
+                        if ui.button("Tag / untag").clicked() {
+                            cmds.push(Command::ToggleTag);
+                            ui.close();
+                        }
+                        ui.separator();
+                        if ui.button("Copy metadata").clicked() {
+                            cmds.push(Command::CopyMetadata);
+                            ui.close();
+                        }
+                        if ui.button("Paste metadata").clicked() {
+                            cmds.push(Command::PasteMetadata);
+                            ui.close();
+                        }
+                        ui.separator();
+                        if ui.button("Rename…").clicked() {
+                            cmds.push(Command::RenamePhotos);
+                            ui.close();
+                        }
+                        if ui
+                            .button(format!(
+                                "Show in {}",
+                                crate::platform::Platform::file_manager()
+                            ))
+                            .clicked()
+                        {
+                            cmds.push(Command::RevealInFinder);
+                            ui.close();
+                        }
+                        ui.separator();
+                        if ui
+                            .button(egui::RichText::new("Move to Trash…").color(t.reject))
+                            .clicked()
+                        {
+                            cmds.push(Command::MoveToTrash);
+                            ui.close();
+                        }
+                    });
                     if resp.double_clicked() {
                         cmds.push(Command::Click {
                             idx,

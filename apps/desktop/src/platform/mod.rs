@@ -88,6 +88,16 @@ impl Platform {
         let _ = (sidebar, inspector, filmstrip, advance);
     }
 
+    /// Follow the Settings choice for what the digit keys do.
+    pub fn set_number_keys(&self, bare_rates: bool) {
+        #[cfg(target_os = "macos")]
+        if let Some(m) = &self.menu {
+            m.set_number_keys(bare_rates);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = bare_rates;
+    }
+
     pub fn set_class_names(&self, names: &[String; 8]) {
         #[cfg(target_os = "macos")]
         if let Some(m) = &self.menu {

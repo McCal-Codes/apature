@@ -459,6 +459,7 @@ pub struct App {
     platform: Platform,
     system_reduce_motion: bool,
     applied_ui_scale: Option<f32>,
+    applied_number_keys: Option<crate::prefs::NumberKeys>,
     /// Motion state: when the sheet last changed tab, when the preview opened
     /// and from which cell, where the focused cell was drawn, when the status
     /// text last changed.
@@ -591,6 +592,7 @@ impl App {
             platform,
             system_reduce_motion: Platform::reduce_motion(),
             applied_ui_scale: None,
+            applied_number_keys: None,
             sheet_fade_since: None,
             preview_since: None,
             preview_from: None,
@@ -4011,6 +4013,16 @@ impl App {
             if pressed(Key::ArrowDown) {
                 out.push(mv(if in_preview { 1 } else { cols }));
             }
+            // Delete or Backspace: the Move to Trash sheet for the focused photo
+            // or the selection (it shows what will move before anything does).
+            // The crop tool keeps Backspace for "remove crop".
+            if (pressed(Key::Delete) || pressed(Key::Backspace))
+                && !cmd
+                && matches!(self.workspace, Workspace::Sheet | Workspace::Preview)
+                && !(in_preview && self.pv.crop.is_some())
+            {
+                out.push(Command::MoveToTrash);
+            }
             if cmd {
                 if has_menu {
                     return;
@@ -4258,6 +4270,11 @@ impl eframe::App for App {
                 crate::prefs::Appearance::Oled => egui::ThemePreference::Dark,
             });
             self.applied_appearance = Some(self.prefs.appearance);
+        }
+        if self.applied_number_keys != Some(self.prefs.number_keys) {
+            self.platform
+                .set_number_keys(self.prefs.number_keys == crate::prefs::NumberKeys::Rating);
+            self.applied_number_keys = Some(self.prefs.number_keys);
         }
         if self.applied_ui_scale != Some(self.prefs.ui_scale) {
             ctx.set_zoom_factor(self.prefs.ui_scale.clamp(0.8, 1.8));

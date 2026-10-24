@@ -15,6 +15,9 @@ pub struct MenuBar {
     inspector: CheckMenuItem,
     filmstrip: CheckMenuItem,
     class_items: Vec<MenuItem>,
+    class_none: MenuItem,
+    rating_items: Vec<MenuItem>,
+    rating_none: MenuItem,
 }
 
 fn item(cmd: Command, text: &str, acc: Option<Accelerator>) -> MenuItem {
@@ -232,15 +235,14 @@ impl MenuBar {
             class.append(&it)?;
             class_items.push(it);
         }
-        class.append_items(&[
-            &PredefinedMenuItem::separator(),
-            &item(
-                Command::SetClass(0),
-                "None",
-                Some(Accelerator::new(Modifiers::empty(), Code::Digit0)),
-            ),
-        ])?;
+        let class_none = item(
+            Command::SetClass(0),
+            "None",
+            Some(Accelerator::new(Modifiers::empty(), Code::Digit0)),
+        );
+        class.append_items(&[&PredefinedMenuItem::separator(), &class_none])?;
         let rating = Submenu::new("Rating", true);
+        let mut rating_items = vec![None, None, None, None, None, None];
         for r in (1..=5).rev() {
             let code = [
                 Code::Digit0,
@@ -250,7 +252,7 @@ impl MenuBar {
                 Code::Digit4,
                 Code::Digit5,
             ][r as usize];
-            rating.append(&item(
+            let it = item(
                 Command::SetRating(r),
                 &format!(
                     "{} {}",
@@ -258,11 +260,15 @@ impl MenuBar {
                     if r == 1 { "Star" } else { "Stars" }
                 ),
                 acc(cmd, code),
-            ))?;
+            );
+            rating.append(&it)?;
+            rating_items[r as usize] = Some(it);
         }
+        let rating_items: Vec<MenuItem> = rating_items.into_iter().flatten().collect();
+        let rating_none = item(Command::SetRating(0), "Unrated", acc(cmd, Code::Digit0));
         rating.append_items(&[
             &PredefinedMenuItem::separator(),
-            &item(Command::SetRating(0), "Unrated", acc(cmd, Code::Digit0)),
+            &rating_none,
             &item(
                 Command::SetRating(-1),
                 "Reject",
@@ -370,6 +376,9 @@ impl MenuBar {
             filmstrip,
             advance,
             class_items,
+            class_none,
+            rating_items,
+            rating_none,
         })
     }
 
@@ -383,6 +392,40 @@ impl MenuBar {
         self.window.set_as_windows_menu_for_nsapp();
         self.help.set_as_help_menu_for_nsapp();
         self.installed = true;
+    }
+
+    /// Bind the digit keys the way the Settings choice says: bare 1–5 rate and
+    /// ⌘1–8 set the colour class (stars), or bare 1–8 set the colour class and
+    /// ⌘0–5 rate (Photo Mechanic's scheme). The menu owns these keys on
+    /// macOS, so it has to follow the setting.
+    pub fn set_number_keys(&self, bare_rates: bool) {
+        let digits = [
+            Code::Digit0,
+            Code::Digit1,
+            Code::Digit2,
+            Code::Digit3,
+            Code::Digit4,
+            Code::Digit5,
+            Code::Digit6,
+            Code::Digit7,
+            Code::Digit8,
+        ];
+        let none = Modifiers::empty();
+        let cmd = Modifiers::META;
+        let (rate_mod, class_mod) = if bare_rates { (none, cmd) } else { (cmd, none) };
+        for (i, it) in self.rating_items.iter().enumerate() {
+            let r = i + 1; // items were collected for stars 1..=5 in order
+            let _ = it.set_accelerator(Some(Accelerator::new(rate_mod, digits[r])));
+        }
+        let _ = self
+            .rating_none
+            .set_accelerator(Some(Accelerator::new(rate_mod, Code::Digit0)));
+        for (i, it) in self.class_items.iter().enumerate() {
+            let _ = it.set_accelerator(Some(Accelerator::new(class_mod, digits[i + 1])));
+        }
+        let _ = self
+            .class_none
+            .set_accelerator(Some(Accelerator::new(class_mod, Code::Digit0)));
     }
 
     pub fn set_class_names(&self, names: &[String; 8]) {
