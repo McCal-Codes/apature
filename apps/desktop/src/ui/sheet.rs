@@ -159,7 +159,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                         }
                         ui.separator();
                         if ui
-                            .button(egui::RichText::new("Move to Trash…").color(t.reject))
+                            .button(egui::RichText::new("Move to Trash").color(t.reject))
                             .clicked()
                         {
                             cmds.push(Command::MoveToTrash);

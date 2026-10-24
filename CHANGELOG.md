@@ -6,6 +6,13 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [Unreleased]
 
 ### Added
+- Straighten: `apature-cli level` estimates how far a frame is tilted from the long straight edges in it (horizons, banners, poles, goal posts); `apature-cli straighten --degrees` stores the angle in the sidecar (`apature:Straighten`) and export turns the picture and then applies the crop, so exports come out level. The in-app preview does not show it yet.
+- Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
+
+### Fixed
+- A `code:` line in an assignment (for example `code: tail = ...`) now beats the generated boilerplate of the same name, and keeps its leading space.
+
+### Added
 - Camera over Wi-Fi, direct: Apature finds a Nikon on the network over Bonjour, pairs with the code the camera shows (typed in Ingest; nothing is confirmed unless it matches), and receives frames as they are shot into the Wi-Fi inbox for Live Ingest. No transmitter accessory and no vendor utility. Settings › Ingest › Forget pairing.
 - Assignments ahead of time: an assignments folder (Google Drive by default when it is installed), an Upcoming list in the Caption workspace, and New assignment, which turns a pasted editor's sheet into an assignment file with the outlet's credit, source and copyright from Settings. When an ingest finishes, the assignment file is copied into the day's folder on the destination drive.
 - Camera over Wi-Fi reads the utility's per-camera subfolder.

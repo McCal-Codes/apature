@@ -114,6 +114,18 @@ enum Cmd {
         clear: bool,
         files: Vec<PathBuf>,
     },
+    /// Store a straighten angle in the sidecar (apature:Straighten), applied
+    /// on export before the crop.
+    Straighten {
+        /// Degrees to turn the picture clockwise to level it (negative = counter-clockwise).
+        #[arg(long, allow_hyphen_values = true)]
+        degrees: f32,
+        files: Vec<PathBuf>,
+    },
+    /// Estimate how far each JPEG is tilted from level, from the long straight
+    /// edges in it (horizons, banners, poles, goal posts). Prints degrees to
+    /// turn the picture clockwise to level it, and how sure the estimate is.
+    Level { files: Vec<PathBuf> },
     /// Plan and run a verified ingest (sequential; never deletes the source).
     /// Export delivery JPEGs (resize, re-encode, EXIF + XMP + IPTC-IIM + ICC).
     Export {
@@ -335,6 +347,21 @@ fn main() -> Result<()> {
         Cmd::Trash { paths } => cmd_trash(paths),
         Cmd::Rotate { ccw, reset, files } => cmd_rotate(ccw, reset, &files),
         Cmd::Crop { rect, clear, files } => cmd_crop(rect, clear, &files),
+        Cmd::Level { files } => cmd_level(&files),
+        Cmd::Straighten { degrees, files } => {
+            for f in &files {
+                let item = item_for(f)?;
+                apature_metadata::edits::write(
+                    &item.sidecar_path(),
+                    &apature_metadata::edits::Change {
+                        straighten: Some(degrees),
+                        ..Default::default()
+                    },
+                )?;
+                println!("{}: straighten {degrees:+.2}°", item.display_name());
+            }
+            Ok(())
+        }
         Cmd::Ingest {
             source,
             primary,
@@ -1065,6 +1092,85 @@ fn cmd_export(
     );
     if ok != results.len() {
         std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Tilt of a picture from the direction of its strong edges. Near-horizontal
+/// edges in the upper part (far stands, banners, the far sideline) and
+/// near-vertical edges anywhere (poles, posts) vote for the angle that
+/// would make them level; the peak of the weighted histogram is the answer.
+fn level_of(jpeg: &[u8]) -> anyhow::Result<(f32, f32)> {
+    let img = apature_preview::decode::decode_jpeg(jpeg, Some(1280))?;
+    let (w, h) = (img.width as usize, img.height as usize);
+    let gray: Vec<f32> = img
+        .data
+        .chunks_exact(3)
+        .map(|p| 0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32)
+        .collect();
+    const RANGE: f32 = 9.0;
+    const STEP: f32 = 0.25;
+    let nb = (2.0 * RANGE / STEP) as usize + 1;
+    let mut hist = vec![0f64; nb];
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
+            let g = |dx: isize, dy: isize| gray[(y as isize + dy) as usize * w + (x as isize + dx) as usize];
+            let gx = (g(1, -1) + 2.0 * g(1, 0) + g(1, 1)) - (g(-1, -1) + 2.0 * g(-1, 0) + g(-1, 1));
+            let gy = (g(-1, 1) + 2.0 * g(0, 1) + g(1, 1)) - (g(-1, -1) + 2.0 * g(0, -1) + g(1, -1));
+            let mag = (gx * gx + gy * gy).sqrt();
+            if mag < 120.0 {
+                continue;
+            }
+            // Edge direction = gradient direction + 90 degrees, folded to (-90, 90].
+            let mut a = gy.atan2(gx).to_degrees() + 90.0;
+            while a > 90.0 {
+                a -= 180.0;
+            }
+            while a <= -90.0 {
+                a += 180.0;
+            }
+            let horizontal = a.abs() < RANGE;
+            let vertical = (a.abs() - 90.0).abs() < RANGE;
+            let d = if horizontal {
+                if (y as f32) > 0.62 * h as f32 {
+                    continue; // near-field lines converge; they say nothing about roll
+                }
+                a
+            } else if vertical {
+                if a > 0.0 { a - 90.0 } else { a + 90.0 }
+            } else {
+                continue;
+            };
+            let b = ((d + RANGE) / STEP).round() as usize;
+            if b < nb {
+                hist[b] += (mag as f64) * (mag as f64);
+            }
+        }
+    }
+    // Smooth over about a degree, then take the peak.
+    let sm: Vec<f64> = (0..nb)
+        .map(|i| {
+            (0..nb)
+                .filter(|&j| (i as isize - j as isize).abs() <= 4)
+                .map(|j| hist[j] * (1.0 - (i as f32 - j as f32).abs() / 5.0) as f64)
+                .sum()
+        })
+        .collect();
+    let (pk, _) = sm.iter().enumerate().fold((0, 0.0), |m, (i, &v)| if v > m.1 { (i, v) } else { m });
+    let total: f64 = hist.iter().sum();
+    let near: f64 = (0..nb).filter(|&j| (j as isize - pk as isize).abs() <= 3).map(|j| hist[j]).sum();
+    let tilt = pk as f32 * STEP - RANGE; // clockwise-positive tilt of the content
+    Ok((-tilt, if total > 0.0 { (near / total) as f32 } else { 0.0 }))
+}
+
+fn cmd_level(files: &[PathBuf]) -> anyhow::Result<()> {
+    for f in files {
+        let bytes = std::fs::read(f)?;
+        let name = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        match level_of(&bytes) {
+            Ok((turn, conf)) => println!("{name}\t{turn:+.2}\t{conf:.2}"),
+            Err(e) => println!("{name}\terror: {e}"),
+        }
     }
     Ok(())
 }

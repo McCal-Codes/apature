@@ -27,6 +27,9 @@ use crate::xmp::{prop_pattern, set_prop, value_of, write_sidecar_with, XmpError}
 
 pub const NS_TIFF: &str = "http://ns.adobe.com/tiff/1.0/";
 pub const NS_CRS: &str = "http://ns.adobe.com/camera-raw-settings/1.0/";
+/// Apature's own namespace: `apature:Straighten`, degrees to turn the picture
+/// clockwise to level it. The crop (`crs:Crop*`) is then in the turned frame.
+pub const NS_APATURE: &str = "http://ns.mccal.dev/apature/1.0/";
 
 /// A crop as fractions (0..=1) of the stored image: `left < right`,
 /// `top < bottom`.
@@ -82,12 +85,16 @@ pub struct Edits {
     /// The sidecar has a crop with a non-zero `crs:CropAngle`; `crop` is
     /// `None` because a straightened crop cannot be applied here.
     pub straightened_crop: bool,
+    /// Degrees to turn the picture clockwise to level it (`apature:Straighten`);
+    /// 0 when not set. Applied about the centre of the stored frame, before
+    /// the crop.
+    pub straighten: f32,
 }
 
 impl Edits {
     /// True when there is a rotation or a crop to apply.
     pub fn is_edited(&self) -> bool {
-        self.orientation.is_some() || self.crop.is_some()
+        self.orientation.is_some() || self.crop.is_some() || self.straighten.abs() > 0.001
     }
 
     /// The orientation to show and export: the sidecar's when set, else the
@@ -187,10 +194,16 @@ pub fn parse(text: &str) -> Edits {
     } else {
         None
     };
+    let apature = prefixes(text, NS_APATURE, "apature");
+    let straighten = prop(text, &apature, "Straighten")
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|a| a.is_finite() && a.abs() <= 45.0)
+        .unwrap_or(0.0);
     Edits {
         orientation,
         crop,
         straightened_crop,
+        straighten,
     }
 }
 
@@ -200,6 +213,8 @@ pub fn parse(text: &str) -> Edits {
 pub struct Change {
     pub orientation: Option<Option<u8>>,
     pub crop: Option<Option<Crop>>,
+    /// `Some(0.0)` clears.
+    pub straighten: Option<f32>,
 }
 
 /// Apply `change` to sidecar text (an empty text starts a new sidecar).
@@ -218,6 +233,12 @@ pub fn apply(text: &str, change: &Change) -> Result<String, XmpError> {
     if let Some(o) = change.orientation {
         let v = o.filter(|o| (1..=8).contains(o)).map(|o| o.to_string());
         set_prop(&mut out, &tiff, NS_TIFF, "Orientation", v.as_deref())?;
+    }
+    if let Some(deg) = change.straighten {
+        let ap = prefixes(&out, NS_APATURE, "apature");
+        let ap: Vec<&str> = ap.iter().map(String::as_str).collect();
+        let v = (deg.abs() > 0.001).then(|| format!("{deg:.3}"));
+        set_prop(&mut out, &ap, NS_APATURE, "Straighten", v.as_deref())?;
     }
     if let Some(crop) = change.crop {
         match crop.and_then(Crop::normalized).filter(|c| !c.is_full()) {
@@ -262,7 +283,8 @@ fn satisfied(change: &Change, got: &Edits) -> bool {
             }
         }
     };
-    o_ok && c_ok
+    let s_ok = change.straighten.map_or(true, |d| (d - got.straighten).abs() < 0.01);
+    o_ok && c_ok && s_ok
 }
 
 /// Read the edits in the sidecar at `path` (none when it does not exist).
@@ -379,6 +401,7 @@ mod tests {
             &Change {
                 orientation: Some(Some(8)),
                 crop: Some(None),
+                straighten: None,
             },
         )
         .unwrap();
@@ -443,6 +466,7 @@ mod tests {
             &Change {
                 orientation: Some(Some(8)),
                 crop: Some(Some(crop)),
+                straighten: None,
             },
         )
         .unwrap();
@@ -476,5 +500,14 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().contains(".tmp"))
             .collect();
         assert!(leftovers.is_empty());
+    }
+
+    #[test]
+    fn straighten_round_trips_and_clears() {
+        let t = apply("", &Change { straighten: Some(-2.25), ..Default::default() }).unwrap();
+        assert!((parse(&t).straighten + 2.25).abs() < 1e-3, "{t}");
+        assert!(parse(&t).is_edited());
+        let t = apply(&t, &Change { straighten: Some(0.0), ..Default::default() }).unwrap();
+        assert_eq!(parse(&t).straighten, 0.0, "{t}");
     }
 }

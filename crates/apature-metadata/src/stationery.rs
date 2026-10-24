@@ -74,7 +74,10 @@ impl Assignment {
                 "copyright" => a.copyright = Some(v.into()),
                 "code" => {
                     if let Some((c, r)) = v.split_once('=') {
-                        a.codes.push((c.trim().into(), r.trim().into()));
+                        // One space after `=` is the separator; any further leading
+                        // space is the replacement's (a `tail` starts with one).
+                        let r = r.strip_prefix(' ').unwrap_or(r);
+                        a.codes.push((c.trim().into(), r.trim_end().into()));
                     }
                 }
                 _ => {}
@@ -170,6 +173,9 @@ impl Assignment {
         if let Some(v) = &self.venue {
             codes.push(("stad".to_string(), v.clone()));
         }
+        // A `code:` line the assignment spells out beats the boilerplate of the
+        // same name ("code: tail = ..." must not lose to the generated tail).
+        codes.retain(|(name, _)| !self.codes.iter().any(|(n, _)| n == name));
         codes.extend(self.codes.iter().cloned());
         CodeTable { codes }
     }
@@ -245,5 +251,18 @@ mod tests {
         assert!(a
             .caption_template()
             .starts_with("North Catholic's PLAYER ACTION in the WPIAL"));
+    }
+
+    #[test]
+    fn an_explicit_code_line_beats_the_generated_boilerplate() {
+        let a = Assignment::parse(
+            "slug: 102526 SPO FB Norwin-SV\nevent: a football game\nvenue: Seneca Valley's NexTier Stadium\ncode: tail =  in a football game Friday, at the stadium.\n",
+        )
+        .unwrap();
+        assert_eq!(
+            a.codes().get("tail"),
+            Some(" in a football game Friday, at the stadium.")
+        );
+        assert!(a.codes().get("game").unwrap().contains("held"), "other boilerplate stays");
     }
 }

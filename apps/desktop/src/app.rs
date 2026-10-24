@@ -886,30 +886,90 @@ impl App {
         let Some(targets) = self.trash_dialog.take() else {
             return;
         };
+        self.trash_now(targets);
+    }
+
+    /// Move the photos (every variant and sidecar) to the Trash at once, no
+    /// questions: undo (⌘Z) puts them back from the Trash.
+    fn trash_now(&mut self, targets: Vec<usize>) {
         let files: Vec<PathBuf> = targets
             .iter()
             .flat_map(|&i| apature_core::fileops::item_files(&self.items[i]))
             .collect();
         let n = targets.len();
-        match apature_core::fileops::trash(&files) {
-            Ok(()) => {
-                let pos = self.cursor_pos();
-                if let Some(dir) = self.folder.clone() {
-                    self.load_folder(&dir);
-                }
-                if !self.view.is_empty() {
-                    let p = pos.min(self.view.len() - 1);
-                    self.cursor = self.view[p];
-                    self.selection.only(self.cursor);
-                    self.scroll_to_cursor = true;
+        match apature_core::fileops::trash_tracked(&files) {
+            Ok(trashed) => {
+                let recoverable = !trashed.is_empty();
+                self.reload_keep_state();
+                if recoverable {
+                    self.undo.push(Entry {
+                        label: format!("move {n} photo{} to the Trash", if n == 1 { "" } else { "s" }),
+                        changes: Vec::new(),
+                        trashed,
+                    });
                 }
                 self.status = format!(
-                    "Moved {n} photo{} ({} files) to the Trash",
+                    "Moved {n} photo{} to the Trash{}",
                     if n == 1 { "" } else { "s" },
-                    files.len()
+                    if recoverable { " · ⌘Z brings it back" } else { "" }
                 );
             }
             Err(e) => self.status = e.to_string(),
+        }
+    }
+
+    /// Put files back from the Trash, reload, and land on the first of them.
+    fn restore_from_trash(&mut self, trashed: &[apature_core::fileops::Trashed]) {
+        match apature_core::fileops::restore(trashed) {
+            Ok((done, skipped)) => {
+                self.reload_keep_state();
+                if let Some(first) = trashed.first() {
+                    if let Some(i) = self.items.iter().position(|it| {
+                        it.path() == first.original || it.secondary.iter().any(|v| v.path == first.original)
+                    }) {
+                        if self.pos[i].is_some() {
+                            self.cursor = i;
+                            self.selection.only(i);
+                            self.scroll_to_cursor = true;
+                        }
+                    }
+                }
+                self.status = if skipped > 0 {
+                    format!("Restored {done} file{}; {skipped} already existed or left the Trash", if done == 1 { "" } else { "s" })
+                } else {
+                    format!("Restored {done} file{} from the Trash", if done == 1 { "" } else { "s" })
+                };
+            }
+            Err(e) => self.status = e.to_string(),
+        }
+    }
+
+    /// Reload the folder after files came or went, keeping what the user had:
+    /// the filter, the workspace, the place in the list, and the undo history
+    /// (re-pointed at each photo's new index).
+    fn reload_keep_state(&mut self) {
+        let Some(dir) = self.folder.clone() else {
+            return;
+        };
+        let old_paths: Vec<PathBuf> = self.items.iter().map(|it| it.path().to_path_buf()).collect();
+        let mut undo = std::mem::take(&mut self.undo);
+        let filter = self.filter.clone();
+        let workspace = self.workspace;
+        let pos = self.cursor_pos();
+        self.load_folder(&dir);
+        let now: std::collections::HashMap<&Path, usize> =
+            self.items.iter().enumerate().map(|(i, it)| (it.path(), i)).collect();
+        undo.remap(|i| old_paths.get(i).and_then(|p| now.get(p.as_path()).copied()));
+        self.undo = undo;
+        self.filter = filter;
+        self.rebuild_view();
+        if !self.view.is_empty() {
+            self.cursor = self.view[pos.min(self.view.len() - 1)];
+            self.selection.only(self.cursor);
+            self.scroll_to_cursor = true;
+            if workspace == Workspace::Preview {
+                self.workspace = Workspace::Preview;
+            }
         }
     }
 
@@ -2521,14 +2581,32 @@ impl App {
             Edit::Redo if text_focus => push(key(egui::Key::Z, true)),
             Edit::SelectAll if is_root => self.selection.all(&self.view),
             Edit::Undo if is_root => {
-                if let Some((label, apply)) = self.undo.undo() {
-                    self.apply_marks(&apply);
+                if let Some((label, apply, trashed)) = self.undo.undo() {
+                    if trashed.is_empty() {
+                        self.apply_marks(&apply);
+                    } else {
+                        self.restore_from_trash(&trashed);
+                    }
                     self.status = format!("Undid {label}");
                 }
             }
             Edit::Redo if is_root => {
-                if let Some((label, apply)) = self.undo.redo() {
-                    self.apply_marks(&apply);
+                if let Some((label, apply, trashed)) = self.undo.redo() {
+                    if trashed.is_empty() {
+                        self.apply_marks(&apply);
+                    } else {
+                        let files: Vec<PathBuf> = trashed.iter().map(|t| t.original.clone()).collect();
+                        match apature_core::fileops::trash_tracked(&files) {
+                            Ok(again) => {
+                                self.undo.set_top_trashed(again);
+                                self.reload_keep_state();
+                            }
+                            Err(e) => {
+                                self.status = e.to_string();
+                                return;
+                            }
+                        }
+                    }
                     self.status = format!("Redid {label}");
                 }
             }
@@ -2962,6 +3040,7 @@ impl App {
                 if changes.len() == 1 { "" } else { "s" }
             ),
             changes,
+            trashed: Vec::new(),
         });
         self.apply_marks(&apply);
         if self.prefs.advance_after_mark
@@ -3629,32 +3708,12 @@ impl App {
                 if !self.items.is_empty() {
                     let mut targets = self.selection.targets(self.cursor);
                     targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
-                    // The system's own confirmation (a sheet on macOS); the
-                    // in-window dialog stays for headless screenshot runs.
+                    // Immediate, undoable. Only the headless screenshot run
+                    // keeps the in-window dialog (the capture of it).
                     if self.launch.screenshot.is_some() {
                         self.trash_dialog = Some(targets);
                     } else {
-                        let n = targets.len();
-                        let files: usize = targets
-                            .iter()
-                            .map(|&i| apature_core::fileops::item_files(&self.items[i]).len())
-                            .sum();
-                        let ok = rfd::MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Warning)
-                            .set_title(if n == 1 { "Move this photo to the Trash?" } else { "Move these photos to the Trash?" })
-                            .set_description(format!(
-                                "{n} photo{} ({files} file{} with sidecars and pairs) go to the Trash. You can put them back from the Finder.",
-                                if n == 1 { "" } else { "s" },
-                                if files == 1 { "" } else { "s" }
-                            ))
-                            .set_buttons(rfd::MessageButtons::OkCancelCustom("Move to Trash".into(), "Cancel".into()))
-                            .show();
-                        if ok == rfd::MessageDialogResult::Ok
-                            || matches!(ok, rfd::MessageDialogResult::Custom(ref s) if s == "Move to Trash")
-                        {
-                            self.trash_dialog = Some(targets);
-                            self.trash_confirm();
-                        }
+                        self.trash_now(targets);
                     }
                 }
             }
@@ -4013,9 +4072,9 @@ impl App {
             if pressed(Key::ArrowDown) {
                 out.push(mv(if in_preview { 1 } else { cols }));
             }
-            // Delete or Backspace: the Move to Trash sheet for the focused photo
-            // or the selection (it shows what will move before anything does).
-            // The crop tool keeps Backspace for "remove crop".
+            // Delete or Backspace: move the focused photo or the selection to the
+            // Trash at once; ⌘Z puts it back. The crop tool keeps Backspace for
+            // "remove crop".
             if (pressed(Key::Delete) || pressed(Key::Backspace))
                 && !cmd
                 && matches!(self.workspace, Workspace::Sheet | Workspace::Preview)

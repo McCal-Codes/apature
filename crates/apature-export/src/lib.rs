@@ -252,6 +252,42 @@ fn resize_to(img: Rgb, long_side: u32) -> Rgb {
     Rgb::from_image(out)
 }
 
+/// Turn the picture `deg` degrees clockwise about its centre (bilinear),
+/// keeping the frame size; the corners the turn uncovers are black and the
+/// crop is expected to cut them away.
+fn straighten_by(img: Rgb, deg: f32) -> Rgb {
+    let (w, h) = (img.width as usize, img.height as usize);
+    let (s, c) = deg.to_radians().sin_cos();
+    let (cx, cy) = (w as f32 / 2.0, h as f32 / 2.0);
+    let mut out = vec![0u8; img.data.len()];
+    for y in 0..h {
+        let dy = y as f32 + 0.5 - cy;
+        for x in 0..w {
+            let dx = x as f32 + 0.5 - cx;
+            let sx = dx * c + dy * s + cx - 0.5;
+            let sy = -dx * s + dy * c + cy - 0.5;
+            if sx < 0.0 || sy < 0.0 || sx > (w - 1) as f32 || sy > (h - 1) as f32 {
+                continue;
+            }
+            let (x0, y0) = (sx as usize, sy as usize);
+            let (x1, y1) = ((x0 + 1).min(w - 1), (y0 + 1).min(h - 1));
+            let (fx, fy) = (sx - x0 as f32, sy - y0 as f32);
+            let o = (y * w + x) * 3;
+            for ch in 0..3 {
+                let p = |xx: usize, yy: usize| img.data[(yy * w + xx) * 3 + ch] as f32;
+                let top = p(x0, y0) * (1.0 - fx) + p(x1, y0) * fx;
+                let bot = p(x0, y1) * (1.0 - fx) + p(x1, y1) * fx;
+                out[o + ch] = (top * (1.0 - fy) + bot * fy + 0.5) as u8;
+            }
+        }
+    }
+    Rgb {
+        width: img.width,
+        height: img.height,
+        data: out,
+    }
+}
+
 fn crop_to(img: Rgb, c: edits::Crop) -> Rgb {
     let (x, y, w, h) = c.pixels(img.width, img.height);
     if (x, y, w, h) == (0, 0, img.width, img.height) {
@@ -364,6 +400,11 @@ pub fn export(
         }
     } else {
         summary.orientation
+    };
+    let img = if edits.straighten.abs() > 0.001 {
+        straighten_by(img, edits.straighten)
+    } else {
+        img
     };
     let img = match edits.crop {
         Some(c) => crop_to(img, c),
@@ -563,6 +604,7 @@ mod tests {
                     bottom: 1.0,
                     right: 1.0,
                 })),
+                straighten: None,
             },
         )
         .unwrap();

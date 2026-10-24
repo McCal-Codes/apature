@@ -296,6 +296,8 @@ name = "apature-core"
 version = "0.1.1"
 dependencies = [
  "log",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
  "serde",
  "tempfile",
  "thiserror 2.0.21",

@@ -287,6 +287,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prefs::Outlet;
 
     #[test]
     fn reads_a_sports_sheet() {

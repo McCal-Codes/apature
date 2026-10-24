@@ -179,6 +179,116 @@ pub fn trash(paths: &[PathBuf]) -> Result<(), FileOpError> {
     }
 }
 
+/// A file the Trash now holds, with where it came from, so it can go back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Trashed {
+    pub original: PathBuf,
+    pub in_trash: PathBuf,
+}
+
+/// The user's Trash folder, where the platform keeps it as plain files.
+#[cfg(not(target_os = "macos"))]
+fn trash_dir() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    #[cfg(unix)]
+    {
+        Some(home.join(".local/share/Trash/files"))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = home;
+        None
+    }
+}
+
+/// [`trash`], and find where each file landed so [`restore`] can put it back.
+/// On macOS the system says where each item went (`trashItemAtURL` returns the
+/// resulting URL; the Trash folder itself is not readable without Full Disk
+/// Access). Elsewhere the Trash folder is searched for the new entries; where
+/// that is not possible the list is empty and the files stay in the Trash.
+#[cfg(target_os = "macos")]
+pub fn trash_tracked(paths: &[PathBuf]) -> Result<Vec<Trashed>, FileOpError> {
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+    let fm = NSFileManager::defaultManager();
+    let mut out = Vec::new();
+    for p in paths {
+        let Some(s) = p.to_str() else {
+            trash(std::slice::from_ref(p))?;
+            continue;
+        };
+        let url = NSURL::fileURLWithPath(&NSString::from_str(s));
+        let mut landed = None;
+        fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut landed))
+            .map_err(|e| FileOpError::Trash(e.to_string()))?;
+        if let Some(in_trash) = landed.and_then(|u| u.path()).map(|n| PathBuf::from(n.to_string())) {
+            out.push(Trashed {
+                original: p.clone(),
+                in_trash,
+            });
+        }
+    }
+    Ok(out)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn trash_tracked(paths: &[PathBuf]) -> Result<Vec<Trashed>, FileOpError> {
+    let dir = trash_dir();
+    let names = |d: &Path| -> Vec<std::ffi::OsString> {
+        std::fs::read_dir(d)
+            .map(|r| r.filter_map(|e| e.ok().map(|e| e.file_name())).collect())
+            .unwrap_or_default()
+    };
+    let before: HashSet<std::ffi::OsString> = dir.as_deref().map(names).unwrap_or_default().into_iter().collect();
+    trash(paths)?;
+    let Some(dir) = dir else {
+        return Ok(Vec::new());
+    };
+    let mut fresh: Vec<std::ffi::OsString> = names(&dir).into_iter().filter(|n| !before.contains(n)).collect();
+    let mut out = Vec::new();
+    for p in paths {
+        let Some(name) = p.file_name() else { continue };
+        let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let ext = p.extension().map(|e| e.to_os_string());
+        let pick = fresh.iter().position(|n| n == name).or_else(|| {
+            fresh.iter().position(|n| {
+                let np = Path::new(n);
+                let s = np.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                np.extension().map(|e| e.to_os_string()) == ext && s.starts_with(&format!("{stem} "))
+            })
+        });
+        if let Some(i) = pick {
+            out.push(Trashed {
+                original: p.clone(),
+                in_trash: dir.join(fresh.swap_remove(i)),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Put trashed files back where they were. Refuses to overwrite: a file that
+/// already sits at the original path is left alone and counted as skipped.
+/// Returns (restored, skipped).
+pub fn restore(items: &[Trashed]) -> Result<(usize, usize), FileOpError> {
+    let (mut done, mut skipped) = (0, 0);
+    for t in items {
+        if t.original.exists() || !t.in_trash.exists() {
+            skipped += 1;
+            continue;
+        }
+        if let Some(parent) = t.original.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| FileOpError::Io(parent.to_path_buf(), e))?;
+        }
+        if std::fs::rename(&t.in_trash, &t.original).is_err() {
+            // Another volume (a synced drive): copy, then drop the Trash copy.
+            std::fs::copy(&t.in_trash, &t.original).map_err(|e| FileOpError::Io(t.original.clone(), e))?;
+            let _ = std::fs::remove_file(&t.in_trash);
+        }
+        done += 1;
+    }
+    Ok((done, skipped))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,4 +377,44 @@ mod tests {
             Err(FileOpError::BadName(_))
         ));
     }
+
+    #[test]
+    fn restore_puts_files_back_and_never_overwrites() {
+        let dir = tempfile::tempdir().unwrap();
+        let (home, trash) = (dir.path().join("photos"), dir.path().join("trash"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&trash).unwrap();
+        let (a, b) = (home.join("a.NEF"), home.join("b.NEF"));
+        let (ta, tb) = (trash.join("a.NEF"), trash.join("b 2.NEF"));
+        std::fs::write(&ta, "a").unwrap();
+        std::fs::write(&tb, "b").unwrap();
+        std::fs::write(&b, "new b").unwrap();
+        let items = vec![
+            Trashed { original: a.clone(), in_trash: ta },
+            Trashed { original: b.clone(), in_trash: tb.clone() },
+        ];
+        assert_eq!(restore(&items).unwrap(), (1, 1));
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "a");
+        assert_eq!(std::fs::read_to_string(&b).unwrap(), "new b");
+        assert!(tb.exists(), "the clash stays in the Trash");
+    }
+
+    /// Touches the real Trash, so it only runs on request:
+    /// `cargo test -p apature-core -- --ignored trash_round_trip`.
+    #[test]
+    #[ignore]
+    fn trash_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = format!("apature-trash-test-{}.NEF", std::process::id());
+        let (a, side) = (dir.path().join(&name), dir.path().join(name.replace(".NEF", ".XMP")));
+        std::fs::write(&a, "raw").unwrap();
+        std::fs::write(&side, "xmp").unwrap();
+        let t = trash_tracked(&[a.clone(), side.clone()]).unwrap();
+        assert_eq!(t.len(), 2, "both files located in the Trash: {t:?}");
+        assert!(!a.exists() && !side.exists());
+        assert_eq!(restore(&t).unwrap(), (2, 0));
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "raw");
+        assert_eq!(std::fs::read_to_string(&side).unwrap(), "xmp");
+    }
 }
+
