@@ -1017,6 +1017,24 @@ fn cmd_export(
     if items.is_empty() {
         anyhow::bail!("nothing to export");
     }
+    // A cloud drive's online-only placeholder blocks the read for as long as
+    // the download takes (maybe forever): say so up front, not 40 files in.
+    let waiting: Vec<_> = items
+        .iter()
+        .filter(|it| {
+            apature_core::fileops::item_files(it)
+                .iter()
+                .any(|f| apature_core::fileops::is_online_only(f))
+        })
+        .map(|it| it.display_name())
+        .collect();
+    if !waiting.is_empty() {
+        anyhow::bail!(
+            "{} photo(s) are online-only (the cloud drive has not downloaded them): {}. Download them, or export from the card.",
+            waiting.len(),
+            waiting.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+        );
+    }
     let settings = apature_export::Settings {
         long_side: long,
         quality,

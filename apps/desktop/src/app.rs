@@ -1064,6 +1064,24 @@ impl App {
         if self.export.running.as_ref().is_some_and(|r| !r.finished) {
             return;
         }
+        let waiting = self
+            .export_targets()
+            .into_iter()
+            .filter(|&i| {
+                apature_core::fileops::item_files(&self.items[i])
+                    .iter()
+                    .any(|f| apature_core::fileops::is_online_only(f))
+            })
+            .count();
+        if waiting > 0 {
+            // A cloud drive's placeholder would stall the export on a download.
+            self.status = format!(
+                "{waiting} photo{} online-only (not downloaded by the cloud drive): download {} first, or export from the card",
+                if waiting == 1 { " is" } else { "s are" },
+                if waiting == 1 { "it" } else { "them" }
+            );
+            return;
+        }
         let names = self.export_names();
         if names.is_empty() {
             if self.launch.export_run {

@@ -11,6 +11,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 - Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
 
 ### Fixed
+- Exporting photos that a cloud drive keeps online-only (Google Drive, iCloud) no longer hangs: Apature says which ones are not downloaded and stops before starting.
 - On macOS the bare keys (1–5 rate, 0 clears, T tag, X reject, Z zoom, C compare, …) did nothing: AppKit offers the menu only ⌘-shortcuts while Apature's own view has the keyboard, and the app skipped bare keys on the assumption that the menu handled them. It handles them itself now.
 - A `code:` line in an assignment (for example `code: tail = ...`) now beats the generated boilerplate of the same name, and keeps its leading space.
 

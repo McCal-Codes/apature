@@ -180,6 +180,8 @@ pub enum ExportError {
     Xmp(#[from] apature_metadata::xmp::XmpError),
     #[error("{0}")]
     Jpeg(#[from] apature_metadata::jpeg_xmp::JpegXmpError),
+    #[error("{0} is online-only (the cloud drive has not downloaded it); download it, or export from the card")]
+    OnlineOnly(PathBuf),
     #[error("system RAW decode of {0} failed: {1}")]
     RawDecode(PathBuf, String),
 }
@@ -325,6 +327,9 @@ pub fn export(
         return Err(ExportError::Exists(out.to_path_buf()));
     }
     let (src_path, mut is_jpeg) = pixel_source(item)?;
+    if apature_core::fileops::is_online_only(&src_path) {
+        return Err(ExportError::OnlineOnly(src_path));
+    }
     let mut pixels = if is_jpeg {
         PixelSource::Jpeg
     } else {

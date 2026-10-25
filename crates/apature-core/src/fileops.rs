@@ -179,6 +179,24 @@ pub fn trash(paths: &[PathBuf]) -> Result<(), FileOpError> {
     }
 }
 
+/// True when `path` is an online-only placeholder (a cloud drive such as
+/// Google Drive or iCloud lists it but has not downloaded it): reading it
+/// would block until the download finishes, which may be never. macOS marks
+/// these `SF_DATALESS`; elsewhere this is always false.
+pub fn is_online_only(path: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::macos::fs::MetadataExt;
+        const SF_DATALESS: u32 = 0x4000_0000;
+        std::fs::symlink_metadata(path).is_ok_and(|m| m.st_flags() & SF_DATALESS != 0)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        false
+    }
+}
+
 /// A file the Trash now holds, with where it came from, so it can go back.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Trashed {
@@ -444,5 +462,14 @@ mod tests {
         assert_eq!(restore(&t).unwrap(), (2, 0));
         assert_eq!(std::fs::read_to_string(&a).unwrap(), "raw");
         assert_eq!(std::fs::read_to_string(&side).unwrap(), "xmp");
+    }
+
+    #[test]
+    fn an_ordinary_file_is_not_online_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.NEF");
+        std::fs::write(&p, "x").unwrap();
+        assert!(!is_online_only(&p));
+        assert!(!is_online_only(&dir.path().join("missing.NEF")));
     }
 }
