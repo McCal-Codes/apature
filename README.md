@@ -139,8 +139,9 @@ refreshes, `⌘,` opens Settings. The full table is in Settings › Shortcuts.
 
 ## Promises
 
-- Originals are never modified. Marks, rotation and crop go to the XMP sidecar next to the file, edited property by
-  property so what Photo Mechanic or Lightroom wrote survives.
+- The image data of an original is never changed. Marks, rotation, crop and straighten go to the XMP sidecar next to a
+  RAW, edited property by property so what Photo Mechanic or Lightroom wrote survives; for a JPEG the same metadata is
+  written into the file's own XMP segment, and the pixels are untouched.
 - `xmp:Rating`, `xmp:Label`, `photomechanic:ColorClass` and `photomechanic:Tagged` are written together, which is
   what both of those need to agree on a label.
 - Copies are verified by hash before they count. The card is read-only.
