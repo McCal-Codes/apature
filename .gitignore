@@ -10,3 +10,4 @@
 
 # Generated Photoshop files: attached to releases as the press kit zip
 docs/marketing/*.psd
+dist/

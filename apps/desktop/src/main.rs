@@ -33,6 +33,7 @@ pub struct Launch {
     pub live: bool,
     /// Open the About window at launch (screenshots).
     pub about: bool,
+    pub whats_new: bool,
     /// Open the welcome (onboarding) at start (screenshots).
     pub welcome: bool,
     /// Start Receive over Wi-Fi on the ingest source at launch (screenshots, tests).
@@ -104,6 +105,7 @@ fn parse_args() -> Launch {
             "--crop" => l.crop = true,
             "--live" => l.live = true,
             "--about" => l.about = true,
+            "--whats-new" => l.whats_new = true,
             "--welcome" => l.welcome = true,
             "--receive" => l.receive = true,
             "--camera" => l.camera = true,

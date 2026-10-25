@@ -204,6 +204,8 @@ pub struct Prefs {
     pub last_update_check: u64,
     /// A version the person chose to skip.
     pub skipped_update: Option<String>,
+    /// The version whose What's New the person has seen.
+    pub last_seen_version: String,
     pub export: ExportPrefs,
     /// Export presets per outlet: size, quality, naming, format and the
     /// delivery target in one chip.
@@ -267,6 +269,7 @@ impl Default for Prefs {
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,
+            last_seen_version: String::new(),
             last_update_check: 0,
             skipped_update: None,
             export: ExportPrefs::default(),

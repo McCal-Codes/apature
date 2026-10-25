@@ -434,6 +434,8 @@ pub struct App {
     next_generation: u64,
     pub settings_open: bool,
     pub about_open: bool,
+    /// What's New, shown once per version after an update.
+    pub whats_new_open: bool,
     /// Settings search text; non-empty replaces the page with results.
     pub settings_query: String,
     /// The welcome (onboarding) modal and its page.
@@ -509,6 +511,12 @@ impl App {
             .favorites
             .retain(|p| p.exists() || Platform::is_volume(p));
         let onboarded = prefs.onboarded;
+        let prefs_last_seen = prefs.last_seen_version.clone();
+        // A first launch gets the welcome, not the news; later launches get
+        // the news once per version.
+        if prefs.last_seen_version != env!("CARGO_PKG_VERSION") && !onboarded {
+            prefs.last_seen_version = env!("CARGO_PKG_VERSION").to_string();
+        }
         apature_metadata::codes::set_user_vars(prefs.variables.clone());
         let platform = Platform::new();
         let mut app = App {
@@ -574,6 +582,10 @@ impl App {
             next_generation: 1,
             settings_open: false,
             about_open: launch.about,
+            whats_new_open: launch.whats_new
+                || (onboarded
+                    && launch.screenshot.is_none()
+                    && prefs_last_seen != env!("CARGO_PKG_VERSION")),
             settings_query: String::new(),
             welcome_open: launch.welcome || (!onboarded && launch.screenshot.is_none()),
             welcome_step: 0,
@@ -3848,6 +3860,7 @@ impl App {
             Command::NewAssignment => {
                 self.assignment_sheet_open = true;
             }
+            Command::OpenWhatsNew => self.whats_new_open = true,
             Command::OpenWelcome => {
                 self.welcome_open = true;
                 self.welcome_step = 0;
@@ -4450,6 +4463,7 @@ impl eframe::App for App {
         ui::settings::show(self, ctx, &t);
         ui::dialogs::show(self, ctx, &t);
         ui::welcome::show(self, ctx, &t);
+        ui::whats_new::show(self, ctx, &t);
         ui::assignments::show(self, ctx, &t);
         ui::welcome::tips(self, ctx, &t);
         ui::status::show(self, ctx, &t);

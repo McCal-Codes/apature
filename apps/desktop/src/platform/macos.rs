@@ -355,6 +355,7 @@ impl MenuBar {
         let help = Submenu::new("Help", true);
         help.append_items(&[
             &item(Command::OpenWelcome, "Welcome to Apature…", None),
+            &item(Command::OpenWhatsNew, "What’s New in Apature…", None),
             &item(
                 Command::ImportPhotoMechanic,
                 "Import from Photo Mechanic…",

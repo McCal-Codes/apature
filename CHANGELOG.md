@@ -6,6 +6,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [Unreleased]
 
 ### Added
+- What's New: after an update a short page shows the newest section of the changelog once; Help › What's New in Apature… and About › What's new bring it back. The page is read from the changelog file, so it never drifts from it.
 - Straighten: `apature-cli level` estimates how far a frame is tilted from the long straight edges in it (horizons, banners, poles, goal posts); `apature-cli straighten --degrees` stores the angle in the sidecar (`apature:Straighten`) and export turns the picture and then applies the crop, so exports come out level. The in-app preview does not show it yet.
 - Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
 

@@ -53,9 +53,15 @@ fn about(app: &mut App, ctx: &egui::Context, t: &Theme) {
         });
         ui.add_space(S3);
         ui.vertical_centered(|ui| {
-            if ui.button("Close").clicked() {
-                app.about_open = false;
-            }
+            ui.horizontal(|ui| {
+                if ui.button("What’s new").clicked() {
+                    app.whats_new_open = true;
+                    app.about_open = false;
+                }
+                if ui.button("Close").clicked() {
+                    app.about_open = false;
+                }
+            });
         });
     });
     if modal.should_close() {

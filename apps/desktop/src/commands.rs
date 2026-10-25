@@ -88,6 +88,7 @@ pub enum Command {
     OpenShortcuts,
     OpenAbout,
     OpenWelcome,
+    OpenWhatsNew,
     /// Load this assignment file (from the list or a new one).
     LoadAssignmentFrom(PathBuf),
     /// Open the New assignment sheet.
@@ -238,6 +239,7 @@ impl Command {
             Command::OpenShortcuts => "help.shortcuts".into(),
             Command::OpenAbout => "app.about".into(),
             Command::OpenWelcome => "help.welcome".into(),
+            Command::OpenWhatsNew => "help.whatsnew".into(),
             Command::NewAssignment => "file.assignment.new".into(),
             Command::ImportPhotoMechanic => "file.import_pm".into(),
             Command::ReceiveToggle => "ingest.receive".into(),
@@ -266,6 +268,7 @@ impl Command {
             "help.shortcuts" => Command::OpenShortcuts,
             "app.about" => Command::OpenAbout,
             "help.welcome" => Command::OpenWelcome,
+            "help.whatsnew" => Command::OpenWhatsNew,
             "file.assignment.new" => Command::NewAssignment,
             "file.import_pm" => Command::ImportPhotoMechanic,
             "ingest.receive" => Command::ReceiveToggle,
