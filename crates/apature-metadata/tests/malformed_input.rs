@@ -67,10 +67,16 @@ fn xmp_and_edits_parse_garbage_text() {
     for c in &cases {
         let _ = xmp::parse(c);
         let e = edits::parse(c);
-        assert!(e.straighten.is_finite(), "a straighten angle is always a finite number");
+        assert!(
+            e.straighten.is_finite(),
+            "a straighten angle is always a finite number"
+        );
         if let Some(crop) = e.crop {
             for v in [crop.top, crop.left, crop.bottom, crop.right] {
-                assert!((0.0..=1.0).contains(&v), "a crop is always inside the frame");
+                assert!(
+                    (0.0..=1.0).contains(&v),
+                    "a crop is always inside the frame"
+                );
             }
         }
     }

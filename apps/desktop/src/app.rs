@@ -915,7 +915,10 @@ impl App {
                 self.reload_keep_state();
                 if recoverable {
                     self.undo.push(Entry {
-                        label: format!("move {n} photo{} to the Trash", if n == 1 { "" } else { "s" }),
+                        label: format!(
+                            "move {n} photo{} to the Trash",
+                            if n == 1 { "" } else { "s" }
+                        ),
                         changes: Vec::new(),
                         trashed,
                     });
@@ -923,7 +926,11 @@ impl App {
                 self.status = format!(
                     "Moved {n} photo{} to the Trash{}",
                     if n == 1 { "" } else { "s" },
-                    if recoverable { " · ⌘Z brings it back" } else { "" }
+                    if recoverable {
+                        " · ⌘Z brings it back"
+                    } else {
+                        ""
+                    }
                 );
             }
             Err(e) => self.status = e.to_string(),
@@ -937,7 +944,8 @@ impl App {
                 self.reload_keep_state();
                 if let Some(first) = trashed.first() {
                     if let Some(i) = self.items.iter().position(|it| {
-                        it.path() == first.original || it.secondary.iter().any(|v| v.path == first.original)
+                        it.path() == first.original
+                            || it.secondary.iter().any(|v| v.path == first.original)
                     }) {
                         if self.pos[i].is_some() {
                             self.cursor = i;
@@ -947,9 +955,15 @@ impl App {
                     }
                 }
                 self.status = if skipped > 0 {
-                    format!("Restored {done} file{}; {skipped} already existed or left the Trash", if done == 1 { "" } else { "s" })
+                    format!(
+                        "Restored {done} file{}; {skipped} already existed or left the Trash",
+                        if done == 1 { "" } else { "s" }
+                    )
                 } else {
-                    format!("Restored {done} file{} from the Trash", if done == 1 { "" } else { "s" })
+                    format!(
+                        "Restored {done} file{} from the Trash",
+                        if done == 1 { "" } else { "s" }
+                    )
                 };
             }
             Err(e) => self.status = e.to_string(),
@@ -963,14 +977,22 @@ impl App {
         let Some(dir) = self.folder.clone() else {
             return;
         };
-        let old_paths: Vec<PathBuf> = self.items.iter().map(|it| it.path().to_path_buf()).collect();
+        let old_paths: Vec<PathBuf> = self
+            .items
+            .iter()
+            .map(|it| it.path().to_path_buf())
+            .collect();
         let mut undo = std::mem::take(&mut self.undo);
         let filter = self.filter.clone();
         let workspace = self.workspace;
         let pos = self.cursor_pos();
         self.load_folder(&dir);
-        let now: std::collections::HashMap<&Path, usize> =
-            self.items.iter().enumerate().map(|(i, it)| (it.path(), i)).collect();
+        let now: std::collections::HashMap<&Path, usize> = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, it)| (it.path(), i))
+            .collect();
         undo.remap(|i| old_paths.get(i).and_then(|p| now.get(p.as_path()).copied()));
         self.undo = undo;
         self.filter = filter;
@@ -2607,7 +2629,8 @@ impl App {
                     if trashed.is_empty() {
                         self.apply_marks(&apply);
                     } else {
-                        let files: Vec<PathBuf> = trashed.iter().map(|t| t.original.clone()).collect();
+                        let files: Vec<PathBuf> =
+                            trashed.iter().map(|t| t.original.clone()).collect();
                         match apature_core::fileops::trash_tracked(&files) {
                             Ok(again) => {
                                 self.undo.set_top_trashed(again);

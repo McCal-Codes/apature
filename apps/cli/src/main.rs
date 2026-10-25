@@ -1114,7 +1114,9 @@ fn level_of(jpeg: &[u8]) -> anyhow::Result<(f32, f32)> {
     let mut hist = vec![0f64; nb];
     for y in 1..h - 1 {
         for x in 1..w - 1 {
-            let g = |dx: isize, dy: isize| gray[(y as isize + dy) as usize * w + (x as isize + dx) as usize];
+            let g = |dx: isize, dy: isize| {
+                gray[(y as isize + dy) as usize * w + (x as isize + dx) as usize]
+            };
             let gx = (g(1, -1) + 2.0 * g(1, 0) + g(1, 1)) - (g(-1, -1) + 2.0 * g(-1, 0) + g(-1, 1));
             let gy = (g(-1, 1) + 2.0 * g(0, 1) + g(1, 1)) - (g(-1, -1) + 2.0 * g(0, -1) + g(1, -1));
             let mag = (gx * gx + gy * gy).sqrt();
@@ -1137,7 +1139,11 @@ fn level_of(jpeg: &[u8]) -> anyhow::Result<(f32, f32)> {
                 }
                 a
             } else if vertical {
-                if a > 0.0 { a - 90.0 } else { a + 90.0 }
+                if a > 0.0 {
+                    a - 90.0
+                } else {
+                    a + 90.0
+                }
             } else {
                 continue;
             };
@@ -1156,17 +1162,33 @@ fn level_of(jpeg: &[u8]) -> anyhow::Result<(f32, f32)> {
                 .sum()
         })
         .collect();
-    let (pk, _) = sm.iter().enumerate().fold((0, 0.0), |m, (i, &v)| if v > m.1 { (i, v) } else { m });
+    let (pk, _) = sm
+        .iter()
+        .enumerate()
+        .fold((0, 0.0), |m, (i, &v)| if v > m.1 { (i, v) } else { m });
     let total: f64 = hist.iter().sum();
-    let near: f64 = (0..nb).filter(|&j| (j as isize - pk as isize).abs() <= 3).map(|j| hist[j]).sum();
+    let near: f64 = (0..nb)
+        .filter(|&j| (j as isize - pk as isize).abs() <= 3)
+        .map(|j| hist[j])
+        .sum();
     let tilt = pk as f32 * STEP - RANGE; // clockwise-positive tilt of the content
-    Ok((-tilt, if total > 0.0 { (near / total) as f32 } else { 0.0 }))
+    Ok((
+        -tilt,
+        if total > 0.0 {
+            (near / total) as f32
+        } else {
+            0.0
+        },
+    ))
 }
 
 fn cmd_level(files: &[PathBuf]) -> anyhow::Result<()> {
     for f in files {
         let bytes = std::fs::read(f)?;
-        let name = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = f
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         match level_of(&bytes) {
             Ok((turn, conf)) => println!("{name}\t{turn:+.2}\t{conf:.2}"),
             Err(e) => println!("{name}\terror: {e}"),

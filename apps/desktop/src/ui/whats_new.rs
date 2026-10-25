@@ -41,7 +41,12 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
         ui.set_width(420.0);
         ui.spacing_mut().item_spacing.y = S2;
         super::eyebrow(ui, t, "What’s new");
-        ui.label(RichText::new(format!("Apature {version}")).size(20.0).strong().color(t.text));
+        ui.label(
+            RichText::new(format!("Apature {version}"))
+                .size(20.0)
+                .strong()
+                .color(t.text),
+        );
         ui.add_space(S1);
         for item in &items {
             ui.horizontal_top(|ui| {
@@ -51,9 +56,15 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
         }
         ui.add_space(S3);
         ui.horizontal(|ui| {
-            ui.hyperlink_to("All changes", "https://github.com/McCal-Codes/apature/blob/main/CHANGELOG.md");
+            ui.hyperlink_to(
+                "All changes",
+                "https://github.com/McCal-Codes/apature/blob/main/CHANGELOG.md",
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.add(egui::Button::new(RichText::new("Got it").strong())).clicked() {
+                if ui
+                    .add(egui::Button::new(RichText::new("Got it").strong()))
+                    .clicked()
+                {
                     close = true;
                 }
             });
@@ -72,7 +83,8 @@ mod tests {
 
     #[test]
     fn newest_section_only() {
-        let (v, items) = newest("## 0.1.2
+        let (v, items) = newest(
+            "## 0.1.2
 
 - One
 - Two
@@ -80,7 +92,8 @@ mod tests {
 ## 0.1.1
 
 - Old
-");
+",
+        );
         assert_eq!(v, "0.1.2");
         assert_eq!(items, vec!["One", "Two"]);
     }

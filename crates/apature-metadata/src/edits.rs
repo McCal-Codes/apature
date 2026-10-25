@@ -283,7 +283,9 @@ fn satisfied(change: &Change, got: &Edits) -> bool {
             }
         }
     };
-    let s_ok = change.straighten.map_or(true, |d| (d - got.straighten).abs() < 0.01);
+    let s_ok = change
+        .straighten
+        .map_or(true, |d| (d - got.straighten).abs() < 0.01);
     o_ok && c_ok && s_ok
 }
 
@@ -504,10 +506,24 @@ mod tests {
 
     #[test]
     fn straighten_round_trips_and_clears() {
-        let t = apply("", &Change { straighten: Some(-2.25), ..Default::default() }).unwrap();
+        let t = apply(
+            "",
+            &Change {
+                straighten: Some(-2.25),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert!((parse(&t).straighten + 2.25).abs() < 1e-3, "{t}");
         assert!(parse(&t).is_edited());
-        let t = apply(&t, &Change { straighten: Some(0.0), ..Default::default() }).unwrap();
+        let t = apply(
+            &t,
+            &Change {
+                straighten: Some(0.0),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(parse(&t).straighten, 0.0, "{t}");
     }
 }

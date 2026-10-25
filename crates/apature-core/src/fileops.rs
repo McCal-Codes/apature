@@ -220,7 +220,10 @@ pub fn trash_tracked(paths: &[PathBuf]) -> Result<Vec<Trashed>, FileOpError> {
         let mut landed = None;
         fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut landed))
             .map_err(|e| FileOpError::Trash(e.to_string()))?;
-        if let Some(in_trash) = landed.and_then(|u| u.path()).map(|n| PathBuf::from(n.to_string())) {
+        if let Some(in_trash) = landed
+            .and_then(|u| u.path())
+            .map(|n| PathBuf::from(n.to_string()))
+        {
             out.push(Trashed {
                 original: p.clone(),
                 in_trash,
@@ -238,22 +241,37 @@ pub fn trash_tracked(paths: &[PathBuf]) -> Result<Vec<Trashed>, FileOpError> {
             .map(|r| r.filter_map(|e| e.ok().map(|e| e.file_name())).collect())
             .unwrap_or_default()
     };
-    let before: HashSet<std::ffi::OsString> = dir.as_deref().map(names).unwrap_or_default().into_iter().collect();
+    let before: HashSet<std::ffi::OsString> = dir
+        .as_deref()
+        .map(names)
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
     trash(paths)?;
     let Some(dir) = dir else {
         return Ok(Vec::new());
     };
-    let mut fresh: Vec<std::ffi::OsString> = names(&dir).into_iter().filter(|n| !before.contains(n)).collect();
+    let mut fresh: Vec<std::ffi::OsString> = names(&dir)
+        .into_iter()
+        .filter(|n| !before.contains(n))
+        .collect();
     let mut out = Vec::new();
     for p in paths {
         let Some(name) = p.file_name() else { continue };
-        let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let stem = p
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let ext = p.extension().map(|e| e.to_os_string());
         let pick = fresh.iter().position(|n| n == name).or_else(|| {
             fresh.iter().position(|n| {
                 let np = Path::new(n);
-                let s = np.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                np.extension().map(|e| e.to_os_string()) == ext && s.starts_with(&format!("{stem} "))
+                let s = np
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                np.extension().map(|e| e.to_os_string()) == ext
+                    && s.starts_with(&format!("{stem} "))
             })
         });
         if let Some(i) = pick {
@@ -277,11 +295,13 @@ pub fn restore(items: &[Trashed]) -> Result<(usize, usize), FileOpError> {
             continue;
         }
         if let Some(parent) = t.original.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| FileOpError::Io(parent.to_path_buf(), e))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| FileOpError::Io(parent.to_path_buf(), e))?;
         }
         if std::fs::rename(&t.in_trash, &t.original).is_err() {
             // Another volume (a synced drive): copy, then drop the Trash copy.
-            std::fs::copy(&t.in_trash, &t.original).map_err(|e| FileOpError::Io(t.original.clone(), e))?;
+            std::fs::copy(&t.in_trash, &t.original)
+                .map_err(|e| FileOpError::Io(t.original.clone(), e))?;
             let _ = std::fs::remove_file(&t.in_trash);
         }
         done += 1;
@@ -390,8 +410,14 @@ mod tests {
         std::fs::write(&tb, "b").unwrap();
         std::fs::write(&b, "new b").unwrap();
         let items = vec![
-            Trashed { original: a.clone(), in_trash: ta },
-            Trashed { original: b.clone(), in_trash: tb.clone() },
+            Trashed {
+                original: a.clone(),
+                in_trash: ta,
+            },
+            Trashed {
+                original: b.clone(),
+                in_trash: tb.clone(),
+            },
         ];
         assert_eq!(restore(&items).unwrap(), (1, 1));
         assert_eq!(std::fs::read_to_string(&a).unwrap(), "a");
@@ -406,7 +432,10 @@ mod tests {
     fn trash_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let name = format!("apature-trash-test-{}.NEF", std::process::id());
-        let (a, side) = (dir.path().join(&name), dir.path().join(name.replace(".NEF", ".XMP")));
+        let (a, side) = (
+            dir.path().join(&name),
+            dir.path().join(name.replace(".NEF", ".XMP")),
+        );
         std::fs::write(&a, "raw").unwrap();
         std::fs::write(&side, "xmp").unwrap();
         let t = trash_tracked(&[a.clone(), side.clone()]).unwrap();
@@ -417,4 +446,3 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&side).unwrap(), "xmp");
     }
 }
-

@@ -146,9 +146,21 @@ mod tests {
     #[test]
     fn remap_follows_photos_and_drops_the_ones_that_left() {
         let mut s = UndoStack::default();
-        let ch = |idx| Change { idx, before: m(0), after: m(3) };
-        s.push(Entry { label: "rate".into(), changes: vec![ch(1), ch(4)], trashed: vec![] });
-        s.push(Entry { label: "rate one".into(), changes: vec![ch(1)], trashed: vec![] });
+        let ch = |idx| Change {
+            idx,
+            before: m(0),
+            after: m(3),
+        };
+        s.push(Entry {
+            label: "rate".into(),
+            changes: vec![ch(1), ch(4)],
+            trashed: vec![],
+        });
+        s.push(Entry {
+            label: "rate one".into(),
+            changes: vec![ch(1)],
+            trashed: vec![],
+        });
         // Photo 1 was deleted: 0 stays, 2.. shift down by one.
         s.remap(|i| match i {
             1 => None,
@@ -156,9 +168,11 @@ mod tests {
             i => Some(i),
         });
         let (label, apply, _) = s.undo().unwrap();
-        assert_eq!(label, "rate", "the entry that only touched the deleted photo is gone");
+        assert_eq!(
+            label, "rate",
+            "the entry that only touched the deleted photo is gone"
+        );
         assert_eq!(apply, vec![(3, m(0))]);
         assert!(s.undo().is_none());
     }
 }
-

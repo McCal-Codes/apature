@@ -263,6 +263,9 @@ mod tests {
             a.codes().get("tail"),
             Some(" in a football game Friday, at the stadium.")
         );
-        assert!(a.codes().get("game").unwrap().contains("held"), "other boilerplate stays");
+        assert!(
+            a.codes().get("game").unwrap().contains("held"),
+            "other boilerplate stays"
+        );
     }
 }
