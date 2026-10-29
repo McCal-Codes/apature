@@ -1263,30 +1263,38 @@ fn cmd_transfer(
     let trash = |files: &[PathBuf]| apature_core::fileops::trash(files).map_err(|e| e.to_string());
     let total = items.len();
     let mut done = 0usize;
-    let report = transfer(&items, &to, mode, &alternates, &trash, &mut |src, r| {
-        let name = src
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        match r {
-            FileResult::Copied {
-                bytes,
-                from_alternate,
-            } => println!(
-                "  ✓ {name}  {:.1} MB{}",
-                *bytes as f64 / 1e6,
-                if *from_alternate {
-                    "  (read from the card)"
-                } else {
-                    ""
-                }
-            ),
-            FileResult::AlreadyThere => println!("  = {name}  already there, identical"),
-            FileResult::Failed(why) => println!("  ✗ {name}  {why}"),
-        }
-        done += 1;
-        let _ = total;
-    });
+    let report = transfer(
+        &items,
+        &to,
+        mode,
+        &alternates,
+        &trash,
+        &|| false,
+        &mut |src, r| {
+            let name = src
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            match r {
+                FileResult::Copied {
+                    bytes,
+                    from_alternate,
+                } => println!(
+                    "  ✓ {name}  {:.1} MB{}",
+                    *bytes as f64 / 1e6,
+                    if *from_alternate {
+                        "  (read from the card)"
+                    } else {
+                        ""
+                    }
+                ),
+                FileResult::AlreadyThere => println!("  = {name}  already there, identical"),
+                FileResult::Failed(why) => println!("  ✗ {name}  {why}"),
+            }
+            done += 1;
+            let _ = total;
+        },
+    );
     println!(
         "{} photo(s): {} file(s) copied, {} photo(s) failed{}",
         report.photos.len(),

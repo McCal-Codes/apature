@@ -157,6 +157,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                             cmds.push(Command::RevealInFinder);
                             ui.close();
                         }
+                        if ui.button("Copy or Move to…").clicked() {
+                            cmds.push(Command::TransferPhotos);
+                            ui.close();
+                        }
                         ui.separator();
                         if ui
                             .button(egui::RichText::new("Move to Trash").color(t.reject))

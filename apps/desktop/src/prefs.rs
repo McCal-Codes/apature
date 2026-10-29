@@ -206,6 +206,8 @@ pub struct Prefs {
     pub skipped_update: Option<String>,
     /// The version whose What's New the person has seen.
     pub last_seen_version: String,
+    /// Where Copy or Move Photos went last.
+    pub last_transfer_dest: Option<PathBuf>,
     pub export: ExportPrefs,
     /// Export presets per outlet: size, quality, naming, format and the
     /// delivery target in one chip.
@@ -269,6 +271,7 @@ impl Default for Prefs {
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,
+            last_transfer_dest: None,
             last_seen_version: String::new(),
             last_update_check: 0,
             skipped_update: None,

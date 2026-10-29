@@ -69,9 +69,137 @@ fn about(app: &mut App, ctx: &egui::Context, t: &Theme) {
     }
 }
 
+/// Copy or Move Photos: choose, watch, read the result. Three phases in one
+/// modal so the answer to "did it all verify?" is on the same screen.
+fn transfer_dialog(app: &mut App, ctx: &egui::Context, t: &Theme) -> Vec<Command> {
+    use apature_ingest::transfer::Mode;
+    let mut cmds: Vec<Command> = Vec::new();
+    let Some(d) = app.transfer_dialog.as_mut() else {
+        return cmds;
+    };
+    let n = d.targets.len();
+    let plural = if n == 1 { "" } else { "s" };
+    let phase = match d.running.as_ref() {
+        None => 0,
+        Some(r) if !r.finished => 1,
+        Some(_) => 2,
+    };
+    let modal = egui::Modal::new(egui::Id::new("transfer-dialog")).show(ctx, |ui| {
+        ui.set_width(520.0);
+        ui.spacing_mut().item_spacing.y = S2;
+        match phase {
+            0 => {
+                ui.label(RichText::new(format!("Copy or move {n} photo{plural}")).size(16.0).strong());
+                ui.label(RichText::new("Every file of a photo goes together (RAW, JPEG and the XMP sidecar). Each one is checked by SHA-256 and nothing is overwritten.").size(11.5).color(t.text2));
+                ui.add_space(S2);
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut d.mode, Mode::Copy, "Copy");
+                    ui.selectable_value(&mut d.mode, Mode::Move, "Move");
+                });
+                ui.label(
+                    RichText::new(if d.mode == Mode::Move {
+                        "Move: the originals go to the Trash only after every file of that photo is verified at the destination. ⌘Z brings them back."
+                    } else {
+                        "Copy: the originals stay where they are."
+                    })
+                    .size(11.5)
+                    .color(t.text2),
+                );
+                ui.add_space(S2);
+                ui.label(RichText::new("TO").monospace().size(9.5).color(t.muted));
+                ui.horizontal(|ui| {
+                    let text = d
+                        .dest
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| "No folder chosen".into());
+                    ui.add(egui::Label::new(RichText::new(text).monospace().size(11.0).color(t.text)).truncate());
+                    if ui.button("Choose…").clicked() {
+                        cmds.push(Command::TransferChooseDest);
+                    }
+                });
+                if d.card_present {
+                    ui.checkbox(&mut d.use_card, "If the cloud drive has not downloaded a file, read it from the camera card");
+                }
+                if let Some(e) = &d.error {
+                    ui.label(RichText::new(e).size(12.0).color(t.reject));
+                }
+                ui.add_space(S3);
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let verb = if d.mode == Mode::Move { "Move" } else { "Copy" };
+                        if ui.add(egui::Button::new(RichText::new(format!("{verb} {n} photo{plural}")).strong())).clicked() {
+                            cmds.push(Command::TransferStart);
+                        }
+                        if ui.button("Cancel").clicked() {
+                            cmds.push(Command::CloseDialog);
+                        }
+                    });
+                });
+            }
+            1 => {
+                let r = d.running.as_ref().unwrap();
+                ui.label(RichText::new(format!("{} {n} photo{plural}…", if r.mode == Mode::Move { "Moving" } else { "Copying" })).size(16.0).strong());
+                let frac = if r.total_files == 0 { 0.0 } else { r.done_files as f32 / r.total_files as f32 };
+                ui.add(egui::ProgressBar::new(frac).text(format!("{} of {} files", r.done_files, r.total_files)));
+                ui.label(RichText::new(&r.current).monospace().size(10.5).color(t.text2));
+                ui.add_space(S3);
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Stop after this photo").clicked() {
+                            cmds.push(Command::CloseDialog);
+                        }
+                    });
+                });
+            }
+            _ => {
+                let r = d.running.as_ref().unwrap();
+                let rep = r.report.as_ref();
+                let photos = rep.map(|x| x.photos.len()).unwrap_or(0);
+                let failed = rep.map(|x| x.failed()).unwrap_or(0);
+                let trashed = rep.map(|x| x.trashed()).unwrap_or(0);
+                let copied = rep.map(|x| x.files_copied()).unwrap_or(0);
+                let there = rep.map(|x| x.already_there()).unwrap_or(0);
+                let title = if failed == 0 { "Done" } else { "Done, with problems" };
+                ui.label(RichText::new(title).size(16.0).strong().color(if failed == 0 { t.text } else { t.reject }));
+                ui.label(RichText::new(format!("{photos} photo{} · {copied} file{} copied and verified · {:.1} MB{}", if photos == 1 { "" } else { "s" }, if copied == 1 { "" } else { "s" }, r.bytes as f64 / 1e6, if there > 0 { format!(" · {there} already there, identical") } else { String::new() })).size(12.0).color(t.text2));
+                if r.mode == Mode::Move {
+                    ui.label(RichText::new(format!("{trashed} photo{} sent to the Trash. ⌘Z puts them back.", if trashed == 1 { "" } else { "s" })).size(12.0).color(t.text2));
+                }
+                if failed > 0 {
+                    ui.label(RichText::new(format!("{failed} photo{} did not transfer; their originals were left alone:", if failed == 1 { "" } else { "s" })).size(12.0).color(t.reject));
+                    egui::ScrollArea::vertical().max_height(140.0).auto_shrink([false, true]).show(ui, |ui| {
+                        for (name, why) in r.failed_files.iter().take(30) {
+                            ui.label(RichText::new(format!("✕ {name}  {why}")).monospace().size(10.5).color(t.text2));
+                        }
+                    });
+                }
+                if rep.is_some_and(|x| x.photos.len() < n) {
+                    ui.label(RichText::new(format!("Stopped early: {} photo{} were not touched.", n - photos, if n - photos == 1 { "" } else { "s" })).size(12.0).color(t.text2));
+                }
+                ui.add_space(S3);
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(egui::Button::new(RichText::new("Done").strong())).clicked() {
+                            cmds.push(Command::CloseDialog);
+                        }
+                        if ui.button(format!("Show in {}", crate::platform::Platform::file_manager())).clicked() {
+                            cmds.push(Command::TransferOpenDest);
+                        }
+                    });
+                });
+            }
+        }
+    });
+    if modal.should_close() && phase != 1 {
+        cmds.push(Command::CloseDialog);
+    }
+    cmds
+}
+
 pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
     about(app, ctx, t);
-    let mut cmds: Vec<Command> = Vec::new();
+    let mut cmds: Vec<Command> = transfer_dialog(app, ctx, t);
 
     if let Some(d) = app.rename_dialog.as_mut() {
         let n = d.targets.len();

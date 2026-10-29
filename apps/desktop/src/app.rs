@@ -220,6 +220,18 @@ impl Default for PreviewView {
     }
 }
 
+/// Copy or Move Photos dialog state.
+pub struct TransferDialog {
+    pub targets: Vec<usize>,
+    pub mode: apature_ingest::transfer::Mode,
+    pub dest: Option<PathBuf>,
+    /// Read online-only files from a camera card when one is mounted.
+    pub use_card: bool,
+    pub card_present: bool,
+    pub running: Option<crate::transfer_job::Running>,
+    pub error: Option<String>,
+}
+
 /// Rename Photos dialog state.
 pub struct RenameDialog {
     pub template: String,
@@ -420,6 +432,8 @@ pub struct App {
     deliver_jobs: DeliverJobs,
     pub pv: PreviewView,
     pub rename_dialog: Option<RenameDialog>,
+    pub transfer_dialog: Option<TransferDialog>,
+    transfer_jobs: crate::transfer_job::TransferJobs,
     /// Internal metadata clipboard: marks plus IPTC of one photo.
     pub meta_clip: Option<(Marks, apature_metadata::Iptc)>,
     /// Items awaiting confirmation to go to the Trash.
@@ -570,6 +584,8 @@ impl App {
             },
             pv: PreviewView::default(),
             rename_dialog: None,
+            transfer_dialog: None,
+            transfer_jobs: crate::transfer_job::TransferJobs::new(cc.egui_ctx.clone()),
             meta_clip: None,
             trash_dialog: None,
             export_jobs: crate::export_job::ExportJobs::new(cc.egui_ctx.clone()),
@@ -748,6 +764,10 @@ impl App {
                 app.pv.zoom_since = None;
             }
         }
+        if launch.transfer_dialog && !app.view.is_empty() {
+            app.selection.all(&app.view);
+            app.open_transfer_dialog();
+        }
         if launch.rename_dialog && !app.view.is_empty() {
             app.selection.all(&app.view.clone());
             app.open_rename_dialog();
@@ -891,6 +911,112 @@ impl App {
                     d.error = Some(e.to_string());
                 }
             }
+        }
+    }
+
+    pub fn open_transfer_dialog(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let mut targets = self.selection.targets(self.cursor);
+        targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
+        let card_present = self
+            .volumes
+            .iter()
+            .any(|(_, p)| self.volume_kinds.get(p) == Some(&crate::platform::VolumeKind::Camera));
+        self.transfer_dialog = Some(TransferDialog {
+            targets,
+            mode: apature_ingest::transfer::Mode::Copy,
+            dest: self.prefs.last_transfer_dest.clone(),
+            use_card: true,
+            card_present,
+            running: None,
+            error: None,
+        });
+    }
+
+    fn transfer_start(&mut self) {
+        let Some(d) = self.transfer_dialog.as_mut() else {
+            return;
+        };
+        if d.running.is_some() {
+            return;
+        }
+        let Some(dest) = d.dest.clone() else {
+            d.error = Some("Choose where the photos should go.".into());
+            return;
+        };
+        // Copying onto the folder the photos already sit in would only report
+        // "already there"; say so instead.
+        if self.folder.as_deref() == Some(dest.as_path()) {
+            d.error = Some("That is the folder the photos are already in.".into());
+            return;
+        }
+        let items: Vec<PhotoItem> = d.targets.iter().map(|&i| self.items[i].clone()).collect();
+        let card_roots: Vec<PathBuf> = if d.use_card {
+            self.volumes
+                .iter()
+                .filter(|(_, p)| {
+                    self.volume_kinds.get(p) == Some(&crate::platform::VolumeKind::Camera)
+                })
+                .map(|(_, p)| p.join("DCIM"))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        d.error = None;
+        d.running = Some(
+            self.transfer_jobs
+                .start(items, dest.clone(), d.mode, card_roots),
+        );
+        self.prefs.last_transfer_dest = Some(dest);
+        self.prefs_dirty = true;
+    }
+
+    fn drain_transfer(&mut self) {
+        while let Some(msg) = self.transfer_jobs.try_recv() {
+            let Some(r) = self
+                .transfer_dialog
+                .as_mut()
+                .and_then(|d| d.running.as_mut())
+            else {
+                continue;
+            };
+            let mode = r.mode;
+            let Some(trashed) = crate::transfer_job::TransferJobs::apply(r, msg) else {
+                continue;
+            };
+            let (photos, failed, moved) = r
+                .report
+                .as_ref()
+                .map(|rep| (rep.photos.len(), rep.failed(), rep.trashed()))
+                .unwrap_or((0, 0, 0));
+            let dest = r.dest.clone();
+            if mode == apature_ingest::transfer::Mode::Move && !trashed.is_empty() {
+                self.reload_keep_state();
+                self.undo.push(Entry {
+                    label: format!(
+                        "move {moved} photo{} to {}",
+                        if moved == 1 { "" } else { "s" },
+                        dest.file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
+                    ),
+                    changes: Vec::new(),
+                    trashed,
+                });
+            }
+            self.status = if failed == 0 {
+                format!(
+                    "Transferred {photos} photo{} to {}",
+                    if photos == 1 { "" } else { "s" },
+                    dest.display()
+                )
+            } else {
+                format!(
+                    "{failed} of {photos} photos did not transfer; their originals were left alone"
+                )
+            };
         }
     }
 
@@ -3756,6 +3882,35 @@ impl App {
                 }
             }
             Command::RenamePhotos => self.open_rename_dialog(),
+            Command::TransferPhotos => self.open_transfer_dialog(),
+            Command::TransferChooseDest => {
+                let mut dlg = rfd::FileDialog::new().set_title("Copy or move the photos to…");
+                if let Some(d) = self
+                    .transfer_dialog
+                    .as_ref()
+                    .and_then(|d| d.dest.clone())
+                    .or_else(|| self.prefs.last_transfer_dest.clone())
+                {
+                    dlg = dlg.set_directory(d);
+                }
+                if let Some(p) = dlg.pick_folder() {
+                    if let Some(d) = self.transfer_dialog.as_mut() {
+                        d.dest = Some(p);
+                        d.error = None;
+                    }
+                }
+            }
+            Command::TransferStart => self.transfer_start(),
+            Command::TransferOpenDest => {
+                if let Some(d) = self
+                    .transfer_dialog
+                    .as_ref()
+                    .and_then(|d| d.running.as_ref())
+                    .map(|r| r.dest.clone())
+                {
+                    Platform::reveal(&d);
+                }
+            }
             Command::RenameApply => self.rename_apply(),
             Command::MoveToTrash => {
                 if !self.items.is_empty() {
@@ -3928,6 +4083,21 @@ impl App {
             Command::CloseDialog => {
                 self.rename_dialog = None;
                 self.trash_dialog = None;
+                // A running transfer is stopped, not abandoned: it finishes the
+                // photo in hand, and the dialog stays until it reports.
+                if let Some(r) = self
+                    .transfer_dialog
+                    .as_ref()
+                    .and_then(|d| d.running.as_ref())
+                {
+                    if !r.finished {
+                        r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                    } else {
+                        self.transfer_dialog = None;
+                    }
+                } else {
+                    self.transfer_dialog = None;
+                }
             }
             Command::ToggleCompare => self.toggle_compare(),
             Command::IngestStart => self.ingest_start(),
@@ -4467,6 +4637,7 @@ impl eframe::App for App {
         self.drain_results(ctx);
         self.drain_ingest();
         self.drain_export();
+        self.drain_transfer();
         self.drain_deliver();
         self.handle_drops(ctx);
         for c in self.platform.drain_menu() {

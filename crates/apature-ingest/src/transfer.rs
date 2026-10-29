@@ -66,6 +66,13 @@ impl Report {
             .filter(|(_, r)| matches!(r, FileResult::Copied { .. }))
             .count()
     }
+    pub fn already_there(&self) -> usize {
+        self.photos
+            .iter()
+            .flat_map(|p| &p.files)
+            .filter(|(_, r)| matches!(r, FileResult::AlreadyThere))
+            .count()
+    }
     pub fn trashed(&self) -> usize {
         self.photos.iter().filter(|p| p.trashed).count()
     }
@@ -102,10 +109,15 @@ pub fn transfer(
     mode: Mode,
     alternates: &[(u64, PathBuf)],
     trash: &dyn Fn(&[PathBuf]) -> Result<(), String>,
+    should_stop: &dyn Fn() -> bool,
     on_file: &mut dyn FnMut(&Path, &FileResult),
 ) -> Report {
     let mut report = Report::default();
     for item in items {
+        // Stopping happens between photos, never in the middle of one.
+        if should_stop() {
+            break;
+        }
         let mut files: Vec<(PathBuf, FileResult)> = Vec::new();
         let mut verified_sources: Vec<PathBuf> = Vec::new();
         for src in fileops::item_files(item) {
@@ -215,6 +227,7 @@ mod tests {
                 trashed.borrow_mut().extend_from_slice(f);
                 Ok(())
             },
+            &|| false,
             &mut |_, _| {},
         );
         assert_eq!(r.files_copied(), 2);
@@ -241,11 +254,27 @@ mod tests {
             trashed.borrow_mut().extend_from_slice(f);
             Ok(())
         };
-        let r = transfer(&items, dst.path(), Mode::Move, &[], &fake, &mut |_, _| {});
+        let r = transfer(
+            &items,
+            dst.path(),
+            Mode::Move,
+            &[],
+            &fake,
+            &|| false,
+            &mut |_, _| {},
+        );
         assert_eq!(r.trashed(), 1);
         assert_eq!(trashed.borrow().len(), 2);
         // Run again (the fake did not really remove them): already there, no new copies.
-        let r2 = transfer(&items, dst.path(), Mode::Copy, &[], &fake, &mut |_, _| {});
+        let r2 = transfer(
+            &items,
+            dst.path(),
+            Mode::Copy,
+            &[],
+            &fake,
+            &|| false,
+            &mut |_, _| {},
+        );
         assert_eq!(r2.files_copied(), 0);
         assert_eq!(r2.failed(), 0);
     }
@@ -266,6 +295,7 @@ mod tests {
                 trashed.borrow_mut().extend_from_slice(f);
                 Ok(())
             },
+            &|| false,
             &mut |_, _| {},
         );
         assert_eq!(r.failed(), 1);
@@ -286,5 +316,28 @@ mod tests {
         assert_eq!(idx.iter().filter(|(l, _)| *l == 5).count(), 1);
         assert_eq!(idx.len(), 2);
         let _ = item::Kind::Raw; // the item module is part of the public API used here
+    }
+
+    #[test]
+    fn stopping_leaves_the_rest_untouched() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        photo(src.path(), "A001", "one", None);
+        photo(src.path(), "A002", "two", None);
+        let seen = std::cell::Cell::new(0);
+        let r = transfer(
+            &items_of(src.path()),
+            dst.path(),
+            Mode::Copy,
+            &[],
+            &|_| Ok(()),
+            &|| {
+                seen.set(seen.get() + 1);
+                seen.get() > 1 // stop before the second photo
+            },
+            &mut |_, _| {},
+        );
+        assert_eq!(r.photos.len(), 1);
+        assert_eq!(fs::read_dir(dst.path()).unwrap().count(), 1);
     }
 }

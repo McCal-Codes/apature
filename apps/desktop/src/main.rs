@@ -15,6 +15,7 @@ mod platform;
 mod pm_import;
 mod prefs;
 mod selection;
+mod transfer_job;
 mod ui;
 mod undo;
 mod updater;
@@ -70,6 +71,7 @@ pub struct Launch {
     pub compare: bool,
     /// Open the Rename / Trash dialog at start (screenshots).
     pub rename_dialog: bool,
+    pub transfer_dialog: bool,
     pub trash_dialog: bool,
     /// Open the Settings window at start (screenshots).
     pub settings: bool,
@@ -124,6 +126,7 @@ fn parse_args() -> Launch {
             }
             "--settings" => l.settings = true,
             "--rename-dialog" => l.rename_dialog = true,
+            "--transfer-dialog" => l.transfer_dialog = true,
             "--trash-dialog" => l.trash_dialog = true,
             "--preview" => l.preview = true,
             "--zoom11" => {

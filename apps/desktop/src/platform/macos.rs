@@ -72,6 +72,7 @@ impl MenuBar {
                 "Rename Photos…",
                 acc(cmd_shift, Code::KeyR),
             ),
+            &item(Command::TransferPhotos, "Copy or Move Photos…", None),
             &item(
                 Command::MoveToTrash,
                 "Move to Trash",
