@@ -65,6 +65,7 @@ impl MenuBar {
             &item(Command::LoadCodes, "Load Code Replacements…", None),
             &PredefinedMenuItem::separator(),
             &item(Command::IngestStart, "Ingest…", acc(cmd_shift, Code::KeyI)),
+            &item(Command::IngestFromSelection, "Ingest From Selection…", None),
             &item(Command::ExportStart, "Export…", acc(cmd, Code::KeyE)),
             &PredefinedMenuItem::separator(),
             &item(

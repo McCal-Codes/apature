@@ -59,6 +59,31 @@ impl Report {
             .filter(|o| !o.failed.is_empty())
             .count()
     }
+    /// Source files of the photos whose every file (RAW, JPEG, companions)
+    /// reached all `destinations` verified. A photo with one failed or missing
+    /// file contributes none, so a caller that removes originals never
+    /// removes half of a photo.
+    pub fn verified_sources(&self, plan: &Plan, destinations: usize) -> Vec<PathBuf> {
+        use std::collections::BTreeSet;
+        let mut bad: BTreeSet<usize> = BTreeSet::new();
+        let mut seen: BTreeSet<usize> = BTreeSet::new();
+        for (i, e) in plan.entries.iter().enumerate() {
+            seen.insert(e.item);
+            let ok = self
+                .outcomes
+                .get(i)
+                .is_some_and(|o| o.source == e.source && o.fully_verified(destinations));
+            if !ok {
+                bad.insert(e.item);
+            }
+        }
+        plan.entries
+            .iter()
+            .filter(|e| seen.contains(&e.item) && !bad.contains(&e.item))
+            .map(|e| e.source.clone())
+            .collect()
+    }
+
     /// True only when every file reached every destination.
     pub fn all_verified(&self, plan: &Plan) -> bool {
         !self.cancelled
@@ -291,5 +316,36 @@ mod tests {
         .unwrap();
         let r2 = run(&plan2, &mut Ledger::in_memory(), &cancel, |_| {});
         assert!(r2.cancelled && r2.outcomes.is_empty());
+    }
+
+    #[test]
+    fn verified_sources_never_offers_half_a_photo() {
+        let t = tempfile::tempdir().unwrap();
+        let src = t.path().join("CARD");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("DSC_0001.JPG"), b"photo").unwrap();
+        fs::write(src.join("DSC_0001.WAV"), b"memo").unwrap();
+        fs::write(src.join("DSC_0002.JPG"), b"other").unwrap();
+        let opts = Options {
+            source: src.clone(),
+            primary: t.path().join("P"),
+            folder_template: String::new(),
+            only_new: false,
+            ..Default::default()
+        };
+        let mut ledger = Ledger::in_memory();
+        let plan = build_plan(&opts, &ledger).unwrap();
+        // Make the first photo's memo fail; the second photo is fine.
+        let memo = plan
+            .entries
+            .iter()
+            .find(|e| e.companion)
+            .unwrap()
+            .primary
+            .clone();
+        fs::create_dir_all(&memo).unwrap();
+        let report = run(&plan, &mut ledger, &AtomicBool::new(false), |_| {});
+        let ok = report.verified_sources(&plan, 1);
+        assert_eq!(ok, vec![src.join("DSC_0002.JPG")], "{ok:?}");
     }
 }

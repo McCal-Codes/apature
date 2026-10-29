@@ -52,6 +52,15 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                     ui.set_width(ui.available_width());
                     super::eyebrow(ui, t, "Source");
                     ui.add_space(S2);
+                    if let Some(sel) = app.ingest.selection.as_mut() {
+                        ui.label(RichText::new(format!("From your selection: {} photo{}", sel.count, if sel.count == 1 { "" } else { "s" })).size(12.5).strong().color(t.text));
+                        ui.label(RichText::new("Only these photos are copied, named and filed like a card ingest, and each copy is verified.").size(11.0).color(t.text2));
+                        ui.checkbox(&mut sel.move_after, "Move: send the originals to the Trash once every copy is verified");
+                        if ui.button("Use the whole source again").clicked() {
+                            cmds.push(Command::IngestBackToSource);
+                        }
+                        ui.add_space(S2);
+                    }
                     ui.horizontal_wrapped(|ui| {
                         for (name, path) in app.volumes.clone() {
                             let on = app.ingest.opts.source == path;

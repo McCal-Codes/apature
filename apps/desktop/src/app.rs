@@ -117,6 +117,17 @@ pub struct IngestState {
     /// Set GPS on ingest: "lat, lon" in decimal degrees, and the switch.
     pub gps: String,
     pub gps_on: bool,
+    /// Ingest From Selection: only the photos picked on the sheet.
+    pub selection: Option<IngestSelection>,
+}
+
+/// What Ingest From Selection remembers so it can put the source back.
+pub struct IngestSelection {
+    /// The options as they were before the selection took over the source.
+    pub original: apature_ingest::Options,
+    pub count: usize,
+    /// After every copy verified, send the originals to the Trash (⌘Z brings them back).
+    pub move_after: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -914,6 +925,94 @@ impl App {
         }
     }
 
+    /// PM's "Ingest From Selection": the Ingest workspace, on just the photos
+    /// picked on the sheet, with the same folder template, rename, pad and
+    /// verification as a card ingest.
+    fn ingest_from_selection(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let Some(folder) = self.folder.clone() else {
+            return;
+        };
+        let mut targets = self.selection.targets(self.cursor);
+        targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
+        let paths: Vec<PathBuf> = targets
+            .iter()
+            .flat_map(|&i| {
+                self.items[i]
+                    .variants()
+                    .map(|v| v.path.clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let (original, move_after) = match self.ingest.selection.take() {
+            Some(s) => (s.original, s.move_after),
+            None => (self.ingest.opts.clone(), false),
+        };
+        self.ingest.opts.source = folder;
+        self.ingest.opts.include_subfolders = true;
+        self.ingest.opts.only_new = false;
+        self.ingest.opts.day = None;
+        self.ingest.opts.only_paths = Some(paths);
+        self.ingest.selection = Some(IngestSelection {
+            original,
+            count: targets.len(),
+            move_after,
+        });
+        self.workspace = Workspace::Ingest;
+        self.ingest_options_changed();
+    }
+
+    fn ingest_back_to_source(&mut self) {
+        if let Some(sel) = self.ingest.selection.take() {
+            self.ingest.opts.source = sel.original.source;
+            self.ingest.opts.include_subfolders = sel.original.include_subfolders;
+            self.ingest.opts.only_new = sel.original.only_new;
+            self.ingest.opts.day = sel.original.day;
+            self.ingest.opts.only_paths = None;
+            self.ingest_options_changed();
+        }
+    }
+
+    /// After an Ingest From Selection with Move on: the originals of every
+    /// photo whose copies all verified go to the Trash. Returns how many files.
+    fn ingest_trash_sources(&mut self, rep: &apature_ingest::Report) -> usize {
+        let Some(plan) = self.ingest.plan.clone() else {
+            return 0;
+        };
+        let wanted = if self.ingest.opts.secondary.is_some() {
+            2
+        } else {
+            1
+        };
+        let files = rep.verified_sources(&plan, wanted);
+        if files.is_empty() {
+            return 0;
+        }
+        match apature_core::fileops::trash_tracked(&files) {
+            Ok(trashed) => {
+                let n = files.len();
+                self.reload_keep_state();
+                if !trashed.is_empty() {
+                    self.undo.push(Entry {
+                        label: format!(
+                            "move {n} file{} after ingest",
+                            if n == 1 { "" } else { "s" }
+                        ),
+                        changes: Vec::new(),
+                        trashed,
+                    });
+                }
+                n
+            }
+            Err(e) => {
+                self.status = e.to_string();
+                0
+            }
+        }
+    }
+
     pub fn open_transfer_dialog(&mut self) {
         if self.items.is_empty() {
             return;
@@ -1127,9 +1226,12 @@ impl App {
             self.cursor = self.view[pos.min(self.view.len() - 1)];
             self.selection.only(self.cursor);
             self.scroll_to_cursor = true;
-            if workspace == Workspace::Preview {
-                self.workspace = Workspace::Preview;
-            }
+        }
+        if matches!(
+            workspace,
+            Workspace::Preview | Workspace::Ingest | Workspace::Export | Workspace::Caption
+        ) {
+            self.workspace = workspace;
         }
     }
 
@@ -1540,7 +1642,17 @@ impl App {
         if self.ingest.opts.headline.is_none() {
             self.ingest.opts.headline = self.assignment.as_ref().map(|a| a.slug.clone());
         }
-        self.prefs.ingest = Some(self.ingest.opts.clone());
+        // Ingest From Selection borrows the source, the file list and the
+        // "only new" and day filters for one run; none of that is saved.
+        let mut saved = self.ingest.opts.clone();
+        if let Some(sel) = &self.ingest.selection {
+            saved.only_paths = None;
+            saved.source = sel.original.source.clone();
+            saved.include_subfolders = sel.original.include_subfolders;
+            saved.only_new = sel.original.only_new;
+            saved.day = sel.original.day;
+        }
+        self.prefs.ingest = Some(saved);
         self.prefs_dirty = true;
         self.ingest.plan = None;
         self.ingest.plan_error = None;
@@ -1765,6 +1877,13 @@ impl App {
                         .as_ref()
                         .map(|p| rep.all_verified(p))
                         .unwrap_or(false);
+                    let moved = if !rep.cancelled
+                        && self.ingest.selection.as_ref().is_some_and(|s| s.move_after)
+                    {
+                        self.ingest_trash_sources(&rep)
+                    } else {
+                        0
+                    };
                     let open_after = ok && self.prefs.open_after_ingest && !self.ingest.apply_pad;
                     // The shoot carries its sheet: copy the loaded assignment
                     // file into the day's folder on the destination drive.
@@ -1787,7 +1906,17 @@ impl App {
                     }
                     if let Some(r) = self.ingest.running.as_mut() {
                         self.status = if ok {
-                            format!("Ingest complete: {} files verified", rep.files_ok())
+                            format!(
+                                "Ingest complete: {} files verified{}",
+                                rep.files_ok(),
+                                if moved > 0 {
+                                    format!(
+                                        " · {moved} originals sent to the Trash, ⌘Z puts them back"
+                                    )
+                                } else {
+                                    String::new()
+                                }
+                            )
                         } else {
                             format!("Ingest finished with {} failed file(s)", rep.files_failed())
                         };
@@ -3882,6 +4011,8 @@ impl App {
                 }
             }
             Command::RenamePhotos => self.open_rename_dialog(),
+            Command::IngestFromSelection => self.ingest_from_selection(),
+            Command::IngestBackToSource => self.ingest_back_to_source(),
             Command::TransferPhotos => self.open_transfer_dialog(),
             Command::TransferChooseDest => {
                 let mut dlg = rfd::FileDialog::new().set_title("Copy or move the photos to…");
