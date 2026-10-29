@@ -3,7 +3,7 @@
 All notable, user-visible changes. Versions follow semantic versioning;
 0.x while the app is finding its shape.
 
-## [Unreleased]
+## [0.1.2] — Unreleased
 
 ### Added
 - What's New: after an update a short page shows the newest section of the changelog once; Help › What's New in Apature… and About › What's new bring it back. The page is read from the changelog file, so it never drifts from it.
