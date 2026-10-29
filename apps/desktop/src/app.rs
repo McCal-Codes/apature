@@ -971,6 +971,25 @@ impl App {
         self.ingest_options_changed();
     }
 
+    /// A different source was chosen (a chip, Folder…) or another folder came
+    /// to the front: the selection no longer applies. Keeps the chosen source.
+    pub fn ingest_drop_selection_keep_source(&mut self) {
+        if let Some(sel) = self.ingest.selection.take() {
+            self.ingest.opts.only_new = sel.original.only_new;
+            self.ingest.opts.day = sel.original.day;
+            self.ingest.opts.only_paths = None;
+        }
+    }
+
+    /// The folder in front is not the one the selection came from.
+    fn drop_selection_if_elsewhere(&mut self) {
+        if self.ingest.selection.is_some()
+            && self.folder.as_deref() != Some(self.ingest.opts.source.as_path())
+        {
+            self.ingest_back_to_source();
+        }
+    }
+
     fn ingest_back_to_source(&mut self) {
         if let Some(sel) = self.ingest.selection.take() {
             self.ingest.opts.source = sel.original.source;
@@ -1077,7 +1096,17 @@ impl App {
             d.error = Some("That is the folder the photos are already in.".into());
             return;
         }
-        let items: Vec<PhotoItem> = d.targets.iter().map(|&i| self.items[i].clone()).collect();
+        // The list may have changed under the dialog (a rescan, a tab): only
+        // indices that still name a photo count.
+        let items: Vec<PhotoItem> = d
+            .targets
+            .iter()
+            .filter_map(|&i| self.items.get(i).cloned())
+            .collect();
+        if items.is_empty() {
+            d.error = Some("The photos changed; close this and select them again.".into());
+            return;
+        }
         let card_roots: Vec<PathBuf> = if d.use_card {
             self.volumes
                 .iter()
@@ -2089,6 +2118,20 @@ impl App {
         if !plan.can_run() {
             return;
         }
+        // A cloud drive's placeholder would stall the copy on a download.
+        let waiting = plan
+            .entries
+            .iter()
+            .filter(|e| apature_core::fileops::is_online_only(&e.source))
+            .count();
+        if waiting > 0 {
+            self.status = format!(
+                "{waiting} file{} not downloaded by the cloud drive: download {} first, or ingest from the card",
+                if waiting == 1 { " is" } else { "s are" },
+                if waiting == 1 { "it" } else { "them" }
+            );
+            return;
+        }
         let mut pad = if self.ingest.apply_pad {
             self.assignment.as_ref().map(|a| a.iptc())
         } else {
@@ -2779,6 +2822,7 @@ impl App {
         if std::mem::take(&mut self.tabs[i].stale) {
             self.reload_keep_state();
         }
+        self.drop_selection_if_elsewhere();
         self.pool.clear_pending();
         self.sheet_fade_since = Some(Instant::now());
         if matches!(self.workspace, Workspace::Preview | Workspace::Caption)
@@ -2871,6 +2915,7 @@ impl App {
                 self.cursor = self.view.first().copied().unwrap_or(0);
                 self.workspace = Workspace::Sheet;
                 self.folder = Some(dir.to_path_buf());
+                self.drop_selection_if_elsewhere();
                 self.stats = Stats {
                     scan_ms: t0.elapsed().as_secs_f32() * 1000.0,
                     ..Default::default()
@@ -4002,6 +4047,7 @@ impl App {
                     )
                     .pick_folder()
                 {
+                    self.ingest_drop_selection_keep_source();
                     self.ingest.opts.source = p;
                     self.ingest_options_changed();
                 }
@@ -4492,6 +4538,17 @@ impl App {
             if ctx.input(|i| i.key_pressed(Key::Escape)) {
                 out.push(Command::Escape);
             }
+            return out;
+        }
+        // A dialog over the sheet owns the keyboard: Delete, 1–5, T, X and the
+        // arrows must not reach the photos behind it. (Each of these closes
+        // itself on Escape.)
+        if self.transfer_dialog.is_some()
+            || self.whats_new_open
+            || self.welcome_open
+            || self.about_open
+            || self.assignment_sheet_open
+        {
             return out;
         }
         ctx.input(|i| {

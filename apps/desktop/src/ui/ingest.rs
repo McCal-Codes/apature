@@ -66,6 +66,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                             let on = app.ingest.opts.source == path;
                             let kind = app.volume_kinds.get(&path).copied().unwrap_or(crate::platform::VolumeKind::External);
                             if super::icons::volume_chip(ui, t, kind, &name, on).clicked() {
+                                app.ingest_drop_selection_keep_source();
                                 app.ingest.opts.source = path;
                                 opts_changed = true;
                             }

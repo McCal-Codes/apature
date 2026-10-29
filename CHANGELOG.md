@@ -14,6 +14,10 @@ All notable, user-visible changes. Versions follow semantic versioning;
 - Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
 
 ### Fixed
+- With a dialog open (Copy or Move, What's New, Welcome, About, the assignment sheet) the keys no longer reach the photos behind it: Delete, 1–5, T, X and the arrows did.
+- Ingest From Selection ends when you pick another source or bring another folder to the front, instead of carrying the old file list into it.
+- Ingest refuses, with the file count, when a cloud drive has not downloaded some of the files, instead of hanging on the first one.
+- Copy or Move no longer trips over a photo list that changed while its dialog was open.
 - Undo of a move to the Trash survives opening a folder or the ingest result in another tab, and a tab showing the folder the files left (or returned to) rescans when you switch back to it.
 - Exporting photos that a cloud drive keeps online-only (Google Drive, iCloud) no longer hangs: Apature says which ones are not downloaded and stops before starting.
 - On macOS the bare keys (1–5 rate, 0 clears, T tag, X reject, Z zoom, C compare, …) did nothing: AppKit offers the menu only ⌘-shortcuts while Apature's own view has the keyboard, and the app skipped bare keys on the assumption that the menu handled them. It handles them itself now.
