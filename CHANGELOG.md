@@ -6,6 +6,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [0.1.2] — Unreleased
 
 ### Added
+- "With Prior Settings" twins in the File menu, like Photo Mechanic's: Ingest with Prior Settings (plans with the saved options and starts when the plan is clean), Rename Photos with Prior Settings (the last template and starting number), and Copy or Move Photos with Prior Settings (the last destination, mode and card fallback). Each falls back to its dialog when something is missing.
 - Ingest From Selection (File menu and the right-click menu): the Ingest workspace on just the photos you picked, with your folder template, rename, pad and per-file verification, like a card ingest. An opt-in Move sends the originals to the Trash only after every file of that photo is verified at every destination, and ⌘Z puts them back. The card ingest settings you had are put back with "Use the whole source again" and are never overwritten by a selection run.
 - Copy or move photos between folders and drives: `apature-cli transfer --to FOLDER [--move] [--card CARD]`. Every file (RAW, JPEG, sidecar) is checked by SHA-256, nothing is overwritten, a run can be repeated, and a move sends the originals to the Trash only after every file of that photo verified. A file a cloud drive has not downloaded is read from the card when one file there has the same size. In the app: File › Copy or Move Photos… (and Copy or Move to… in the right-click menu) asks where, shows progress, can stop after the photo in hand, and lists anything that did not transfer; ⌘Z after a move puts the originals back from the Trash.
 - What's New: after an update a short page shows the newest section of the changelog once; Help › What's New in Apature… and About › What's new bring it back. The page is read from the changelog file, so it never drifts from it.
@@ -13,6 +14,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 - Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
 
 ### Fixed
+- Undo of a move to the Trash survives opening a folder or the ingest result in another tab, and a tab showing the folder the files left (or returned to) rescans when you switch back to it.
 - Exporting photos that a cloud drive keeps online-only (Google Drive, iCloud) no longer hangs: Apature says which ones are not downloaded and stops before starting.
 - On macOS the bare keys (1–5 rate, 0 clears, T tag, X reject, Z zoom, C compare, …) did nothing: AppKit offers the menu only ⌘-shortcuts while Apature's own view has the keyboard, and the app skipped bare keys on the assumption that the menu handled them. It handles them itself now.
 - A `code:` line in an assignment (for example `code: tail = ...`) now beats the generated boilerplate of the same name, and keeps its leading space.

@@ -79,9 +79,16 @@ impl UndoStack {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.undo.clear();
-        self.redo.clear();
+    /// A folder was (re)loaded: marks are tied to the old list's indices and
+    /// go, but what was moved to the Trash is tied to paths and stays, so a
+    /// reload (or opening the ingest result) never costs the undo.
+    pub fn keep_trash_only(&mut self) {
+        for stack in [&mut self.undo, &mut self.redo] {
+            for e in stack.iter_mut() {
+                e.changes.clear();
+            }
+            stack.retain(|e| !e.trashed.is_empty());
+        }
     }
 }
 
@@ -174,5 +181,35 @@ mod tests {
         );
         assert_eq!(apply, vec![(3, m(0))]);
         assert!(s.undo().is_none());
+    }
+
+    #[test]
+    fn a_folder_reload_keeps_what_went_to_the_trash_and_drops_the_marks() {
+        use apature_core::fileops::Trashed;
+        let mut s = UndoStack::default();
+        let ch = Change {
+            idx: 2,
+            before: m(0),
+            after: m(3),
+        };
+        s.push(Entry {
+            label: "rate".into(),
+            changes: vec![ch],
+            trashed: vec![],
+        });
+        s.push(Entry {
+            label: "move 2 files after ingest".into(),
+            changes: vec![],
+            trashed: vec![Trashed {
+                original: "/a/DSC_0001.jpg".into(),
+                in_trash: "/t/DSC_0001.jpg".into(),
+            }],
+        });
+        s.keep_trash_only();
+        let (label, apply, trashed) = s.undo().unwrap();
+        assert_eq!(label, "move 2 files after ingest");
+        assert!(apply.is_empty());
+        assert_eq!(trashed.len(), 1);
+        assert!(s.undo().is_none(), "the mark entry went with the old list");
     }
 }

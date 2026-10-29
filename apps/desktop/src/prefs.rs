@@ -208,6 +208,11 @@ pub struct Prefs {
     pub last_seen_version: String,
     /// Where Copy or Move Photos went last.
     pub last_transfer_dest: Option<PathBuf>,
+    /// Copy or Move last time (true = Move), and whether the camera card was a fallback source.
+    pub last_transfer_move: bool,
+    pub last_transfer_use_card: bool,
+    /// Where Rename Photos' sequence started last time.
+    pub rename_seq_start: u32,
     pub export: ExportPrefs,
     /// Export presets per outlet: size, quality, naming, format and the
     /// delivery target in one chip.
@@ -271,6 +276,9 @@ impl Default for Prefs {
             show_perf_stats: false,
             check_updates: true,
             beta_updates: false,
+            last_transfer_move: false,
+            last_transfer_use_card: true,
+            rename_seq_start: 1,
             last_transfer_dest: None,
             last_seen_version: String::new(),
             last_update_check: 0,

@@ -66,6 +66,7 @@ impl MenuBar {
             &PredefinedMenuItem::separator(),
             &item(Command::IngestStart, "Ingest…", acc(cmd_shift, Code::KeyI)),
             &item(Command::IngestFromSelection, "Ingest From Selection…", None),
+            &item(Command::IngestWithPrior, "Ingest with Prior Settings", None),
             &item(Command::ExportStart, "Export…", acc(cmd, Code::KeyE)),
             &PredefinedMenuItem::separator(),
             &item(
@@ -74,6 +75,16 @@ impl MenuBar {
                 acc(cmd_shift, Code::KeyR),
             ),
             &item(Command::TransferPhotos, "Copy or Move Photos…", None),
+            &item(
+                Command::TransferWithPrior,
+                "Copy or Move Photos with Prior Settings",
+                None,
+            ),
+            &item(
+                Command::RenameWithPrior,
+                "Rename Photos with Prior Settings",
+                None,
+            ),
             &item(
                 Command::MoveToTrash,
                 "Move to Trash",

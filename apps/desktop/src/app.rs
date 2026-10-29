@@ -77,6 +77,9 @@ pub struct Tab {
     pub state: Option<TabState>,
     /// Photo count for the strip while the state is parked.
     pub count: usize,
+    /// Files in this folder were moved or restored while the tab was parked:
+    /// rescan it when it comes back.
+    pub stale: bool,
 }
 
 #[derive(Default)]
@@ -119,6 +122,8 @@ pub struct IngestState {
     pub gps_on: bool,
     /// Ingest From Selection: only the photos picked on the sheet.
     pub selection: Option<IngestSelection>,
+    /// Ingest with Prior Settings: start as soon as the plan is ready and clean.
+    pub auto_start: bool,
 }
 
 /// What Ingest From Selection remembers so it can put the source back.
@@ -814,7 +819,7 @@ impl App {
         targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
         self.rename_dialog = Some(RenameDialog {
             template: self.prefs.rename_template.clone(),
-            seq_start: 1,
+            seq_start: self.prefs.rename_seq_start.max(1),
             targets,
             plan: None,
             error: None,
@@ -886,6 +891,7 @@ impl App {
             return;
         };
         let template = d.template.trim().to_string();
+        let seq_start = d.seq_start;
         match apature_core::fileops::rename(&plan) {
             Ok(moves) => {
                 let mut photos = 0;
@@ -908,6 +914,7 @@ impl App {
                     }
                 }
                 self.prefs.rename_template = template;
+                self.prefs.rename_seq_start = seq_start;
                 self.prefs_dirty = true;
                 self.rename_dialog = None;
                 self.rebuild_view();
@@ -993,7 +1000,7 @@ impl App {
         match apature_core::fileops::trash_tracked(&files) {
             Ok(trashed) => {
                 let n = files.len();
-                self.reload_keep_state();
+                self.files_changed_on_disk(&files);
                 if !trashed.is_empty() {
                     self.undo.push(Entry {
                         label: format!(
@@ -1013,6 +1020,21 @@ impl App {
         }
     }
 
+    /// Files in `files` were moved away or brought back: tabs showing their
+    /// folders (other than the one in front) must rescan when they return;
+    /// the one in front is rescanned now when it shows one.
+    fn files_changed_on_disk(&mut self, files: &[PathBuf]) {
+        let under = |dir: &Path| files.iter().any(|f| f.starts_with(dir));
+        for (i, t) in self.tabs.iter_mut().enumerate() {
+            if i != self.active && under(&t.folder) {
+                t.stale = true;
+            }
+        }
+        if self.folder.as_deref().is_some_and(under) {
+            self.reload_keep_state();
+        }
+    }
+
     pub fn open_transfer_dialog(&mut self) {
         if self.items.is_empty() {
             return;
@@ -1025,9 +1047,13 @@ impl App {
             .any(|(_, p)| self.volume_kinds.get(p) == Some(&crate::platform::VolumeKind::Camera));
         self.transfer_dialog = Some(TransferDialog {
             targets,
-            mode: apature_ingest::transfer::Mode::Copy,
+            mode: if self.prefs.last_transfer_move {
+                apature_ingest::transfer::Mode::Move
+            } else {
+                apature_ingest::transfer::Mode::Copy
+            },
             dest: self.prefs.last_transfer_dest.clone(),
-            use_card: true,
+            use_card: self.prefs.last_transfer_use_card,
             card_present,
             running: None,
             error: None,
@@ -1069,6 +1095,10 @@ impl App {
                 .start(items, dest.clone(), d.mode, card_roots),
         );
         self.prefs.last_transfer_dest = Some(dest);
+        if let Some(d) = self.transfer_dialog.as_ref() {
+            self.prefs.last_transfer_move = d.mode == apature_ingest::transfer::Mode::Move;
+            self.prefs.last_transfer_use_card = d.use_card;
+        }
         self.prefs_dirty = true;
     }
 
@@ -1092,7 +1122,8 @@ impl App {
                 .unwrap_or((0, 0, 0));
             let dest = r.dest.clone();
             if mode == apature_ingest::transfer::Mode::Move && !trashed.is_empty() {
-                self.reload_keep_state();
+                let gone: Vec<PathBuf> = trashed.iter().map(|t| t.original.clone()).collect();
+                self.files_changed_on_disk(&gone);
                 self.undo.push(Entry {
                     label: format!(
                         "move {moved} photo{} to {}",
@@ -1137,7 +1168,7 @@ impl App {
         match apature_core::fileops::trash_tracked(&files) {
             Ok(trashed) => {
                 let recoverable = !trashed.is_empty();
-                self.reload_keep_state();
+                self.files_changed_on_disk(&files);
                 if recoverable {
                     self.undo.push(Entry {
                         label: format!(
@@ -1166,7 +1197,8 @@ impl App {
     fn restore_from_trash(&mut self, trashed: &[apature_core::fileops::Trashed]) {
         match apature_core::fileops::restore(trashed) {
             Ok((done, skipped)) => {
-                self.reload_keep_state();
+                let back: Vec<PathBuf> = trashed.iter().map(|t| t.original.clone()).collect();
+                self.files_changed_on_disk(&back);
                 if let Some(first) = trashed.first() {
                     if let Some(i) = self.items.iter().position(|it| {
                         it.path() == first.original
@@ -1788,8 +1820,18 @@ impl App {
                         Ok(p) => {
                             self.ingest.plan = Some(p);
                             self.ingest.plan_since = Some(Instant::now());
+                            if std::mem::take(&mut self.ingest.auto_start) {
+                                if self.ingest.plan.as_ref().is_some_and(|p| p.can_run()) {
+                                    self.dispatch_later = Some(Command::IngestStart);
+                                } else {
+                                    self.status = "Ingest with the last settings did not start: the plan has nothing to copy or has a collision".into();
+                                }
+                            }
                         }
-                        Err(e) => self.ingest.plan_error = Some(e),
+                        Err(e) => {
+                            self.ingest.auto_start = false;
+                            self.ingest.plan_error = Some(e);
+                        }
                     }
                     if self.launch.ingest_run && self.ingest.running.is_none() {
                         match &self.ingest.plan {
@@ -2651,6 +2693,7 @@ impl App {
             folder: dir.to_path_buf(),
             state: None,
             count: 0,
+            stale: false,
         });
         self.active = self.tabs.len() - 1;
         self.load_folder(dir);
@@ -2733,6 +2776,9 @@ impl App {
             self.put_tab(next);
         }
         self.active = i;
+        if std::mem::take(&mut self.tabs[i].stale) {
+            self.reload_keep_state();
+        }
         self.pool.clear_pending();
         self.sheet_fade_since = Some(Instant::now());
         if matches!(self.workspace, Workspace::Preview | Workspace::Caption)
@@ -2819,7 +2865,7 @@ impl App {
                 self.previews.clear();
                 self.preview_lru.clear();
                 self.selection.clear();
-                self.undo.clear();
+                self.undo.keep_trash_only();
                 self.filter = Filter::default();
                 self.rebuild_view();
                 self.cursor = self.view.first().copied().unwrap_or(0);
@@ -2907,7 +2953,7 @@ impl App {
                         match apature_core::fileops::trash_tracked(&files) {
                             Ok(again) => {
                                 self.undo.set_top_trashed(again);
-                                self.reload_keep_state();
+                                self.files_changed_on_disk(&files);
                             }
                             Err(e) => {
                                 self.status = e.to_string();
@@ -4012,6 +4058,52 @@ impl App {
             }
             Command::RenamePhotos => self.open_rename_dialog(),
             Command::IngestFromSelection => self.ingest_from_selection(),
+            Command::IngestWithPrior => {
+                if self
+                    .ingest
+                    .running
+                    .as_ref()
+                    .is_some_and(|r| r.done.is_none())
+                {
+                    return;
+                }
+                self.ingest_back_to_source();
+                self.workspace = Workspace::Ingest;
+                self.ingest.auto_start = true;
+                self.ingest_options_changed();
+                if self.ingest.planning {
+                    self.status = "Ingest with the last settings: planning…".into();
+                } else {
+                    // Nothing to plan (no source or destination set): do not
+                    // leave the start armed for some later, unrelated plan.
+                    self.ingest.auto_start = false;
+                    self.status =
+                        "Ingest with the last settings needs a source and a destination first"
+                            .into();
+                }
+            }
+            Command::RenameWithPrior => {
+                self.open_rename_dialog();
+                if self
+                    .rename_dialog
+                    .as_ref()
+                    .and_then(|d| d.plan.as_ref())
+                    .is_some_and(|p| p.can_run())
+                {
+                    self.rename_apply();
+                }
+            }
+            Command::TransferWithPrior => {
+                self.open_transfer_dialog();
+                let ready = self
+                    .transfer_dialog
+                    .as_ref()
+                    .and_then(|d| d.dest.as_ref())
+                    .is_some_and(|p| p.is_dir());
+                if ready {
+                    self.transfer_start();
+                }
+            }
             Command::IngestBackToSource => self.ingest_back_to_source(),
             Command::TransferPhotos => self.open_transfer_dialog(),
             Command::TransferChooseDest => {
