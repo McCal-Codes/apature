@@ -11,6 +11,7 @@ Ranked from the Photo Mechanic menu audit (docs/research/pm-feature-gap.md §6):
 6. Find / Find and Replace in captions.
 7. Edit Photos with… (Capture One, Photoshop).
 8. Adjust capture dates and times.
+9. From PM's own screens (pm-feature-gap.md §7): "with prior settings" twins (⌥), named ingest and copy presets with PM import, a Tasks panel, Settings Import/Export, Set Sequence Variable and Reload Code Replacements as menu items. Ingest From Selection is done but its screen flow still needs a hands-on test with the screen unlocked.
 Also: show straighten in the preview; push the unpushed commits; replace the
 stale /Applications/Apature.app (ask first); install the rebuilt bundle.
 

@@ -170,3 +170,41 @@ stored in the sidecar.
   detect that and fall back or fail fast instead of hanging.
 * Always look at the output (a contact sheet of the export) before saying it
   is done.
+
+## 7. What Photo Mechanic's own screens and files teach (2026-10-29)
+
+Source: *observed*. The Settings window, the Preview window and the menus of
+the installed Photo Mechanic, and the owner's saved presets
+(`~/Library/Preferences/com.camerabits.PhotoMechanic/IngestDialogSettings`,
+`CopyOptionsSettings`). Nothing was changed in Photo Mechanic.
+
+### How the owner actually imports
+
+* **Ingest** (card or folder → drive): destination folder
+  `{iptcyear4}/{iptcmonthname}/{iptcmonthname3} {iptcday0} {head}`, rename
+  `{iyr2}{imn0}{idy0}{head}_CAL{frame}`, RAW only, metadata pad applied
+  during the copy, several cards merged, contact sheets opened in the
+  background. Apature's saved ingest options match this.
+* **Copy/Move Photos** (the second route, from a sheet to another drive):
+  the same folder and rename templates, plus Move, Apply IPTC, RAW+JPEG
+  option, Overwrite off, Open destination, and for Butler a running counter
+  `BUTLR-{headline}{seqn}-{date}`. Five saved copy presets and three ingest
+  presets exist; they are the owner's real vocabulary.
+
+### Lessons, in order of value
+
+| # | what Photo Mechanic does | lesson for Apature | state |
+|---|---|---|---|
+| 1 | **Every action with a dialog has a "(with prior settings)" twin** in the menu: Rename, Copy/Move, Save Photos as, FTP, Upload, Apply Rotation, Slide Show | one keystroke repeats the last job without the dialog; hold ⌥ on the menu item or key | open; cheap and the biggest speed win on a deadline |
+| 2 | **Named snapshots for each dialog** (ingest, copy, rename, save as) | save, name and recall ingest and copy/move presets; import all of the owner's presets at once | open |
+| 3 | **Ingest From Selection** and Copy/Move use the same templates | one pipeline, not two | **done** (Ingest From Selection) |
+| 4 | A **Tasks panel** beside the preview shows background jobs | one place for ingest, copy, export and delivery progress that stays visible when a dialog is closed | open |
+| 5 | **Settings Import… / Export…** for the whole set, and **Variables…** on every page | portable settings (Mac to the Windows PC) and user variables reachable from Ingest, Caption and Export | open |
+| 6 | The **window title carries facts**: file name, pixel size, file size, zoom %, "138 of 172" | show size and zoom in the title or status bar | open; trivial |
+| 7 | **Edit › Settings submenu**: Set Autocomplete, Set Code Replacements, Reload Code Replacements, Set GPS Home, Set Info Text, Set Sequence Variable, Set User/Client Variables | the small configuration the work needs mid-shoot is one menu item, not a trip into Settings; "Reload Code Replacements" and "Set Sequence Variable" first | open |
+| 8 | **Force variants** ("Delete Photos… (force)", "Edit Photos (force)") skip the confirmation | with Delete now immediate and undoable this is already the model; keep confirmation only where there is no undo | done for Delete |
+| 9 | **Rating and tag pills under every filmstrip thumbnail** | marks are visible and clickable where the photo is | partial |
+| 10 | Settings are one window, a category dropdown with **back and forward** arrows, boxed groups, OK/Cancel | Apature's rail and search are better; keep live apply with the versioned-prefs backup | no change |
+
+Next three to build: (1) the "(with prior settings)" twins, (2) ingest and
+copy presets with PM import, (3) a Tasks panel.
