@@ -20,6 +20,7 @@ pub mod ledger;
 pub mod plan;
 pub mod run;
 pub mod template;
+pub mod transfer;
 
 pub use copy::{copy_verified, sha256_file, CopyReport, IngestError};
 pub use ledger::Ledger;

@@ -114,6 +114,24 @@ enum Cmd {
         clear: bool,
         files: Vec<PathBuf>,
     },
+    /// Copy or move photos (every variant and sidecar) to a folder, checking each
+    /// file by SHA-256. Never overwrites. `--move` sends the originals to the
+    /// Trash only after every file of that photo verified. An online-only
+    /// cloud file is read from `--card` instead when one file there has the
+    /// same size.
+    Transfer {
+        /// Destination folder (created if needed).
+        #[arg(long)]
+        to: PathBuf,
+        /// Trash the originals after they verify (default: leave them).
+        #[arg(long = "move")]
+        move_originals: bool,
+        /// Folder to search for online-only files (the camera card); repeatable.
+        #[arg(long)]
+        card: Vec<PathBuf>,
+        /// Files or folders.
+        paths: Vec<PathBuf>,
+    },
     /// Store a straighten angle in the sidecar (apature:Straighten), applied
     /// on export before the crop.
     Straighten {
@@ -348,6 +366,12 @@ fn main() -> Result<()> {
         Cmd::Rotate { ccw, reset, files } => cmd_rotate(ccw, reset, &files),
         Cmd::Crop { rect, clear, files } => cmd_crop(rect, clear, &files),
         Cmd::Level { files } => cmd_level(&files),
+        Cmd::Transfer {
+            to,
+            move_originals,
+            card,
+            paths,
+        } => cmd_transfer(to, move_originals, card, paths),
         Cmd::Straighten { degrees, files } => {
             for f in &files {
                 let item = item_for(f)?;
@@ -1211,6 +1235,74 @@ fn cmd_level(files: &[PathBuf]) -> anyhow::Result<()> {
             Ok((turn, conf)) => println!("{name}\t{turn:+.2}\t{conf:.2}"),
             Err(e) => println!("{name}\terror: {e}"),
         }
+    }
+    Ok(())
+}
+
+fn cmd_transfer(
+    to: PathBuf,
+    move_originals: bool,
+    card: Vec<PathBuf>,
+    paths: Vec<PathBuf>,
+) -> Result<()> {
+    use apature_ingest::transfer::{index_alternates, transfer, FileResult, Mode};
+    let items = items_for_paths(paths)?;
+    if items.is_empty() {
+        bail!("nothing to transfer");
+    }
+    let alternates = if card.is_empty() {
+        Vec::new()
+    } else {
+        index_alternates(&card)
+    };
+    let mode = if move_originals {
+        Mode::Move
+    } else {
+        Mode::Copy
+    };
+    let trash = |files: &[PathBuf]| apature_core::fileops::trash(files).map_err(|e| e.to_string());
+    let total = items.len();
+    let mut done = 0usize;
+    let report = transfer(&items, &to, mode, &alternates, &trash, &mut |src, r| {
+        let name = src
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        match r {
+            FileResult::Copied {
+                bytes,
+                from_alternate,
+            } => println!(
+                "  ✓ {name}  {:.1} MB{}",
+                *bytes as f64 / 1e6,
+                if *from_alternate {
+                    "  (read from the card)"
+                } else {
+                    ""
+                }
+            ),
+            FileResult::AlreadyThere => println!("  = {name}  already there, identical"),
+            FileResult::Failed(why) => println!("  ✗ {name}  {why}"),
+        }
+        done += 1;
+        let _ = total;
+    });
+    println!(
+        "{} photo(s): {} file(s) copied, {} photo(s) failed{}",
+        report.photos.len(),
+        report.files_copied(),
+        report.failed(),
+        if move_originals {
+            format!(", {} sent to the Trash", report.trashed())
+        } else {
+            String::new()
+        }
+    );
+    if report.failed() > 0 {
+        bail!(
+            "{} photo(s) did not transfer; their originals were left alone",
+            report.failed()
+        );
     }
     Ok(())
 }

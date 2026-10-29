@@ -3,7 +3,7 @@
 ## Next up (2026-10-23, after the Norwin–Seneca Valley game)
 
 Ranked from the Photo Mechanic menu audit (docs/research/pm-feature-gap.md §6):
-1. Copy/Move Photos with verification, placeholder fallback, ask-before-trash.
+1. Copy/Move Photos: engine and CLI done (`apature-cli transfer`, verified, placeholder fallback to the card, trash only after verify); the in-app dialog and progress are next.
 2. A "transferred" mark (exported/delivered) with select/clear.
 3. Select menu: rating, class, tagged, cropped, transferred, invert; save/load selection.
 4. Export picks in one step (last preset, subfolder named from the slug).

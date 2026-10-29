@@ -6,6 +6,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [0.1.2] — Unreleased
 
 ### Added
+- Copy or move photos between folders and drives: `apature-cli transfer --to FOLDER [--move] [--card CARD]`. Every file (RAW, JPEG, sidecar) is checked by SHA-256, nothing is overwritten, a run can be repeated, and a move sends the originals to the Trash only after every file of that photo verified. A file a cloud drive has not downloaded is read from the card when one file there has the same size. The in-app Copy/Move dialog is next.
 - What's New: after an update a short page shows the newest section of the changelog once; Help › What's New in Apature… and About › What's new bring it back. The page is read from the changelog file, so it never drifts from it.
 - Straighten: `apature-cli level` estimates how far a frame is tilted from the long straight edges in it (horizons, banners, poles, goal posts); `apature-cli straighten --degrees` stores the angle in the sidecar (`apature:Straighten`) and export turns the picture and then applies the crop, so exports come out level. The in-app preview does not show it yet.
 - Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
