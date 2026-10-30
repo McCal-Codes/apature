@@ -113,6 +113,26 @@ impl Default for ExportPrefs {
     }
 }
 
+/// A named ingest setup, like a Photo Mechanic ingest or copy snapshot: where
+/// files go, how they are filed and named, and which kinds are taken.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct IngestPreset {
+    pub name: String,
+    pub folder_template: String,
+    pub rename_template: String,
+    /// Destination root; None keeps whatever is set now.
+    pub primary: Option<PathBuf>,
+    pub filter: apature_ingest::FileFilter,
+    pub copy_companions: bool,
+    pub preserve_folders: bool,
+    pub on_collision: apature_ingest::CollisionPolicy,
+    /// Where `{seqn}` starts when the preset says so.
+    pub seq_start: Option<u32>,
+    /// Photo Mechanic's own name for the snapshot this came from.
+    pub from_pm: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Prefs {
@@ -206,6 +226,9 @@ pub struct Prefs {
     pub skipped_update: Option<String>,
     /// The version whose What's New the person has seen.
     pub last_seen_version: String,
+    /// Named ingest setups, and the one last applied.
+    pub ingest_presets: Vec<IngestPreset>,
+    pub ingest_preset: Option<String>,
     /// Where Copy or Move Photos went last.
     pub last_transfer_dest: Option<PathBuf>,
     /// Copy or Move last time (true = Move), and whether the camera card was a fallback source.
@@ -280,6 +303,8 @@ impl Default for Prefs {
             last_transfer_use_card: true,
             rename_seq_start: 1,
             last_transfer_dest: None,
+            ingest_presets: Vec::new(),
+            ingest_preset: None,
             last_seen_version: String::new(),
             last_update_check: 0,
             skipped_update: None,

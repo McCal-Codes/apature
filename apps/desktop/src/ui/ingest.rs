@@ -45,6 +45,39 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
     egui::Frame::NONE.fill(t.photo).inner_margin(egui::Margin::same(S5 as i8)).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = S2;
         ui.add_enabled_ui(!running, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("PRESET").monospace().size(9.5).color(t.muted));
+                let current = app.prefs.ingest_preset.clone();
+                egui::ComboBox::from_id_salt("ingest-preset")
+                    .selected_text(current.clone().unwrap_or_else(|| "none".into()))
+                    .width(230.0)
+                    .show_ui(ui, |ui| {
+                        for p in &app.prefs.ingest_presets {
+                            if ui.selectable_label(current.as_deref() == Some(p.name.as_str()), &p.name).clicked() {
+                                cmds.push(Command::IngestPresetApply(p.name.clone()));
+                            }
+                        }
+                        if app.prefs.ingest_presets.is_empty() {
+                            ui.label(RichText::new("No presets yet").size(11.0).color(t.muted));
+                        }
+                    });
+                ui.add(egui::TextEdit::singleline(&mut app.ingest.preset_draft).hint_text("name").desired_width(150.0));
+                if ui.add_enabled(!app.ingest.preset_draft.trim().is_empty(), egui::Button::new("Save as")).clicked() {
+                    cmds.push(Command::IngestPresetSave(app.ingest.preset_draft.trim().to_string()));
+                }
+                if let Some(cur) = current.clone() {
+                    if ui.button("Update").on_hover_text("Save the settings on screen over this preset").clicked() {
+                        cmds.push(Command::IngestPresetSave(cur.clone()));
+                    }
+                    if ui.button("Delete").clicked() {
+                        cmds.push(Command::IngestPresetDelete(cur));
+                    }
+                }
+                if crate::pm_import::pm_settings_dir().is_some() && ui.button("Import from Photo Mechanic").clicked() {
+                    cmds.push(Command::IngestPresetsFromPm);
+                }
+            });
+            ui.add_space(S2);
             ui.columns(2, |cols| {
                 // ---- Source ----
                 let ui = &mut cols[0];

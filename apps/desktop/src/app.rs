@@ -124,6 +124,8 @@ pub struct IngestState {
     pub selection: Option<IngestSelection>,
     /// Ingest with Prior Settings: start as soon as the plan is ready and clean.
     pub auto_start: bool,
+    /// The name being typed for Save as… in the preset row.
+    pub preset_draft: String,
 }
 
 /// What Ingest From Selection remembers so it can put the source back.
@@ -234,6 +236,18 @@ impl Default for PreviewView {
             compare: None,
         }
     }
+}
+
+/// A preset's destination root can be used when its drive is mounted
+/// (`/Volumes/X9 Pro/…` needs `/Volumes/X9 Pro`) or its parent folder exists.
+fn preset_root_available(root: &Path) -> bool {
+    let mut parts = root.components();
+    if let (Some(_), Some(first), Some(vol)) = (parts.next(), parts.next(), parts.next()) {
+        if first.as_os_str() == "Volumes" {
+            return Path::new("/Volumes").join(vol.as_os_str()).is_dir();
+        }
+    }
+    root.is_dir() || root.parent().is_some_and(|p| p.is_dir())
 }
 
 /// Copy or Move Photos dialog state.
@@ -930,6 +944,113 @@ impl App {
                 }
             }
         }
+    }
+
+    fn ingest_preset_apply(&mut self, name: &str) {
+        let Some(p) = self
+            .prefs
+            .ingest_presets
+            .iter()
+            .find(|p| p.name == name)
+            .cloned()
+        else {
+            return;
+        };
+        let o = &mut self.ingest.opts;
+        o.folder_template = p.folder_template;
+        o.rename_template = p.rename_template;
+        o.filter = p.filter;
+        o.copy_companions = p.copy_companions;
+        o.preserve_folders = p.preserve_folders;
+        o.on_collision = p.on_collision;
+        let mut kept_destination = false;
+        if let Some(root) = p.primary.filter(|r| !r.as_os_str().is_empty()) {
+            if preset_root_available(&root) {
+                o.primary = root;
+            } else {
+                kept_destination = true;
+            }
+        }
+        if let Some(s) = p.seq_start {
+            o.seq_start = s;
+        }
+        self.prefs.ingest_preset = Some(p.name.clone());
+        self.status = if kept_destination {
+            format!("Ingest preset: {} (its drive is not connected, so the destination was not changed)", p.name)
+        } else {
+            format!("Ingest preset: {}", p.name)
+        };
+        self.ingest_options_changed();
+    }
+
+    /// Save the options on screen under `name` (replacing a preset of that name).
+    fn ingest_preset_save(&mut self, name: &str) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        let o = &self.ingest.opts;
+        let preset = crate::prefs::IngestPreset {
+            name: name.to_string(),
+            folder_template: o.folder_template.clone(),
+            rename_template: o.rename_template.clone(),
+            primary: Some(o.primary.clone()).filter(|p| !p.as_os_str().is_empty()),
+            filter: o.filter,
+            copy_companions: o.copy_companions,
+            preserve_folders: o.preserve_folders,
+            on_collision: o.on_collision,
+            seq_start: None,
+            from_pm: self
+                .prefs
+                .ingest_presets
+                .iter()
+                .find(|p| p.name == name)
+                .and_then(|p| p.from_pm.clone()),
+        };
+        match self
+            .prefs
+            .ingest_presets
+            .iter_mut()
+            .find(|p| p.name == name)
+        {
+            Some(slot) => *slot = preset,
+            None => self.prefs.ingest_presets.push(preset),
+        }
+        self.prefs.ingest_preset = Some(name.to_string());
+        self.ingest.preset_draft.clear();
+        self.prefs_dirty = true;
+        self.status = format!("Saved ingest preset: {name}");
+    }
+
+    /// Bring in every ingest and copy snapshot Photo Mechanic has; a preset
+    /// of the same name is replaced, the rest are left alone.
+    fn ingest_presets_from_pm(&mut self) {
+        let Some(dir) = crate::pm_import::pm_settings_dir() else {
+            self.status = "Photo Mechanic's settings were not found on this computer".into();
+            return;
+        };
+        let found = crate::pm_import::presets_from_dir(&dir);
+        if found.is_empty() {
+            self.status = "No Photo Mechanic ingest or copy presets found".into();
+            return;
+        }
+        let n = found.len();
+        for p in found {
+            match self
+                .prefs
+                .ingest_presets
+                .iter_mut()
+                .find(|x| x.name == p.name)
+            {
+                Some(slot) => *slot = p,
+                None => self.prefs.ingest_presets.push(p),
+            }
+        }
+        self.prefs_dirty = true;
+        self.status = format!(
+            "Imported {n} Photo Mechanic preset{}",
+            if n == 1 { "" } else { "s" }
+        );
     }
 
     /// PM's "Ingest From Selection": the Ingest workspace, on just the photos
@@ -4104,6 +4225,16 @@ impl App {
             }
             Command::RenamePhotos => self.open_rename_dialog(),
             Command::IngestFromSelection => self.ingest_from_selection(),
+            Command::IngestPresetApply(name) => self.ingest_preset_apply(&name),
+            Command::IngestPresetSave(name) => self.ingest_preset_save(&name),
+            Command::IngestPresetDelete(name) => {
+                self.prefs.ingest_presets.retain(|p| p.name != name);
+                if self.prefs.ingest_preset.as_deref() == Some(name.as_str()) {
+                    self.prefs.ingest_preset = None;
+                }
+                self.prefs_dirty = true;
+            }
+            Command::IngestPresetsFromPm => self.ingest_presets_from_pm(),
             Command::IngestWithPrior => {
                 if self
                     .ingest
