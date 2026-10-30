@@ -341,6 +341,85 @@ impl Platform {
         }
     }
 
+    /// Where an application called `name` (or at path `name`) is installed.
+    pub fn find_app(name: &str) -> Option<std::path::PathBuf> {
+        let p = std::path::Path::new(name);
+        if p.is_absolute() && p.exists() {
+            return Some(p.to_path_buf());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let stem = name.trim_end_matches(".app");
+            let mut dirs = vec![
+                std::path::PathBuf::from("/Applications"),
+                std::path::PathBuf::from("/Applications/Utilities"),
+                std::path::PathBuf::from("/System/Applications"),
+                std::path::PathBuf::from("/System/Applications/Utilities"),
+            ];
+            if let Some(h) = std::env::var_os("HOME") {
+                dirs.push(std::path::PathBuf::from(h).join("Applications"));
+            }
+            for d in dirs {
+                let a = d.join(format!("{stem}.app"));
+                if a.exists() {
+                    return Some(a);
+                }
+            }
+        }
+        None
+    }
+
+    /// Open `files` in `app` (a name or a path); an empty `app` uses each
+    /// file's default application. Returns a message when it cannot.
+    pub fn open_with(app: &str, files: &[std::path::PathBuf]) -> Result<(), String> {
+        if files.is_empty() {
+            return Ok(());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            // `open -a NAME` lets macOS find the app wherever it lives
+            // (Applications, ~/Applications, the system folders, Setapp).
+            let mut c = std::process::Command::new("open");
+            if !app.is_empty() {
+                c.arg("-a").arg(app);
+            }
+            c.args(files);
+            let out = c.output().map_err(|e| e.to_string())?;
+            if out.status.success() {
+                Ok(())
+            } else {
+                let why = String::from_utf8_lossy(&out.stderr);
+                let why = why.lines().next().unwrap_or("").trim();
+                Err(if why.is_empty() {
+                    format!("could not open the photos in {app}")
+                } else {
+                    why.to_string()
+                })
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if app.is_empty() {
+                for f in files {
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/C", "start", ""])
+                        .arg(f)
+                        .spawn();
+                    #[cfg(not(target_os = "windows"))]
+                    let _ = std::process::Command::new("xdg-open").arg(f).spawn();
+                }
+                Ok(())
+            } else {
+                std::process::Command::new(app)
+                    .args(files)
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|e| format!("{app}: {e}"))
+            }
+        }
+    }
+
     /// Open a URL in the default browser.
     pub fn open_url(url: &str) {
         #[cfg(target_os = "macos")]
@@ -493,5 +572,27 @@ impl Platform {
                 let _ = e.delete_credential();
             }
         }
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod open_with_tests {
+    use super::*;
+
+    #[test]
+    fn finds_apps_by_path_and_refuses_the_ones_that_are_missing() {
+        assert!(Platform::find_app("/System/Library/CoreServices/Finder.app").is_some());
+        assert!(Platform::find_app("No Such App 12345").is_none());
+        let file =
+            std::env::temp_dir().join(format!("apature-open-with-{}.txt", std::process::id()));
+        std::fs::write(&file, "x").unwrap();
+        let err = Platform::open_with("No Such App 12345", &[file.clone()]).unwrap_err();
+        let _ = std::fs::remove_file(&file);
+        assert!(err.contains("No Such App 12345"), "{err}");
+        assert!(
+            Platform::find_app("Preview").is_some(),
+            "system apps are found too"
+        );
+        assert!(Platform::open_with("", &[]).is_ok());
     }
 }

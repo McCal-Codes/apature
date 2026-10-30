@@ -131,6 +131,11 @@ const PANELS: &[(Page, &str, &str)] = &[
     ),
     (
         Page::General,
+        "Edit photos in",
+        "capture one photoshop lightroom editor open edit photos external hand off",
+    ),
+    (
+        Page::General,
         "Files Apature keeps",
         "prefs.json log reveal reset settings folder",
     ),
@@ -968,6 +973,51 @@ fn page_body(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command
                     });
                 }
             }
+            card(ui, t, "Edit photos in", |ui| {
+                ui.add_space(S2);
+                let detected = app.editor_app();
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("APP").monospace().size(9.5).color(t.muted));
+                    let r = ui.add(
+                        egui::TextEdit::singleline(&mut app.prefs.editor_app)
+                            .hint_text(if detected.is_empty() {
+                                "system default".to_string()
+                            } else {
+                                format!("{detected} (found)")
+                            })
+                            .desired_width(240.0),
+                    );
+                    if r.changed() {
+                        app.prefs_dirty = true;
+                    }
+                    if ui.small_button("Choose…").clicked() {
+                        if let Some(p) = rfd::FileDialog::new()
+                            .set_title("Choose the editing app")
+                            .pick_file()
+                        {
+                            app.prefs.editor_app = p.display().to_string();
+                            app.prefs_dirty = true;
+                        }
+                    }
+                });
+                ui.add_space(S1);
+                if ui
+                    .checkbox(
+                        &mut app.prefs.editor_with_jpeg,
+                        "Send a RAW's JPEG partner too",
+                    )
+                    .changed()
+                {
+                    app.prefs_dirty = true;
+                }
+                ui.add_space(S1);
+                hint(
+                    ui,
+                    t,
+                    "Image › Edit Photos (or right-click) opens the selected photos there. The editor reads the rating, colour label, caption and crop from the XMP sidecar beside each RAW. In Capture One: Preferences › Image › Metadata, set Auto Sync Sidecar XMP to Load and tick Prefer Sidecar XMP over Embedded Metadata; Image › Load Metadata refreshes later changes.",
+                );
+                ui.add_space(S2);
+            });
             card(ui, t, "Files Apature keeps", |ui| {
                 ui.add_space(S2);
                 ui.horizontal_wrapped(|ui| {

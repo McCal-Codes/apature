@@ -306,6 +306,8 @@ impl MenuBar {
                 Some(Accelerator::new(Modifiers::empty(), Code::KeyT)),
             ),
             &PredefinedMenuItem::separator(),
+            &item(Command::EditPhotos, "Edit Photos", None),
+            &PredefinedMenuItem::separator(),
             &item(
                 Command::Rotate(false),
                 "Rotate Left",

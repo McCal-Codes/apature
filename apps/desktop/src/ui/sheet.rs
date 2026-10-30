@@ -157,6 +157,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
                             cmds.push(Command::RevealInFinder);
                             ui.close();
                         }
+                        if ui.button("Edit Photos").clicked() {
+                            cmds.push(Command::EditPhotos);
+                            ui.close();
+                        }
                         if ui.button("Ingest Selected Photos…").clicked() {
                             cmds.push(Command::IngestFromSelection);
                             ui.close();

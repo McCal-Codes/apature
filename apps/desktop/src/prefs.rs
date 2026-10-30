@@ -227,6 +227,11 @@ pub struct Prefs {
     /// The version whose What's New the person has seen.
     pub last_seen_version: String,
     /// Named ingest setups, and the one last applied.
+    /// The app Edit Photos sends to: a name ("Capture One") or a path. Empty
+    /// means Capture One when it is installed, else the system's default app.
+    pub editor_app: String,
+    /// Send a RAW's JPEG partner along with it.
+    pub editor_with_jpeg: bool,
     pub ingest_presets: Vec<IngestPreset>,
     pub ingest_preset: Option<String>,
     /// Where Copy or Move Photos went last.
@@ -303,6 +308,8 @@ impl Default for Prefs {
             last_transfer_use_card: true,
             rename_seq_start: 1,
             last_transfer_dest: None,
+            editor_app: String::new(),
+            editor_with_jpeg: false,
             ingest_presets: Vec::new(),
             ingest_preset: None,
             last_seen_version: String::new(),

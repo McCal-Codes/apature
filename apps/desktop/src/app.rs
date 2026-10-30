@@ -1053,6 +1053,64 @@ impl App {
         );
     }
 
+    /// The app Edit Photos uses: the one chosen in Settings, else Capture One
+    /// when it is installed, else the system default (empty).
+    pub fn editor_app(&self) -> String {
+        let chosen = self.prefs.editor_app.trim();
+        if !chosen.is_empty() {
+            return chosen.to_string();
+        }
+        if Platform::find_app("Capture One").is_some() {
+            return "Capture One".into();
+        }
+        String::new()
+    }
+
+    /// Photo Mechanic's Image › Edit Photos: send the selection to the editor.
+    /// The sidecar beside each RAW (rating, label, caption, crop) is found by
+    /// the editor on its own, so only the photos are passed.
+    fn edit_photos(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let mut targets = self.selection.targets(self.cursor);
+        targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
+        let mut files: Vec<PathBuf> = Vec::new();
+        for &i in &targets {
+            let it = &self.items[i];
+            files.push(it.primary.path.clone());
+            if self.prefs.editor_with_jpeg {
+                files.extend(it.secondary.iter().map(|v| v.path.clone()));
+            }
+        }
+        let waiting = files
+            .iter()
+            .filter(|f| apature_core::fileops::is_online_only(f))
+            .count();
+        if waiting > 0 {
+            self.status = format!(
+                "{waiting} file{} not downloaded by the cloud drive: download {} before editing",
+                if waiting == 1 { " is" } else { "s are" },
+                if waiting == 1 { "it" } else { "them" }
+            );
+            return;
+        }
+        let app = self.editor_app();
+        let label = if app.is_empty() {
+            "the default app".to_string()
+        } else {
+            app.clone()
+        };
+        self.status = match Platform::open_with(&app, &files) {
+            Ok(()) => format!(
+                "Sent {} photo{} to {label}",
+                targets.len(),
+                if targets.len() == 1 { "" } else { "s" }
+            ),
+            Err(e) => e,
+        };
+    }
+
     /// PM's "Ingest From Selection": the Ingest workspace, on just the photos
     /// picked on the sheet, with the same folder template, rename, pad and
     /// verification as a card ingest.
@@ -4225,6 +4283,7 @@ impl App {
             }
             Command::RenamePhotos => self.open_rename_dialog(),
             Command::IngestFromSelection => self.ingest_from_selection(),
+            Command::EditPhotos => self.edit_photos(),
             Command::IngestPresetApply(name) => self.ingest_preset_apply(&name),
             Command::IngestPresetSave(name) => self.ingest_preset_save(&name),
             Command::IngestPresetDelete(name) => {
