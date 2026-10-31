@@ -73,6 +73,7 @@ pub struct Draft {
     pub city: String,
     pub state: String,
     pub team: String,
+    pub opponent: String,
     pub keywords: String,
     pub ending: String,
     pub notes: String,
@@ -148,6 +149,28 @@ pub fn fill_from_sheet(d: &mut Draft) {
             // "FOOTBALL: North Catholic at Highlands, 7 pm"
             if d.what.is_empty() {
                 d.what = format!("a {sport} game");
+            }
+            // "A at B": B is the home side. The team of the caption template
+            // defaults to the home side (edit it if you follow the visitors).
+            let sides: Vec<&str> = matchup
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .split(" at ")
+                .map(|t| t.trim())
+                .filter(|t| !t.is_empty())
+                .collect();
+            if let [away, home] = sides.as_slice() {
+                if d.team.is_empty() {
+                    d.team = if home.ends_with('s') {
+                        format!("{home}'")
+                    } else {
+                        format!("{home}'s")
+                    };
+                }
+                if d.opponent.is_empty() {
+                    d.opponent = away.to_string();
+                }
             }
             if d.keywords.is_empty() {
                 let teams: Vec<&str> = matchup
@@ -343,6 +366,7 @@ pub fn render(d: &Draft, o: &crate::prefs::Outlet) -> String {
     put(&mut out, "event", &d.what);
     put(&mut out, "keywords", &d.keywords);
     put(&mut out, "team", &d.team);
+    put(&mut out, "opponent", &d.opponent);
     put(&mut out, "photographer", &o.photographer);
     put(&mut out, "credit", &o.credit);
     put(&mut out, "source", &o.source);
@@ -401,6 +425,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 ("City", &mut d.city, "Jackson Township"),
                 ("State", &mut d.state, "Pa."),
                 ("Team", &mut d.team, "Seneca Valley's (for the caption template)"),
+                ("Opponent", &mut d.opponent, "Norwin"),
                 ("Keywords", &mut d.keywords, "football; Norwin; Seneca Valley; WPIAL"),
                 ("Caption ending", &mut d.ending, "in a football game Friday, Oct. 23, 2026, at … Photog/Special to the Eagle"),
             ] {
@@ -510,6 +535,8 @@ mod tests {
         assert_eq!(d.city, "Natrona Heights");
         assert_eq!(d.state, "Pa.");
         assert_eq!(d.keywords, "football; North Catholic; Highlands");
+        assert_eq!(d.team, "Highlands'");
+        assert_eq!(d.opponent, "North Catholic");
         assert!(d
             .ending
             .starts_with("in a football game Friday, Oct. 30, 2026"));

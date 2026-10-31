@@ -5,6 +5,7 @@
 # (SPO sports, LOC local, COM community) and Apature fills IPTC Category from it. It also goes in the
 # headline, the title, the job ID (transmission reference) and the file names.
 #
+# From this file {team}, {teamname}, {opponent}, {event}, {venue}, {city} and {slug} are variables too.
 # {variables} work in every field and in the caption endings: {iptcdow} {iptcmonthnameap} {iptcday}
 # {iptcyear4} (the photo's own date), {year4}, {credit}, {headline}. Names Apature does not know stay as typed.
 date: YYYY-MM-DD
@@ -17,6 +18,7 @@ country: USA
 event: a football game
 keywords: football; high school football; [school]; [opponent]
 team: [Team]'s
+opponent: [Opponent]
 photographer: [Photographer Name]/Example Press
 credit: [Photographer Name]/Example Press
 source: Example Press

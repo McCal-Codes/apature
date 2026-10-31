@@ -1246,6 +1246,7 @@ fn read_assignment(path: &Path) -> Result<apature_metadata::stationery::Assignme
             bad.join("\n  ")
         );
     }
+    apature_metadata::codes::set_assignment_vars(a.vars());
     Ok(a)
 }
 

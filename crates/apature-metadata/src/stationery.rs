@@ -18,6 +18,8 @@ pub struct Assignment {
     pub event: Option<String>,
     pub keywords: Vec<String>,
     pub team: Option<String>,
+    /// The other side (`opponent:`), for `{opponent}`.
+    pub opponent: Option<String>,
     pub photographer: Option<String>,
     pub credit: Option<String>,
     pub source: Option<String>,
@@ -75,6 +77,7 @@ impl Assignment {
                 "creator_title" | "title" => a.creator_title = Some(v.into()),
                 "caption_writer" => a.caption_writer = Some(v.into()),
                 "copyright" => a.copyright = Some(v.into()),
+                "opponent" => a.opponent = Some(v.into()),
                 "category" => a.category = Some(v.into()),
                 "supp_cat" => a.supp_categories = split_list(v),
                 "code" => {
@@ -166,6 +169,28 @@ impl Assignment {
             && (2..=4).contains(&sec.len())
             && sec.bytes().all(|b| b.is_ascii_uppercase()))
         .then(|| sec.to_string())
+    }
+
+    /// The assignment's own variables: `{team}` (as written, e.g. "Highlands'"),
+    /// `{teamname}` ("Highlands"), `{opponent}`, `{event}` and `{slug}`.
+    pub fn vars(&self) -> Vec<(String, String)> {
+        let mut v = Vec::new();
+        if let Some(t) = &self.team {
+            v.push(("team".to_string(), t.clone()));
+            let name = t
+                .trim_end_matches("'s")
+                .trim_end_matches('\'')
+                .trim()
+                .to_string();
+            v.push(("teamname".to_string(), name));
+        }
+        if let Some(o) = &self.opponent {
+            v.push(("opponent".to_string(), o.clone()));
+        }
+        if let Some(e) = &self.event {
+            v.push(("event".to_string(), e.clone()));
+        }
+        v
     }
 
     /// `category:` if given, else the section code of the slug.
@@ -380,5 +405,27 @@ mod tests {
         assert_eq!(bad.len(), 4, "{bad:?}");
         let ok = Assignment::parse("slug: 103126 SPO FB A-B\nvenue: Highlands Stadium\ndate: 2026-10-30\nkeywords: football\ncode: tail = (x)\n").unwrap();
         assert!(ok.unfilled().is_empty());
+    }
+
+    #[test]
+    fn team_event_and_opponent_are_variables_of_the_assignment() {
+        let a = Assignment::parse(
+            "slug: 103126 SPO FB A-B\nteam: Highlands'\nopponent: North Catholic\nevent: a football game\ncode: tail =  vs {opponent} in {event}\n",
+        )
+        .unwrap();
+        assert_eq!(
+            a.vars().iter().find(|(k, _)| k == "teamname").unwrap().1,
+            "Highlands"
+        );
+        crate::codes::set_assignment_vars(a.vars());
+        let vars = crate::codes::Vars::default();
+        assert_eq!(
+            crate::codes::expand_variables(
+                "{team} PLAYER vs {opponent}, {event}; {unknown}",
+                &vars
+            ),
+            "Highlands' PLAYER vs North Catholic, a football game; {unknown}"
+        );
+        crate::codes::set_assignment_vars(Vec::new());
     }
 }

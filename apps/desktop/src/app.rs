@@ -2378,6 +2378,7 @@ impl App {
             }
             Ok(a) => {
                 self.codes.merge(&a.codes());
+                apature_metadata::codes::set_assignment_vars(a.vars());
                 self.status = format!(
                     "Assignment loaded: {} ({} codes)",
                     a.slug,

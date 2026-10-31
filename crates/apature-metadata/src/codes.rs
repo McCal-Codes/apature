@@ -85,6 +85,19 @@ pub struct Vars {
 /// `Vars` and `Facts`.
 static USER_VARS: std::sync::RwLock<Vec<(String, String)>> = std::sync::RwLock::new(Vec::new());
 
+/// The loaded assignment's own values (`{team}`, `{event}`, `{opponent}`…):
+/// set when an assignment is loaded, so a caption ending or a template written
+/// once says the right thing for each job. The photographer's own variables
+/// win over these when a name is in both.
+static ASSIGNMENT_VARS: std::sync::RwLock<Vec<(String, String)>> =
+    std::sync::RwLock::new(Vec::new());
+
+pub fn set_assignment_vars(vars: Vec<(String, String)>) {
+    if let Ok(mut w) = ASSIGNMENT_VARS.write() {
+        *w = vars;
+    }
+}
+
 pub fn set_user_vars(vars: Vec<(String, String)>) {
     if let Ok(mut w) = USER_VARS.write() {
         *w = vars;
@@ -94,12 +107,14 @@ pub fn set_user_vars(vars: Vec<(String, String)>) {
 /// Look a user variable up, case-insensitively, trimming the name.
 pub fn user_var(name: &str) -> Option<String> {
     let n = name.trim();
-    USER_VARS
-        .read()
-        .ok()?
-        .iter()
-        .find(|(k, _)| k.trim().eq_ignore_ascii_case(n))
-        .map(|(_, v)| v.clone())
+    let find = |vars: &std::sync::RwLock<Vec<(String, String)>>| {
+        vars.read()
+            .ok()?
+            .iter()
+            .find(|(k, _)| k.trim().eq_ignore_ascii_case(n))
+            .map(|(_, v)| v.clone())
+    };
+    find(&USER_VARS).or_else(|| find(&ASSIGNMENT_VARS))
 }
 
 pub const AP_MONTHS: [&str; 12] = [

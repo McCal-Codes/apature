@@ -6,6 +6,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [0.1.2] — Unreleased
 
 ### Added
+- Assignment variables: `{team}`, `{teamname}`, `{opponent}` and `{event}` (and the existing `{venue}`, `{city}`, `{slug}`) come from the loaded assignment, so one caption ending or template says the right thing for each job; your own variables win if a name is in both. New assignment fills the team (the home side) and the opponent from a sheet's "FOOTBALL: A at B" line.
 - One template, both apps: Import from Photo Mechanic now also reads an IPTC template (the snapshots under IPTC templates, not only ingest snapshots) into an assignment, including Category, the date, the team and the caption ending; tools/pm_from_assignment.py goes the other way and writes a Photo Mechanic IPTC template, ingest and copy snapshot named after the slug from an assignment file, with the job's values in and the per-photo variables left as variables. Photo Mechanic's own user/client variables are a fixed set of fields, so the per-job values live in the assignment file.
 - An assignment that still has template text (`[venue]`, `MMDDYY`, `YYYY-MM-DD`) is refused by the app and the command line, with the lines to fix, so placeholder text cannot reach a photo.
 - IPTC Category and Supplemental Categories (`photoshop:Category`, IIM 2:15 and 2:20), filled from the slug's section code (`103126 SPO FB …` → `SPO`) or a `category:` / `supp_cat:` line in the assignment, like Photo Mechanic's Status section.
