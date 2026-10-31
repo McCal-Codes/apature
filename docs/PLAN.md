@@ -1,5 +1,30 @@
 # Plan for the next sessions (written 2026-10-15, budget-aware)
 
+## Todo added 2026-10-30 (from the owner)
+
+1. **Five stars in the camera while shooting (Z 6 II).** Research done, see
+   docs/research/camera-rating-and-bridge.md: assign Rating to a playback
+   control (Custom Setting f3, to confirm on the body); run the 10-minute test
+   to find which tag carries the rating; then read it at ingest into the sidecar,
+   add a camera-rating filter and copy starred frames first.
+2. **An Apature app bridge, like the Nikon phone app.** Research started (same
+   note): phone-to-FTP first (no new protocol), then an Apature phone app over
+   PTP/IP, Bluetooth pairing as a research track. Needs the owner's answers
+   (iPhone or Android, who uses it, 2 MP enough).
+3. **UI pass.** Make the contact sheet, preview and dialogs better than Photo
+   Mechanic; for now close to 1:1 in layout and speed, a little cleaner, with
+   best practices: the 4 pt spacing scale, one type scale, real hit targets,
+   visible keyboard focus and a focus order, WCAG AA contrast in every
+   appearance, motion that is interruptible and honours Reduce Motion, no
+   dialog without Escape. Method: screenshot each workspace beside Photo
+   Mechanic's, list the differences, fix in order of daily use; run the
+   accessibility and design review skills on the result. Also: a Tasks panel,
+   the "with prior settings" items, rating pills under thumbnails, file size
+   and zoom in the title (docs/research/pm-feature-gap.md §7).
+4. **More templates**: Butler Events, TribLive General and Sports; move
+   tools/pm_from_assignment.py into Apature as a button.
+5. **Windows PC storage move** (owner said later): see the Mac storage note.
+
 ## Next up (2026-10-23, after the Norwin–Seneca Valley game)
 
 Ranked from the Photo Mechanic menu audit (docs/research/pm-feature-gap.md §6):
