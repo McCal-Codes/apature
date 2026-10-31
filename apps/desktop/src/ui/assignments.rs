@@ -85,9 +85,10 @@ pub struct Draft {
 pub fn fill_from_sheet(d: &mut Draft) {
     let text = d.pasted.clone();
     let mut notes = Vec::new();
+    let mut date_from_slug_line = false;
     for raw in text.lines() {
-        let line = raw.trim();
-        if line.is_empty() {
+        let line = strip_list_number(raw.trim());
+        if line.is_empty() || is_page_chrome(line) {
             continue;
         }
         let upper = line.to_ascii_uppercase();
@@ -101,6 +102,14 @@ pub fn fill_from_sheet(d: &mut Draft) {
                 .to_string();
             if d.date.is_empty() {
                 d.date = date_from_slug(&d.slug).unwrap_or_default();
+                date_from_slug_line = !d.date.is_empty();
+            }
+        } else if let Some(day) = date_in_line(line) {
+            // The day of the event beats the slug's run date: a game on Friday
+            // can carry Sunday's slug, and the photos are of Friday.
+            if d.date.is_empty() || date_from_slug_line {
+                d.date = day;
+                date_from_slug_line = false;
             }
         } else if upper.starts_with("WHAT:") && d.what.is_empty() {
             d.what = after("WHAT:");
@@ -113,7 +122,16 @@ pub fn fill_from_sheet(d: &mut Draft) {
                 after("ADDRESS:")
             };
             // "Venue - detail, street, Town" → venue is the first part, town the last.
-            let parts: Vec<&str> = v.split(',').map(|s| s.trim()).collect();
+            // "Venue, street, Town, PA 15065" → the town is the part before the state and ZIP.
+            let mut parts: Vec<&str> = v.split(',').map(|s| s.trim()).collect();
+            if let Some(last) = parts.last().copied() {
+                if let Some(st) = state_and_zip(last) {
+                    if d.state.is_empty() {
+                        d.state = st;
+                    }
+                    parts.pop();
+                }
+            }
             d.venue = parts
                 .first()
                 .map(|s| s.split(" - ").next().unwrap_or(s).to_string())
@@ -126,8 +144,40 @@ pub fn fill_from_sheet(d: &mut Draft) {
                 .trim_start_matches("...")
                 .trim()
                 .to_string();
+        } else if let Some((sport, matchup)) = sport_line(line) {
+            // "FOOTBALL: North Catholic at Highlands, 7 pm"
+            if d.what.is_empty() {
+                d.what = format!("a {sport} game");
+            }
+            if d.keywords.is_empty() {
+                let teams: Vec<&str> = matchup
+                    .split(',')
+                    .next()
+                    .unwrap_or("")
+                    .split(" at ")
+                    .map(|t| t.trim())
+                    .filter(|t| !t.is_empty())
+                    .collect();
+                let mut kw = vec![sport.clone()];
+                kw.extend(teams.iter().map(|t| t.to_string()));
+                d.keywords = kw.join("; ");
+            }
+            notes.push(line.to_string());
         } else if !line.starts_with("http") {
             notes.push(line.to_string());
+        }
+    }
+    // The caption ending names the place as the desk writes it ("at Highlands
+    // Golden Rams Stadium."): better for the IPTC Location than the school's name.
+    if let Some(i) = d.ending.rfind(", at ") {
+        let place = &d.ending[i + 5..];
+        let place = place
+            .split(". ")
+            .next()
+            .unwrap_or(place)
+            .trim_end_matches('.');
+        if !place.is_empty() && place.len() < 80 {
+            d.venue = place.to_string();
         }
     }
     if d.notes.is_empty() {
@@ -136,6 +186,121 @@ pub fn fill_from_sheet(d: &mut Draft) {
     if d.state.is_empty() {
         d.state = "Pa.".into();
     }
+}
+
+/// "3. 110126 SPO FB …" → "110126 SPO FB …": the list position is not the slug.
+fn strip_list_number(line: &str) -> &str {
+    let t = line.trim_start();
+    let digits = t.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits > 0 && digits <= 3 {
+        if let Some(rest) = t[digits..].strip_prefix(". ") {
+            return rest.trim_start();
+        }
+    }
+    line
+}
+
+/// Labels the scheduling page prints around the sheet (not part of it).
+fn is_page_chrome(line: &str) -> bool {
+    let l = line.trim();
+    matches!(
+        l,
+        "Plan"
+            | "Event"
+            | "Sharing"
+            | "Details"
+            | "Assignment"
+            | "Show Less"
+            | "Show More"
+            | "Plan missing assignments"
+    ) || l.starts_with("Type Plan")
+        || l.starts_with("Created ")
+        || l.starts_with("Updated ")
+}
+
+/// "PA 15065" → "Pa."
+fn state_and_zip(part: &str) -> Option<String> {
+    let mut it = part.split_whitespace();
+    let (st, zip) = (it.next()?, it.next()?);
+    if it.next().is_some()
+        || st.len() != 2
+        || !st.chars().all(|c| c.is_ascii_uppercase())
+        || zip.len() != 5
+        || !zip.chars().all(|c| c.is_ascii_digit())
+    {
+        return None;
+    }
+    Some(
+        match st {
+            "PA" => "Pa.",
+            "OH" => "Ohio",
+            "WV" => "W.Va.",
+            "NY" => "N.Y.",
+            "MD" => "Md.",
+            "VA" => "Va.",
+            "NJ" => "N.J.",
+            other => other,
+        }
+        .to_string(),
+    )
+}
+
+/// "Friday October 30 2026 19:00 - …" → "2026-10-30".
+fn date_in_line(line: &str) -> Option<String> {
+    const MONTHS: [&str; 12] = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    ];
+    let toks: Vec<&str> = line.split_whitespace().collect();
+    for (i, t) in toks.iter().enumerate() {
+        let Some(m) = MONTHS
+            .iter()
+            .position(|n| n.eq_ignore_ascii_case(t.trim_end_matches(',')))
+        else {
+            continue;
+        };
+        let day: u32 = toks.get(i + 1)?.trim_end_matches(',').parse().ok()?;
+        let year: i32 = toks.get(i + 2)?.trim_end_matches(',').parse().ok()?;
+        if (1..=31).contains(&day) && (2000..2100).contains(&year) {
+            return Some(format!("{year}-{:02}-{day:02}", m + 1));
+        }
+    }
+    None
+}
+
+/// "FOOTBALL: North Catholic at Highlands, 7 pm" → ("football", "North Catholic at Highlands, 7 pm").
+fn sport_line(line: &str) -> Option<(String, String)> {
+    let (k, v) = line.split_once(':')?;
+    let k = k.trim();
+    let known = [
+        "FOOTBALL",
+        "SOCCER",
+        "BASKETBALL",
+        "BASEBALL",
+        "SOFTBALL",
+        "VOLLEYBALL",
+        "HOCKEY",
+        "LACROSSE",
+        "WRESTLING",
+        "GOLF",
+        "TENNIS",
+        "SWIMMING",
+        "TRACK",
+        "CROSS COUNTRY",
+    ];
+    known
+        .contains(&k)
+        .then(|| (k.to_ascii_lowercase(), v.trim().to_string()))
 }
 
 fn looks_like_slug(line: &str) -> bool {
@@ -298,7 +463,10 @@ mod tests {
         fill_from_sheet(&mut d);
         assert_eq!(d.slug, "102526 SPO FB Norwin-SV");
         assert_eq!(d.date, "2026-10-25");
-        assert_eq!(d.venue, "Seneca Valley HS");
+        assert_eq!(
+            d.venue, "Seneca Valley's NexTier Stadium",
+            "the place the caption ending names beats the school"
+        );
         assert!(d.ending.starts_with("in a football game Friday"));
         let text = render(
             &d,
@@ -323,5 +491,39 @@ mod tests {
         assert_eq!(d.what, "Great Pumpkin Festival");
         assert_eq!(d.venue, "Cranberry Township Municipal Building");
         assert_eq!(d.city, "Cranberry Township");
+    }
+
+    #[test]
+    fn reads_the_eagle_planning_page_as_pasted() {
+        let mut d = Draft {
+            pasted: "Plan\n3. 110126 SPO FB NC-Highlands\nType Plan Status Assigned Urgency 3 Section Sports\nFriday October 30 2026 19:00 - Friday October 30 2026 21:00\nFOOTBALL: North Catholic at Highlands, 7 pm\nADDRESS: Highlands HS, 1500 Pacific Ave, Natrona Heights, PA 15065\nCAPTION ENDING: ... in a football game Friday, Oct. 30, 2026, at Highlands Golden Rams Stadium. Photog/Special to the Eagle\nREPORTER: XXX\nDEADLINE: 2-4 print photos within 75 minutes, rest of gallery ASAP after\nASSIGNED: Jake\nShow Less\nAssignment\nPlan missing assignments\n".into(),
+            ..Default::default()
+        };
+        fill_from_sheet(&mut d);
+        assert_eq!(d.slug, "110126 SPO FB NC-Highlands");
+        assert_eq!(
+            d.date, "2026-10-30",
+            "the game day, not the slug's run date"
+        );
+        assert_eq!(d.what, "a football game");
+        assert_eq!(d.venue, "Highlands Golden Rams Stadium");
+        assert_eq!(d.city, "Natrona Heights");
+        assert_eq!(d.state, "Pa.");
+        assert_eq!(d.keywords, "football; North Catholic; Highlands");
+        assert!(d
+            .ending
+            .starts_with("in a football game Friday, Oct. 30, 2026"));
+        assert!(!d.notes.contains("Plan missing"), "{}", d.notes);
+        assert!(d.notes.contains("DEADLINE") && d.notes.contains("ASSIGNED: Jake"));
+        let text = render(
+            &d,
+            &Outlet {
+                credit: "Caleb McCartney/Special to the Eagle".into(),
+                ..Default::default()
+            },
+        );
+        let a = apature_metadata::stationery::Assignment::parse(&text).unwrap();
+        assert!(a.unfilled().is_empty(), "{:?}", a.unfilled());
+        assert_eq!(a.iptc().category.as_deref(), Some("SPO"));
     }
 }

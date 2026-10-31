@@ -21,6 +21,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 - Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
 
 ### Fixed
+- New assignment reads the Eagle's planning page as pasted: the list number before the slug, the real game day (not the slug's run date) from the date line, the town and state out of "Natrona Heights, PA 15065", the sport and teams from "FOOTBALL: A at B", and the stadium the caption ending names as the venue; the page's own labels no longer land in the notes.
 - With a dialog open (Copy or Move, What's New, Welcome, About, the assignment sheet) the keys no longer reach the photos behind it: Delete, 1–5, T, X and the arrows did.
 - Ingest From Selection ends when you pick another source or bring another folder to the front, instead of carrying the old file list into it.
 - Ingest refuses, with the file count, when a cloud drive has not downloaded some of the files, instead of hanging on the first one.
