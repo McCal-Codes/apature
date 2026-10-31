@@ -265,6 +265,9 @@ pub struct TransferDialog {
 /// Rename Photos dialog state.
 pub struct RenameDialog {
     pub template: String,
+    /// Also write the loaded assignment's slug into the headline, title and
+    /// job ID of the photos that are renamed.
+    pub set_headline: bool,
     pub seq_start: u32,
     pub targets: Vec<usize>,
     pub plan: Option<apature_core::fileops::RenamePlan>,
@@ -833,6 +836,7 @@ impl App {
         targets.sort_by_key(|&i| self.pos[i].unwrap_or(usize::MAX));
         self.rename_dialog = Some(RenameDialog {
             template: self.prefs.rename_template.clone(),
+            set_headline: false,
             seq_start: self.prefs.rename_seq_start.max(1),
             targets,
             plan: None,
@@ -906,10 +910,12 @@ impl App {
         };
         let template = d.template.trim().to_string();
         let seq_start = d.seq_start;
+        let set_headline = d.set_headline;
+        let mut renamed: Vec<usize> = Vec::new();
         match apature_core::fileops::rename(&plan) {
             Ok(moves) => {
                 let mut photos = 0;
-                for it in self.items.iter_mut() {
+                for (idx, it) in self.items.iter_mut().enumerate() {
                     let mut touched = false;
                     for v in std::iter::once(&mut it.primary).chain(it.secondary.iter_mut()) {
                         if let Some((_, to)) = moves.iter().find(|(from, _)| *from == v.path) {
@@ -925,6 +931,31 @@ impl App {
                             .map(|s| s.to_string_lossy().into_owned())
                             .unwrap_or_else(|| it.stem.clone());
                         photos += 1;
+                        renamed.push(idx);
+                    }
+                }
+                // Names and metadata must agree: the slug goes into the
+                // headline, title and job ID of what was just renamed.
+                let mut meta = String::new();
+                if set_headline {
+                    if let Some(slug) = self.assignment.as_ref().map(|a| a.slug.clone()) {
+                        let pad = apature_metadata::Iptc {
+                            title: Some(slug.clone()),
+                            headline: Some(slug.clone()),
+                            transmission_reference: Some(slug),
+                            ..Default::default()
+                        };
+                        let failed = renamed
+                            .iter()
+                            .filter(|&&i| items::write_iptc(&self.items[i], &pad).is_err())
+                            .count();
+                        meta = if failed == 0 {
+                            " · headline, title and job ID set to the slug".into()
+                        } else {
+                            format!(
+                                " · {failed} photo(s) could not take the slug in their metadata"
+                            )
+                        };
                     }
                 }
                 self.prefs.rename_template = template;
@@ -933,7 +964,7 @@ impl App {
                 self.rename_dialog = None;
                 self.rebuild_view();
                 self.status = format!(
-                    "Renamed {photos} photo{} ({} files)",
+                    "Renamed {photos} photo{} ({} files){meta}",
                     if photos == 1 { "" } else { "s" },
                     moves.len()
                 );

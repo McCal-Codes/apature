@@ -13,6 +13,8 @@ use apature_core::{ColorClass, ColorClassScheme, Marks, Rating, ScanOptions};
 use apature_metadata::items;
 use apature_preview::{Source, ThumbCache};
 
+mod locate;
+
 #[derive(Parser)]
 #[command(name = "apature-cli", version, about = "Apature command line")]
 struct Cli {
@@ -139,6 +141,15 @@ enum Cmd {
         #[arg(long, allow_hyphen_values = true)]
         degrees: f32,
         files: Vec<PathBuf>,
+    },
+    /// Find where a crop was cut from: for each frame (JPEG files) print the best match, its score and the crop rectangle as
+    /// top,left,bottom,right fractions, ready for `crop --rect`.
+    Locate {
+        /// The cropped JPEG.
+        #[arg(long)]
+        crop: PathBuf,
+        /// Candidate frames (JPEG files).
+        frames: Vec<PathBuf>,
     },
     /// Estimate how far each JPEG is tilted from level, from the long straight
     /// edges in it (horizons, banners, poles, goal posts). Prints degrees to
@@ -366,6 +377,7 @@ fn main() -> Result<()> {
         Cmd::Rotate { ccw, reset, files } => cmd_rotate(ccw, reset, &files),
         Cmd::Crop { rect, clear, files } => cmd_crop(rect, clear, &files),
         Cmd::Level { files } => cmd_level(&files),
+        Cmd::Locate { crop, frames } => cmd_locate(&crop, &frames),
         Cmd::Transfer {
             to,
             move_originals,
@@ -1321,6 +1333,34 @@ fn cmd_transfer(
         bail!(
             "{} photo(s) did not transfer; their originals were left alone",
             report.failed()
+        );
+    }
+    Ok(())
+}
+
+fn cmd_locate(crop: &Path, frames: &[PathBuf]) -> Result<()> {
+    let crop_bytes = std::fs::read(crop)?;
+    let mut rows: Vec<(f64, String, (f32, f32, f32, f32))> = frames
+        .par_iter()
+        .filter_map(|f| {
+            let bytes = match std::fs::read(f) {
+                Ok(b) => b,
+                Err(_) => return None,
+            };
+            // Frames are JPEGs (`apature-cli extract` writes a RAW's preview as one).
+            if !bytes.starts_with(&[0xFF, 0xD8]) {
+                return None;
+            }
+            let jpeg = bytes;
+            let found = locate::find(&crop_bytes, &jpeg).ok()?;
+            Some((found.score, f.display().to_string(), found.rect))
+        })
+        .collect();
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    for (score, f, r) in rows {
+        println!(
+            "{score:.4}\t{:.5},{:.5},{:.5},{:.5}\t{f}",
+            r.0, r.1, r.2, r.3
         );
     }
     Ok(())

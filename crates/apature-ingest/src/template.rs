@@ -2,7 +2,7 @@
 //! so an existing `{headline}-{seqn}` habit carries over.
 //!
 //! Supported (Photo Mechanic names and aliases):
-//! file: `{filename}` `{ext}` `{frame}` `{seqn}` `{seqn:N}` `{folder}`
+//! file: `{filename}` `{ext}` `{frame}` `{oldseq}` (the number already in a BUTLR-…0049-103026 name) `{seqn}` `{seqn:N}` `{folder}`
 //! assignment: `{headline}` `{head}` `{slug}`
 //! capture date: `{date}` (2026-10-06) `{datesort}` (20261006) `{yymmdd}`
 //! `{year4}` `{yr2}` `{month0}` `{monthname}` `{mnn3}` `{day0}` `{dow}` `{dow3}`
@@ -84,6 +84,30 @@ fn trim_float(v: f64) -> String {
 }
 
 impl Facts {
+    /// The photo's number from a name this app or Photo Mechanic already
+    /// gave it: `BUTLR-FB North Catholic-Highlands0049-103026` → "0049" (the
+    /// digits before a trailing six-digit `-MMDDYY`). Falls back to the
+    /// trailing digits of the stem, so a camera name still works. This is
+    /// what lets a rename change the slug and keep every number.
+    pub fn oldseq(&self) -> String {
+        if let Some((head, tail)) = self.stem.rsplit_once('-') {
+            if tail.len() == 6 && tail.bytes().all(|b| b.is_ascii_digit()) {
+                let digits: String = head
+                    .chars()
+                    .rev()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect();
+                if !digits.is_empty() {
+                    return digits;
+                }
+            }
+        }
+        self.frame()
+    }
+
     /// Trailing digits of the stem ("DSC_0412" → "0412", "850_7783" → "7783").
     pub fn frame(&self) -> String {
         let digits: String = self
@@ -118,6 +142,7 @@ pub fn expand(template: &str, facts: &Facts, seq: u32) -> String {
             "filename" | "stem" => Ok(Some(facts.stem.clone())),
             "ext" => Ok(Some(facts.ext.clone())),
             "frame" => Ok(Some(facts.frame())),
+            "oldseq" | "keepseq" => Ok(Some(facts.oldseq())),
             "seqn" | "seq" => {
                 let width = arg.and_then(|a| a.parse::<usize>().ok()).unwrap_or(3);
                 Ok(Some(format!("{seq:0width$}")))
@@ -386,5 +411,32 @@ mod tests {
         assert_eq!(sanitize_component("  ..  "), None);
         assert_eq!(sanitize_component("...hidden").as_deref(), Some("hidden"));
         assert_eq!(sanitize_component(""), None);
+    }
+
+    #[test]
+    fn oldseq_keeps_the_number_of_an_already_named_photo() {
+        let f = |stem: &str| Facts {
+            stem: stem.into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            f("BUTLR-FB North Catholic-Highlands0049-103026").oldseq(),
+            "0049"
+        );
+        assert_eq!(f("SEW-SewAcademyHorse1336-102826").oldseq(), "1336");
+        assert_eq!(
+            f("CAL_0875").oldseq(),
+            "0875",
+            "a camera name falls back to its own number"
+        );
+        assert_eq!(f("CAL_0875").frame(), "0875");
+        assert_eq!(
+            expand(
+                "BUTLR-110126 SPO FB NC-Highlands{oldseq}-103026",
+                &f("BUTLR-FB North Catholic-Highlands0049-103026"),
+                1
+            ),
+            "BUTLR-110126 SPO FB NC-Highlands0049-103026"
+        );
     }
 }

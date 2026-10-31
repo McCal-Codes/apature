@@ -217,6 +217,20 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 cmds.push(Command::RenameApply);
             }
             ui.horizontal(|ui| {
+                ui.label(RichText::new("NUMBERS").monospace().size(9.5).color(t.muted));
+                if ui.small_button("Keep each photo's number").on_hover_text("Use {oldseq}: the number already in a name like …Highlands0049-103026, so only the rest of the name changes").clicked() {
+                    d.template = keep_numbers(&d.template);
+                    changed = true;
+                }
+                if ui.small_button("Count from the start number").clicked() {
+                    d.template = count_numbers(&d.template);
+                    changed = true;
+                }
+            });
+            if app.assignment.is_some() {
+                ui.checkbox(&mut d.set_headline, "Also set the headline, title and job ID to the assignment's slug");
+            }
+            ui.horizontal(|ui| {
                 ui.label(RichText::new("SEQUENCE STARTS AT").monospace().size(9.5).color(t.muted));
                 changed |= ui.add(egui::DragValue::new(&mut d.seq_start).range(1..=99999)).changed();
             });
@@ -300,5 +314,51 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
 
     for c in cmds {
         app.dispatch(ctx, c);
+    }
+}
+
+/// `{seqn}` / `{seqn:4}` / `{frame}` → `{oldseq}`: keep the number each photo already has.
+pub fn keep_numbers(template: &str) -> String {
+    let mut out = String::new();
+    let mut rest = template;
+    while let Some(i) = rest.find('{') {
+        out.push_str(&rest[..i]);
+        let after = &rest[i..];
+        let Some(j) = after.find('}') else {
+            out.push_str(after);
+            return out;
+        };
+        let token = &after[..=j];
+        if token == "{seqn}" || token.starts_with("{seqn:") || token == "{frame}" {
+            out.push_str("{oldseq}");
+        } else {
+            out.push_str(token);
+        }
+        rest = &after[j + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `{oldseq}` → `{seqn:4}`: number the photos from the start number again.
+pub fn count_numbers(template: &str) -> String {
+    template.replace("{oldseq}", "{seqn:4}")
+}
+
+#[cfg(test)]
+mod rename_tests {
+    use super::*;
+
+    #[test]
+    fn the_number_part_of_a_template_switches_both_ways() {
+        let t = "BUTLR-{headline}{seqn:4}-{iptcmonth0}{iptcday0}{iptcyear2}";
+        assert_eq!(
+            keep_numbers(t),
+            "BUTLR-{headline}{oldseq}-{iptcmonth0}{iptcday0}{iptcyear2}"
+        );
+        assert_eq!(keep_numbers("{headline}{seqn}"), "{headline}{oldseq}");
+        assert_eq!(keep_numbers("{frame}-x"), "{oldseq}-x");
+        assert_eq!(count_numbers("A{oldseq}"), "A{seqn:4}");
+        assert_eq!(keep_numbers("no tokens {unclosed"), "no tokens {unclosed");
     }
 }
