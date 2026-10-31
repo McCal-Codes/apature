@@ -117,6 +117,44 @@ impl Assignment {
         self.credit.clone().or_else(|| self.photographer.clone())
     }
 
+    /// Fields still holding template text (`[venue]`, `MMDDYY`, `YYYY-MM-DD`):
+    /// "field: value" lines to fix before the assignment is used. A pad with
+    /// placeholders must never reach a photo.
+    pub fn unfilled(&self) -> Vec<String> {
+        let bad = |v: &str| {
+            (v.contains('[') && v.contains(']')) || v.contains("MMDDYY") || v.contains("YYYY")
+        };
+        let mut out = Vec::new();
+        let mut check = |k: &str, v: &str| {
+            if bad(v) {
+                out.push(format!("{k}: {v}"));
+            }
+        };
+        check("slug", &self.slug);
+        for (k, v) in [
+            ("date", &self.date),
+            ("venue", &self.venue),
+            ("city", &self.city),
+            ("state", &self.state),
+            ("event", &self.event),
+            ("team", &self.team),
+            ("photographer", &self.photographer),
+            ("credit", &self.credit),
+            ("source", &self.source),
+            ("copyright", &self.copyright),
+            ("caption_writer", &self.caption_writer),
+            ("category", &self.category),
+        ] {
+            if let Some(v) = v {
+                check(k, v);
+            }
+        }
+        for k in &self.keywords {
+            check("keywords", k);
+        }
+        out
+    }
+
     /// The section code in a slug written `MMDDYY SEC topic…` (`103126 SPO FB
     /// Highlands-North Catholic` → `SPO`): six digits, then a short code in capitals.
     pub fn slug_section(slug: &str) -> Option<String> {
@@ -333,5 +371,14 @@ mod tests {
                 .category,
             None
         );
+    }
+
+    #[test]
+    fn template_text_left_in_an_assignment_is_reported() {
+        let a = Assignment::parse("slug: MMDDYY SPO SLUG Title\nvenue: [venue]\ncity: Natrona Heights\nkeywords: football; [school]\ndate: YYYY-MM-DD\n").unwrap();
+        let bad = a.unfilled();
+        assert_eq!(bad.len(), 4, "{bad:?}");
+        let ok = Assignment::parse("slug: 103126 SPO FB A-B\nvenue: Highlands Stadium\ndate: 2026-10-30\nkeywords: football\ncode: tail = (x)\n").unwrap();
+        assert!(ok.unfilled().is_empty());
     }
 }

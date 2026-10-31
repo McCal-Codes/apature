@@ -6,6 +6,8 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [0.1.2] — Unreleased
 
 ### Added
+- One template, both apps: Import from Photo Mechanic now also reads an IPTC template (the snapshots under IPTC templates, not only ingest snapshots) into an assignment, including Category, the date, the team and the caption ending; tools/pm_from_assignment.py goes the other way and writes a Photo Mechanic IPTC template, ingest and copy snapshot named after the slug from an assignment file, with the job's values in and the per-photo variables left as variables. Photo Mechanic's own user/client variables are a fixed set of fields, so the per-job values live in the assignment file.
+- An assignment that still has template text (`[venue]`, `MMDDYY`, `YYYY-MM-DD`) is refused by the app and the command line, with the lines to fix, so placeholder text cannot reach a photo.
 - IPTC Category and Supplemental Categories (`photoshop:Category`, IIM 2:15 and 2:20), filled from the slug's section code (`103126 SPO FB …` → `SPO`) or a `category:` / `supp_cat:` line in the assignment, like Photo Mechanic's Status section.
 - Variables in assignment fields: when a pad is applied, `{iptcdow}`, `{iptcmonthnameap}`, `{iptcday}`, `{iptcyear4}`, `{year4}`, `{credit}`, `{headline}` and the rest are filled in per photo from its own capture date, the way Photo Mechanic does for a template. Unknown names stay as typed.
 - A generic sports assignment template (docs/templates/sports-assignment.txt) and a script that builds Photo Mechanic snapshots from your own (tools/pm_butler_sports.py).

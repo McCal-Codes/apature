@@ -75,10 +75,17 @@ fn unescape(s: &str) -> String {
 
 /// The stationery pad of a snapshot as assignment-file lines.
 fn pad_to_assignment(text: &str) -> Option<String> {
+    // The pad sits in an ingest snapshot (<IPTCStationeryPadData>) or is the
+    // whole of an IPTC template snapshot (<XMPRecord>).
     let pad = text
         .split("<IPTCStationeryPadData>")
         .nth(1)
-        .and_then(|s| s.split("</IPTCStationeryPadData>").next())?;
+        .and_then(|s| s.split("</IPTCStationeryPadData>").next())
+        .or_else(|| {
+            text.split("<XMPRecord>")
+                .nth(1)
+                .and_then(|s| s.split("</XMPRecord>").next())
+        })?;
     let xmp = unescape(pad);
     let mut lines: Vec<String> = Vec::new();
     let mut put = |k: &str, v: Option<String>| {
@@ -87,6 +94,11 @@ fn pad_to_assignment(text: &str) -> Option<String> {
         }
     };
     put("slug", xmp_attr(&xmp, "photoshop:Headline"));
+    put(
+        "date",
+        xmp_attr(&xmp, "photoshop:DateCreated").map(|d| d.chars().take(10).collect()),
+    );
+    put("category", xmp_attr(&xmp, "photoshop:Category"));
     put("city", xmp_attr(&xmp, "photoshop:City"));
     put("state", xmp_attr(&xmp, "photoshop:State"));
     put("country", xmp_attr(&xmp, "photoshop:Country"));
@@ -99,6 +111,17 @@ fn pad_to_assignment(text: &str) -> Option<String> {
     let creators = xmp_list(&xmp, "dc:creator");
     put("creator", creators.first().cloned());
     put("copyright", xmp_list(&xmp, "dc:rights").into_iter().next());
+    // A caption starter like "Knoch's PLAYER (##) ACTION in a football game
+    // {iptcdow}, … {credit}" becomes the team and the caption ending (`tail`),
+    // so the same template drives captions in both apps.
+    if let Some(d) = xmp_list(&xmp, "dc:description").into_iter().next() {
+        if let Some((team, tail)) = d.split_once(" PLAYER (##) ACTION") {
+            if !team.trim().is_empty() {
+                lines.push(format!("team: {}", team.trim()));
+            }
+            lines.push(format!("code: tail =  {}", tail.trim()));
+        }
+    }
     let kw = xmp_list(&xmp, "dc:subject");
     if !kw.is_empty() {
         lines.push(format!("keywords: {}", kw.join("; ")));
@@ -143,12 +166,18 @@ pub fn import(path: &Path) -> Result<Imported, String> {
         got.assignment = pad_to_assignment(&text);
         return Ok(got);
     }
+    if text.contains("<IPTCSettings>") {
+        got.assignment = pad_to_assignment(&text);
+        if got.assignment.is_some() {
+            return Ok(got);
+        }
+    }
     let table = apature_metadata::codes::CodeTable::parse(&text);
     if !table.codes.is_empty() {
         got.codes = true;
         return Ok(got);
     }
-    Err("not an ingest snapshot or a code replacement file".into())
+    Err("not an ingest snapshot, an IPTC template or a code replacement file".into())
 }
 
 #[cfg(test)]
@@ -422,5 +451,29 @@ mod preset_tests {
             ),
             "SEW-ZelienopleTrickOrTreat001-102926"
         );
+    }
+
+    #[test]
+    fn an_iptc_template_snapshot_becomes_an_assignment_and_back_to_the_same_fields() {
+        let snap = "<IPTCSettings>\n<XMPRecord>&lt;rdf:Description photoshop:City=\"Natrona Heights\" photoshop:State=\"Pennsylvania\" photoshop:Credit=\"Caleb McCartney/Special to the Eagle\" photoshop:Source=\"Special to the Eagle\" photoshop:Headline=\"103126 SPO FB Highlands-North Catholic\" photoshop:Category=\"SPO\" Iptc4xmpCore:Location=\"Highlands Stadium\" photoshop:DateCreated=\"2026-10-30T00:00:00-04:00\"&gt;&lt;dc:description&gt;&lt;rdf:Alt&gt;&lt;rdf:li xml:lang=\"x-default\"&gt;Highlands' PLAYER (##) ACTION in a football game {iptcdow}, {iptcmonthnameap} {iptcday}, {iptcyear4}, at Highlands Stadium. {credit}&lt;/rdf:li&gt;&lt;/rdf:Alt&gt;&lt;/dc:description&gt;&lt;dc:subject&gt;&lt;rdf:Bag&gt;&lt;rdf:li&gt;{headline}&lt;/rdf:li&gt;&lt;rdf:li&gt;football&lt;/rdf:li&gt;&lt;/rdf:Bag&gt;&lt;/dc:subject&gt;</XMPRecord>\n</IPTCSettings>";
+        let p =
+            std::env::temp_dir().join(format!("apature-iptc-template-{}.snap", std::process::id()));
+        std::fs::write(&p, snap).unwrap();
+        let imported = import(&p);
+        let _ = std::fs::remove_file(&p);
+        let text = imported.unwrap().assignment.expect("an assignment");
+        let a = apature_metadata::stationery::Assignment::parse(&text).unwrap();
+        assert_eq!(a.slug, "103126 SPO FB Highlands-North Catholic");
+        assert_eq!(a.category.as_deref(), Some("SPO"));
+        assert_eq!(a.venue.as_deref(), Some("Highlands Stadium"));
+        assert_eq!(a.team.as_deref(), Some("Highlands'"));
+        assert_eq!(a.date.as_deref(), Some("2026-10-30"));
+        assert!(a.unfilled().is_empty(), "{:?}", a.unfilled());
+        let tail = a.codes().get("tail").unwrap().to_string();
+        assert!(
+            tail.contains("{iptcdow}") && tail.ends_with("{credit}"),
+            "{tail}"
+        );
+        assert_eq!(a.iptc().category.as_deref(), Some("SPO"));
     }
 }

@@ -2365,6 +2365,17 @@ impl App {
             .map_err(|e| e.to_string())
             .and_then(|t| Assignment::parse(&t).map_err(|e| e.to_string()))
         {
+            Ok(a) if !a.unfilled().is_empty() => {
+                // Template text must never reach a photo: refuse until it is filled in.
+                let bad = a.unfilled();
+                self.status = format!(
+                    "{} still has template text, fill in: {}",
+                    path.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    bad.join(" · ")
+                );
+            }
             Ok(a) => {
                 self.codes.merge(&a.codes());
                 self.status = format!(

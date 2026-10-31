@@ -821,7 +821,7 @@ fn cmd_crop(rect: Option<Vec<f32>>, clear: bool, files: &[PathBuf]) -> Result<()
 }
 
 fn pad(assignment: &Path, files: &[PathBuf]) -> Result<()> {
-    let a = apature_metadata::stationery::Assignment::parse(&std::fs::read_to_string(assignment)?)?;
+    let a = read_assignment(assignment)?;
     let fields = a.iptc();
     for f in files {
         let item = item_for(f)?;
@@ -840,9 +840,7 @@ fn caption(
 ) -> Result<()> {
     use apature_metadata::codes::{self, Vars};
     let a = match assignment {
-        Some(p) => Some(apature_metadata::stationery::Assignment::parse(
-            &std::fs::read_to_string(p)?,
-        )?),
+        Some(p) => Some(read_assignment(&p)?),
         None => None,
     };
     let codes_table = a.as_ref().map(|a| a.codes()).unwrap_or_default();
@@ -1032,9 +1030,7 @@ fn cmd_export(
     use apature_ingest::plan::facts_for;
     use apature_ingest::template::expand;
     let pad = match assignment {
-        Some(p) => Some(apature_metadata::stationery::Assignment::parse(
-            &std::fs::read_to_string(p)?,
-        )?),
+        Some(p) => Some(read_assignment(&p)?),
         None => None,
     };
     let items = items_for_paths(paths)?;
@@ -1237,6 +1233,20 @@ fn cmd_level(files: &[PathBuf]) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Read an assignment file and refuse it while it still holds template text.
+fn read_assignment(path: &Path) -> Result<apature_metadata::stationery::Assignment> {
+    let a = apature_metadata::stationery::Assignment::parse(&std::fs::read_to_string(path)?)?;
+    let bad = a.unfilled();
+    if !bad.is_empty() {
+        bail!(
+            "{} still has template text; fill these in first:\n  {}",
+            path.display(),
+            bad.join("\n  ")
+        );
+    }
+    Ok(a)
 }
 
 fn cmd_transfer(
