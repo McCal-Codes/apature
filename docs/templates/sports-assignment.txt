@@ -1,0 +1,28 @@
+# Sports assignment template. Copy this file, name it after the slug, and fill in the [brackets].
+# Load in Apature: Caption › Load assignment (or File › Load Assignment…).
+#
+# The slug is the editor's: MMDDYY SEC topic. The six digits are the run date, SEC is the section code
+# (SPO sports, LOC local, COM community) and Apature fills IPTC Category from it. It also goes in the
+# headline, the title, the job ID (transmission reference) and the file names.
+#
+# {variables} work in every field and in the caption endings: {iptcdow} {iptcmonthnameap} {iptcday}
+# {iptcyear4} (the photo's own date), {year4}, {credit}, {headline}. Names Apature does not know stay as typed.
+date: YYYY-MM-DD
+slug: MMDDYY SPO SLUG Title
+category: SPO
+venue: [venue]
+city: [city]
+state: Pa.
+country: USA
+event: a football game
+keywords: football; high school football; [school]; [opponent]
+team: [Team]'s
+photographer: [Photographer Name]/Example Press
+credit: [Photographer Name]/Example Press
+source: Example Press
+copyright: © {year4} [Photographer Name]
+caption_writer: [Photographer Name]
+code: tail =  in a football game {iptcdow}, {iptcmonthnameap} {iptcday}, {iptcyear4}, at [venue]. {credit}
+# Player codes: \home7\ expands to the name. Add one line per player you can verify.
+# code: home7 = [Team]'s [First Last]
+# code: away22 = [Opponent]'s [First Last]

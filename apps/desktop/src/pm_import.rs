@@ -258,7 +258,7 @@ pub fn ingest_preset(name: &str, text: &str) -> Option<crate::prefs::IngestPrese
         String::new()
     };
     Some(crate::prefs::IngestPreset {
-        name: format!("{name} (ingest)"),
+        name: name.to_string(),
         folder_template: folder,
         rename_template: rename,
         primary: real_path(get("IngestPrimaryDestPath")),
@@ -292,7 +292,7 @@ pub fn copy_preset(name: &str, text: &str) -> Option<crate::prefs::IngestPreset>
         String::new()
     };
     Some(crate::prefs::IngestPreset {
-        name: format!("{name} (copy)"),
+        name: name.to_string(),
         folder_template: folder,
         rename_template: rename,
         primary: real_path(tag("CopyToFolderRootPath").as_ref()),
@@ -338,7 +338,17 @@ pub fn presets_from_dir(dir: &Path) -> Vec<crate::prefs::IngestPreset> {
             } else {
                 ingest_preset(&name, &text)
             };
-            out.extend(preset);
+            // An ingest and a copy snapshot can share a name (a "Butler Eagle
+            // Sports" of each): the first keeps it, the other says what it is.
+            if let Some(mut p) = preset {
+                if out
+                    .iter()
+                    .any(|x: &crate::prefs::IngestPreset| x.name == p.name)
+                {
+                    p.name = format!("{} ({})", p.name, if is_copy { "copy" } else { "ingest" });
+                }
+                out.push(p);
+            }
         }
     }
     out
@@ -354,7 +364,7 @@ mod preset_tests {
     #[test]
     fn an_ingest_snapshot_becomes_a_preset() {
         let p = ingest_preset("Deafult", INGEST).unwrap();
-        assert_eq!(p.name, "Deafult (ingest)");
+        assert_eq!(p.name, "Deafult");
         assert_eq!(
             p.folder_template,
             "{iptcyear4}/{iptcmonthname}/{iptcmonthname3} {iptcday0} {head}"
@@ -367,7 +377,7 @@ mod preset_tests {
     #[test]
     fn a_copy_snapshot_becomes_a_preset_with_its_root() {
         let p = copy_preset("Triblive Swickley", COPY).unwrap();
-        assert_eq!(p.name, "Triblive Swickley (copy)");
+        assert_eq!(p.name, "Triblive Swickley");
         assert_eq!(
             p.rename_template,
             "SEW-{headline}{seqn}-{iptcmonth0}{iptcday0}{iptcyear2}"

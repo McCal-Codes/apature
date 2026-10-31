@@ -25,6 +25,9 @@ pub struct Assignment {
     pub creator_title: Option<String>,
     pub caption_writer: Option<String>,
     pub copyright: Option<String>,
+    pub category: Option<String>,
+    /// Supplemental categories (`supp_cat:` a; b).
+    pub supp_categories: Vec<String>,
     pub codes: Vec<(String, String)>,
 }
 
@@ -72,6 +75,8 @@ impl Assignment {
                 "creator_title" | "title" => a.creator_title = Some(v.into()),
                 "caption_writer" => a.caption_writer = Some(v.into()),
                 "copyright" => a.copyright = Some(v.into()),
+                "category" => a.category = Some(v.into()),
+                "supp_cat" => a.supp_categories = split_list(v),
                 "code" => {
                     if let Some((c, r)) = v.split_once('=') {
                         // One space after `=` is the separator; any further leading
@@ -112,6 +117,26 @@ impl Assignment {
         self.credit.clone().or_else(|| self.photographer.clone())
     }
 
+    /// The section code in a slug written `MMDDYY SEC topic…` (`103126 SPO FB
+    /// Highlands-North Catholic` → `SPO`): six digits, then a short code in capitals.
+    pub fn slug_section(slug: &str) -> Option<String> {
+        let mut parts = slug.split_whitespace();
+        let date = parts.next()?;
+        let sec = parts.next()?;
+        (date.len() == 6
+            && date.bytes().all(|b| b.is_ascii_digit())
+            && (2..=4).contains(&sec.len())
+            && sec.bytes().all(|b| b.is_ascii_uppercase()))
+        .then(|| sec.to_string())
+    }
+
+    /// `category:` if given, else the section code of the slug.
+    pub fn category_code(&self) -> Option<String> {
+        self.category
+            .clone()
+            .or_else(|| Self::slug_section(&self.slug))
+    }
+
     /// The IPTC pad to apply to every frame of the assignment.
     pub fn iptc(&self) -> Iptc {
         let creator = self.creator.clone().or_else(|| {
@@ -126,6 +151,8 @@ impl Assignment {
             title: Some(self.slug.clone()),
             headline: Some(self.slug.clone()),
             transmission_reference: Some(self.slug.clone()),
+            category: self.category_code(),
+            supplemental_categories: Some(self.supp_categories.clone()).filter(|s| !s.is_empty()),
             keywords: Some(keywords),
             creator: creator.map(|c| vec![c]),
             creator_title: self.creator_title.clone(),
@@ -266,6 +293,45 @@ mod tests {
         assert!(
             a.codes().get("game").unwrap().contains("held"),
             "other boilerplate stays"
+        );
+    }
+
+    #[test]
+    fn the_section_of_the_slug_becomes_the_category() {
+        assert_eq!(
+            Assignment::slug_section("103126 SPO FB Highlands-North Catholic").as_deref(),
+            Some("SPO")
+        );
+        assert_eq!(
+            Assignment::slug_section("102526 LOC Great Pumpkin Fest").as_deref(),
+            Some("LOC")
+        );
+        assert_eq!(
+            Assignment::slug_section("Zelie Merchant Trick-or-Treat Parade"),
+            None
+        );
+        assert_eq!(Assignment::slug_section("10312 SPO x"), None, "six digits");
+        assert_eq!(Assignment::slug_section("103126 Spo x"), None, "capitals");
+        let a = Assignment::parse("slug: 103126 SPO FB A-B\nsupp_cat: football; high school\n")
+            .unwrap();
+        let i = a.iptc();
+        assert_eq!(i.category.as_deref(), Some("SPO"));
+        assert_eq!(
+            i.supplemental_categories,
+            Some(vec!["football".to_string(), "high school".to_string()])
+        );
+        let b = Assignment::parse("slug: Odd Slug\ncategory: COM\n").unwrap();
+        assert_eq!(
+            b.iptc().category.as_deref(),
+            Some("COM"),
+            "an explicit category wins"
+        );
+        assert_eq!(
+            Assignment::parse("slug: Odd Slug\n")
+                .unwrap()
+                .iptc()
+                .category,
+            None
         );
     }
 }

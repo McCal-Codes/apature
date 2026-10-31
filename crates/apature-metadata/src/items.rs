@@ -146,7 +146,92 @@ pub fn read_iptc(item: &PhotoItem) -> Iptc {
 }
 
 /// Write IPTC everywhere marks go (sidecar for a RAW, packet for each JPEG).
+/// `fields` with every `{variable}` in its text expanded for this photo:
+/// the date from the photo's own capture time (else the pad's date), the
+/// credit, headline and the rest from the pad itself. Photo Mechanic does the
+/// same to a template's fields; unknown names stay as typed.
+pub fn expand_pad(item: &PhotoItem, fields: &Iptc) -> Iptc {
+    use crate::codes::{self, Vars};
+    let has_braces = |s: &Option<String>| s.as_deref().is_some_and(|t| t.contains('{'));
+    let any = has_braces(&fields.title)
+        || has_braces(&fields.headline)
+        || has_braces(&fields.description)
+        || has_braces(&fields.credit)
+        || has_braces(&fields.source)
+        || has_braces(&fields.copyright)
+        || has_braces(&fields.instructions)
+        || has_braces(&fields.sublocation)
+        || has_braces(&fields.caption_writer)
+        || has_braces(&fields.city)
+        || fields
+            .keywords
+            .iter()
+            .flatten()
+            .chain(fields.creator.iter().flatten())
+            .chain(fields.supplemental_categories.iter().flatten())
+            .any(|k| k.contains('{'));
+    if !any {
+        return fields.clone();
+    }
+    let date = crate::exif::read(item.path())
+        .ok()
+        .and_then(|e| e.date_time_original)
+        .and_then(|d| codes::parse_date(&d.replace(':', "-")))
+        .or_else(|| fields.date_created.as_deref().and_then(codes::parse_date));
+    let vars = Vars {
+        date,
+        credit: fields.credit.clone(),
+        headline: fields.headline.clone(),
+        title: fields.title.clone(),
+        city: fields.city.clone(),
+        state: fields.state.clone(),
+        country: fields.country.clone(),
+        sublocation: fields.sublocation.clone(),
+        source: fields.source.clone(),
+        copyright: fields.copyright.clone(),
+        creator: fields.creator.as_ref().and_then(|c| c.first().cloned()),
+        caption_writer: fields.caption_writer.clone(),
+        transmission_reference: fields.transmission_reference.clone(),
+        keywords: None,
+        filename: item
+            .path()
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned()),
+    };
+    let x = |s: &Option<String>| s.as_ref().map(|t| codes::expand_variables(t, &vars));
+    let xl = |l: &Option<Vec<String>>| {
+        l.as_ref().map(|v| {
+            v.iter()
+                .map(|t| codes::expand_variables(t, &vars))
+                .collect()
+        })
+    };
+    Iptc {
+        title: x(&fields.title),
+        headline: x(&fields.headline),
+        description: x(&fields.description),
+        keywords: xl(&fields.keywords),
+        creator: xl(&fields.creator),
+        creator_title: x(&fields.creator_title),
+        credit: x(&fields.credit),
+        source: x(&fields.source),
+        copyright: x(&fields.copyright),
+        caption_writer: x(&fields.caption_writer),
+        city: x(&fields.city),
+        state: x(&fields.state),
+        country: x(&fields.country),
+        sublocation: x(&fields.sublocation),
+        instructions: x(&fields.instructions),
+        transmission_reference: x(&fields.transmission_reference),
+        category: x(&fields.category),
+        supplemental_categories: xl(&fields.supplemental_categories),
+        usage_terms: x(&fields.usage_terms),
+        ..fields.clone()
+    }
+}
+
 pub fn write_iptc(item: &PhotoItem, fields: &Iptc) -> Result<Vec<PathBuf>, ItemError> {
+    let fields = &expand_pad(item, fields);
     let mut written = Vec::new();
     if item.variants().any(|v| v.kind == Kind::Raw) {
         let p = item.sidecar_path();
@@ -253,5 +338,53 @@ mod tests {
         assert_eq!(src.effective(&items[0], &scheme).rating, Rating(5));
         assert_eq!(src.conflicts().len(), 1);
         assert_eq!(src.conflicts()[0].1.field, "rating");
+    }
+
+    #[test]
+    fn a_pad_with_variables_is_filled_in_for_each_photo() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("DSC_0001.JPG"), jpeg_skeleton()).unwrap();
+        let items = apature_core::scan(dir.path(), &ScanOptions::default()).unwrap();
+        let pad = Iptc {
+            headline: Some("103126 SPO FB A-B".into()),
+            credit: Some("Caleb McCartney/Special to the Eagle".into()),
+            date_created: Some("2026-10-30T00:00:00".into()),
+            description: Some(
+                "Highlands' PLAYER (##) ACTION in a football game {iptcdow}, {iptcmonthnameap} {iptcday}, {iptcyear4}. {credit}".into(),
+            ),
+            copyright: Some("\u{a9} {year4} Caleb McCartney".into()),
+            keywords: Some(vec!["{headline}".into(), "{not_a_variable}".into(), "football".into()]),
+            ..Default::default()
+        };
+        let out = expand_pad(&items[0], &pad);
+        assert_eq!(
+            out.description.as_deref(),
+            Some("Highlands' PLAYER (##) ACTION in a football game Friday, Oct. 30, 2026. Caleb McCartney/Special to the Eagle")
+        );
+        assert_eq!(
+            out.copyright.as_deref(),
+            Some("\u{a9} 2026 Caleb McCartney")
+        );
+        assert_eq!(
+            out.keywords,
+            Some(vec![
+                "103126 SPO FB A-B".into(),
+                "{not_a_variable}".into(),
+                "football".into()
+            ]),
+            "{{headline}} is filled in, an unknown name stays as typed"
+        );
+        // and written to the file, the variables are gone
+        write_iptc(&items[0], &pad).unwrap();
+        let back = iptc::parse(&String::from_utf8_lossy(
+            &fs::read(dir.path().join("DSC_0001.JPG")).unwrap(),
+        ));
+        assert!(
+            back.description
+                .as_deref()
+                .unwrap_or("")
+                .contains("Friday, Oct. 30, 2026"),
+            "{back:?}"
+        );
     }
 }

@@ -41,6 +41,10 @@ pub struct Iptc {
     pub date_created: Option<String>,
     pub instructions: Option<String>,
     pub transmission_reference: Option<String>,
+    /// IPTC Category (photoshop:Category, IIM 2:15): the slug's section code.
+    pub category: Option<String>,
+    /// Supplemental categories (photoshop:SupplementalCategories, IIM 2:20).
+    pub supplemental_categories: Option<Vec<String>>,
     pub usage_terms: Option<String>,
     /// XMP exif:GPSLatitude / GPSLongitude in their own "DD,MM.mmmmN" form;
     /// use `set_gps` and `gps_decimal` for decimal degrees.
@@ -76,6 +80,8 @@ pub enum Field {
     DateCreated,
     Instructions,
     TransmissionReference,
+    Category,
+    SupplementalCategories,
     UsageTerms,
     GpsLatitude,
     GpsLongitude,
@@ -190,6 +196,20 @@ const TABLE: &[(Field, &str, &str, &str, Kind)] = &[
         Kind::Simple,
     ),
     (
+        Field::Category,
+        "photoshop",
+        NS_PHOTOSHOP,
+        "Category",
+        Kind::Simple,
+    ),
+    (
+        Field::SupplementalCategories,
+        "photoshop",
+        NS_PHOTOSHOP,
+        "SupplementalCategories",
+        Kind::Bag,
+    ),
+    (
         Field::UsageTerms,
         "xmpRights",
         NS_XMP_RIGHTS,
@@ -220,6 +240,8 @@ impl Iptc {
             Field::DateCreated => one(&self.date_created),
             Field::Instructions => one(&self.instructions),
             Field::TransmissionReference => one(&self.transmission_reference),
+            Field::Category => one(&self.category),
+            Field::SupplementalCategories => self.supplemental_categories.clone(),
             Field::UsageTerms => one(&self.usage_terms),
             Field::GpsLatitude => one(&self.gps_latitude),
             Field::GpsLongitude => one(&self.gps_longitude),
@@ -247,6 +269,8 @@ impl Iptc {
             Field::DateCreated => self.date_created = one(v),
             Field::Instructions => self.instructions = one(v),
             Field::TransmissionReference => self.transmission_reference = one(v),
+            Field::Category => self.category = one(v),
+            Field::SupplementalCategories => self.supplemental_categories = Some(v),
             Field::UsageTerms => self.usage_terms = one(v),
             Field::GpsLatitude => self.gps_latitude = one(v),
             Field::GpsLongitude => self.gps_longitude = one(v),

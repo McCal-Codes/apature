@@ -80,6 +80,12 @@ pub fn datasets(iptc: &Iptc) -> Vec<u8> {
             ds(&mut o, 2, 25, k.as_bytes());
         }
     }
+    text(&mut o, 15, &iptc.category);
+    if let Some(cs) = &iptc.supplemental_categories {
+        for c in cs.iter().filter(|c| !c.trim().is_empty()) {
+            ds(&mut o, 2, 20, c.as_bytes());
+        }
+    }
     text(&mut o, 40, &iptc.instructions);
     if let Some((d, t)) = iptc.date_created.as_deref().and_then(date_parts) {
         ds(&mut o, 2, 55, d.as_bytes());
