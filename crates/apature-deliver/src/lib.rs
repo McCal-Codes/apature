@@ -150,14 +150,17 @@ impl Remote for LocalFolder {
         if let Some(p) = dst.parent() {
             std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
         }
-        let n = std::fs::copy(local, dst).map_err(|e| e.to_string())?;
-        // Opened for writing: Windows will not flush a read-only handle.
-        std::fs::OpenOptions::new()
-            .write(true)
-            .open(dst)
-            .and_then(|f| f.sync_all())
-            .map_err(|e| e.to_string())?;
-        Ok(n)
+        // Copy through our own handle and flush that one. `fs::copy` would
+        // carry a read-only source's permissions to the copy, and Windows
+        // will not flush a handle opened read-only.
+        let copy = || -> std::io::Result<u64> {
+            let mut src = std::fs::File::open(local)?;
+            let mut out = std::fs::File::create(dst)?;
+            let n = std::io::copy(&mut src, &mut out)?;
+            out.sync_all()?;
+            Ok(n)
+        };
+        copy().map_err(|e| e.to_string())
     }
     fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
         std::fs::rename(from, to).map_err(|e| e.to_string())
@@ -332,6 +335,33 @@ mod tests {
             "/incoming/X.JPG"
         );
         assert_eq!(remote_path("photos", Path::new("X.JPG")), "photos/X.JPG");
+    }
+
+    #[test]
+    fn folder_delivery_sends_a_read_only_photo() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("TEST-002.JPG");
+        std::fs::write(&f, vec![9u8; 4_096]).unwrap();
+        let mut perms = std::fs::metadata(&f).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&f, perms).unwrap();
+        let desk = dir.path().join("desk");
+        let target = Target {
+            name: "test".into(),
+            kind: Kind::Folder,
+            host: String::new(),
+            port: 0,
+            user: String::new(),
+            dir: desk.display().to_string(),
+            key_file: None,
+        };
+        let rep = send(&target, "", &[f], |_| {}).unwrap();
+        assert_eq!(rep.sent, 1);
+        assert_eq!(rep.bytes, 4_096);
+        assert_eq!(
+            std::fs::read(desk.join("TEST-002.JPG")).unwrap().len(),
+            4_096
+        );
     }
 
     /// Runs only with a local FTP server: `APATURE_FTP_TEST=host:port:user:pass:dir`.
