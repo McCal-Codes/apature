@@ -151,7 +151,10 @@ impl Remote for LocalFolder {
             std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
         }
         let n = std::fs::copy(local, dst).map_err(|e| e.to_string())?;
-        std::fs::File::open(dst)
+        // Opened for writing: Windows will not flush a read-only handle.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(dst)
             .and_then(|f| f.sync_all())
             .map_err(|e| e.to_string())?;
         Ok(n)

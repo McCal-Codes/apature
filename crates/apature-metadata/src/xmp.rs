@@ -292,6 +292,16 @@ pub fn satisfies(want: &XmpMarks, got: &XmpMarks) -> bool {
         })
 }
 
+/// Write `bytes` to `path` and flush them to the disk through the same
+/// handle. Windows refuses to flush a handle opened read-only ("Access is
+/// denied"), so reopening the file with `File::open` to sync it fails there.
+pub(crate) fn write_synced(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    let mut f = fs::File::create(path)?;
+    f.write_all(bytes)?;
+    f.sync_all()
+}
+
 /// Generic atomic sidecar edit: read (or start empty), `edit` the text,
 /// `verify` the result, then temp → fsync → rename. The original is never
 /// touched unless verification passes.
@@ -314,8 +324,7 @@ pub fn write_sidecar_with(
     }
     let tmp = path.with_extension(format!("xmp.tmp{}", std::process::id()));
     let result = (|| {
-        fs::write(&tmp, updated.as_bytes())?;
-        fs::File::open(&tmp)?.sync_all()?;
+        write_synced(&tmp, updated.as_bytes())?;
         fs::rename(&tmp, path)
     })();
     if result.is_err() {
@@ -344,8 +353,7 @@ pub fn write_marks(path: &Path, marks: &XmpMarks) -> Result<(), XmpError> {
     }
     let tmp = path.with_extension(format!("xmp.tmp{}", std::process::id()));
     let result = (|| {
-        fs::write(&tmp, updated.as_bytes())?;
-        fs::File::open(&tmp)?.sync_all()?;
+        write_synced(&tmp, updated.as_bytes())?;
         fs::rename(&tmp, path)
     })();
     if result.is_err() {
