@@ -631,6 +631,8 @@ mod tests {
                     .unwrap()
                     .display()
                     .to_string()
+                    // Windows prints `\`; compare with `/` everywhere.
+                    .replace('\\', "/")
             })
             .collect();
         assert_eq!(
@@ -680,7 +682,13 @@ mod tests {
         assert!(plan.can_run(), "{:?}", plan.collisions);
         assert_eq!(plan.items, 2);
         assert_eq!(plan.companions, 2);
-        let rel = |p: &Path| p.strip_prefix(t.path()).unwrap().display().to_string();
+        let rel = |p: &Path| {
+            p.strip_prefix(t.path())
+                .unwrap()
+                .display()
+                .to_string()
+                .replace('\\', "/")
+        };
         let names: Vec<String> = plan.entries.iter().map(|e| rel(&e.primary)).collect();
         assert_eq!(
             names,

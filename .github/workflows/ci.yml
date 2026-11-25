@@ -2,7 +2,7 @@ name: CI
 
 # Linux for the libraries, a type-check of the desktop, and a real desktop
 # build with a headless smoke test under Xvfb (cheapest minutes). Windows
-# builds the desktop on pushes to main and pull requests. One macOS job
+# builds the desktop and runs every test on pushes to main and pull requests. One macOS job
 # builds and tests the desktop crate on pushes to main, so a commit that does
 # not compile can never sit on main unnoticed. Bundling, signing and the
 # real-card checks stay on the owner's Mac.
@@ -77,6 +77,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p apature -p apature-cli
+      # The tests catch what only Windows does (read-only handles that cannot
+      # be flushed, `\` in paths). --release reuses the build above.
+      - name: Tests
+        shell: pwsh
+        run: |
+          $env:APATURE_CONFIG_DIR = Join-Path $env:RUNNER_TEMP apature-config
+          cargo test --release --workspace
       - name: Software OpenGL for the runner (Mesa llvmpipe; the VM has no GPU)
         uses: ssciwr/setup-mesa-dist-win@v2
       - name: Smoke test (the app starts headless and writes a screenshot)

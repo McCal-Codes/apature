@@ -22,8 +22,22 @@ All notable, user-visible changes. Versions follow semantic versioning;
 - What's New: after an update a short page shows the newest section of the changelog once; Help › What's New in Apature… and About › What's new bring it back. The page is read from the changelog file, so it never drifts from it.
 - Straighten: `apature-cli level` estimates how far a frame is tilted from the long straight edges in it (horizons, banners, poles, goal posts); `apature-cli straighten --degrees` stores the angle in the sidecar (`apature:Straighten`) and export turns the picture and then applies the crop, so exports come out level. The in-app preview does not show it yet.
 - Delete key and Move to Trash act at once with no sheet; ⌘Z puts the photos back from the Trash (⇧⌘Z trashes them again). The undo history keeps pointing at the right photos after a delete or a restore.
+- Camera over Wi-Fi, direct: Apature finds a Nikon on the network over Bonjour, pairs with the code the camera shows (typed in Ingest; nothing is confirmed unless it matches), and receives frames as they are shot into the Wi-Fi inbox for Live Ingest. No transmitter accessory and no vendor utility. Settings › Ingest › Forget pairing.
+- Assignments ahead of time: an assignments folder (Google Drive by default when it is installed), an Upcoming list in the Caption workspace, and New assignment, which turns a pasted editor's sheet into an assignment file with the outlet's credit, source and copyright from Settings. When an ingest finishes, the assignment file is copied into the day's folder on the destination drive.
+- Camera over Wi-Fi reads the utility's per-camera subfolder.
+- Camera over Wi-Fi: when Nikon's Wireless Transmitter Utility has a destination folder, it is listed under Drives & cards; one click opens Ingest on it with Live Ingest on. No WT-7, no phone.
+- Appearance › OLED: the Dark appearance on a true black ground, for OLED screens and dark rooms.
+- Settings › Resources: style and ethics (AP Stylebook, NPPA, SPJ, Poynter) and internships, workshops and contests for students, each a checked link that opens in the browser.
+- Photo Mechanic import now turns the stationery pad in an ingest snapshot into an assignment file and loads it.
+- Windows: Eject the card (Shell's Eject verb).
+
+### Changed
+- Inspector sections drawn as cards; the tag is a switch. The filter popup uses chips and switches, with colour classes as dotted chips.
+- Export workspace laid out in the order of Photo Mechanic's Save Photos As dialog: Preset, Photos, Destination and naming with an example, Image (format, size, quality, RAW decode), Metadata, Then (open folder, send to); switches instead of checkboxes; the Export button pinned at the bottom.
+- Caption workspace laid out as cards (Assignment, Caption, Keywords, Where, Who, More fields) with Save & next, Save and Revert pinned at the bottom; the code list sits behind a hover.
 
 ### Fixed
+- Windows: ratings, labels, captions and crops are saved again. Every sidecar and embedded-XMP write failed with "Access is denied", because the new file was flushed through a read-only handle, which Windows refuses; Folder delivery had the same problem.
 - New assignment reads the Eagle's planning page as pasted: the list number before the slug, the real game day (not the slug's run date) from the date line, the town and state out of "Natrona Heights, PA 15065", the sport and teams from "FOOTBALL: A at B", and the stadium the caption ending names as the venue; the page's own labels no longer land in the notes.
 - With a dialog open (Copy or Move, What's New, Welcome, About, the assignment sheet) the keys no longer reach the photos behind it: Delete, 1–5, T, X and the arrows did.
 - Ingest From Selection ends when you pick another source or bring another folder to the front, instead of carrying the old file list into it.
@@ -33,27 +47,6 @@ All notable, user-visible changes. Versions follow semantic versioning;
 - Exporting photos that a cloud drive keeps online-only (Google Drive, iCloud) no longer hangs: Apature says which ones are not downloaded and stops before starting.
 - On macOS the bare keys (1–5 rate, 0 clears, T tag, X reject, Z zoom, C compare, …) did nothing: AppKit offers the menu only ⌘-shortcuts while Apature's own view has the keyboard, and the app skipped bare keys on the assumption that the menu handled them. It handles them itself now.
 - A `code:` line in an assignment (for example `code: tail = ...`) now beats the generated boilerplate of the same name, and keeps its leading space.
-
-### Added
-- Camera over Wi-Fi, direct: Apature finds a Nikon on the network over Bonjour, pairs with the code the camera shows (typed in Ingest; nothing is confirmed unless it matches), and receives frames as they are shot into the Wi-Fi inbox for Live Ingest. No transmitter accessory and no vendor utility. Settings › Ingest › Forget pairing.
-- Assignments ahead of time: an assignments folder (Google Drive by default when it is installed), an Upcoming list in the Caption workspace, and New assignment, which turns a pasted editor's sheet into an assignment file with the outlet's credit, source and copyright from Settings. When an ingest finishes, the assignment file is copied into the day's folder on the destination drive.
-- Camera over Wi-Fi reads the utility's per-camera subfolder.
-- Camera over Wi-Fi: when Nikon's Wireless Transmitter Utility has a destination folder, it is listed under Drives & cards; one click opens Ingest on it with Live Ingest on. No WT-7, no phone.
-
-### Changed
-- Inspector sections drawn as cards; the tag is a switch. The filter popup uses chips and switches, with colour classes as dotted chips.
-
-### Added
-- Appearance › OLED: the Dark appearance on a true black ground, for OLED screens and dark rooms.
-
-### Changed
-- Export workspace laid out in the order of Photo Mechanic's Save Photos As dialog: Preset, Photos, Destination and naming with an example, Image (format, size, quality, RAW decode), Metadata, Then (open folder, send to); switches instead of checkboxes; the Export button pinned at the bottom.
-- Caption workspace laid out as cards (Assignment, Caption, Keywords, Where, Who, More fields) with Save & next, Save and Revert pinned at the bottom; the code list sits behind a hover.
-
-### Added
-- Settings › Resources: style and ethics (AP Stylebook, NPPA, SPJ, Poynter) and internships, workshops and contests for students, each a checked link that opens in the browser.
-- Photo Mechanic import now turns the stationery pad in an ingest snapshot into an assignment file and loads it.
-- Windows: Eject the card (Shell's Eject verb).
 
 ## [0.1.1] — 2026-10-23
 
