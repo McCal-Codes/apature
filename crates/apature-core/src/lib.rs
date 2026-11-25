@@ -1,10 +1,12 @@
 //! Core models shared by every other crate: what a photo *is* on disk, how
 //! RAW+JPEG pairs are grouped, the culling marks a photographer applies, and a
-//! small TIFF/IFD reader that both preview extraction and metadata use.
+//! small TIFF/IFD reader and ISO-BMFF box walker (for CR3) that both preview
+//! extraction and metadata use.
 //!
 //! This crate has no I/O beyond directory scanning and never touches image
 //! pixels.
 
+pub mod bmff;
 pub mod fileops;
 pub mod folder;
 pub mod item;
