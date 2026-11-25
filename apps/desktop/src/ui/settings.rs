@@ -443,7 +443,7 @@ pub(crate) fn toggle(ui: &mut egui::Ui, t: &Theme, on: &mut bool) -> bool {
         p.rect_stroke(
             rect.expand(2.0),
             egui::CornerRadius::same(12),
-            egui::Stroke::new(1.5, t.accent),
+            egui::Stroke::new(1.5_f32, t.accent),
             egui::StrokeKind::Outside,
         );
     }
@@ -500,9 +500,13 @@ fn accent_swatches(app: &mut App, ui: &mut egui::Ui, t: &Theme) -> bool {
             let p = ui.painter();
             p.circle_filled(rect.center(), 9.0, swatch.accent);
             if selected {
-                p.circle_stroke(rect.center(), 11.0, egui::Stroke::new(2.0, t.text));
+                p.circle_stroke(rect.center(), 11.0, egui::Stroke::new(2.0_f32, t.text));
             } else if resp.hovered() {
-                p.circle_stroke(rect.center(), 11.0, egui::Stroke::new(1.0, t.line_strong));
+                p.circle_stroke(
+                    rect.center(),
+                    11.0,
+                    egui::Stroke::new(1.0_f32, t.line_strong),
+                );
             }
             if resp.clicked() && !selected {
                 app.prefs.accent = a;
@@ -535,7 +539,7 @@ fn card<R>(ui: &mut egui::Ui, t: &Theme, title: &str, add: impl FnOnce(&mut egui
     ui.add_space(S1);
     egui::Frame::NONE
         .fill(t.panel)
-        .stroke(egui::Stroke::new(1.0, t.line))
+        .stroke(egui::Stroke::new(1.0_f32, t.line))
         .corner_radius(egui::CornerRadius::same(8))
         .inner_margin(egui::Margin::symmetric(S3 as i8, S1 as i8))
         .show(ui, |ui| {
@@ -627,7 +631,7 @@ fn setting_row(
         ui.painter().hline(
             r.x_range(),
             ui.cursor().top(),
-            egui::Stroke::new(1.0, t.line),
+            egui::Stroke::new(1.0_f32, t.line),
         );
     }
 }
@@ -830,7 +834,7 @@ fn body(app: &mut App, ctx: &egui::Context, t: &Theme, cmds: &mut Vec<Command>) 
                     p.rect_stroke(
                         badge,
                         egui::CornerRadius::same(8),
-                        egui::Stroke::new(1.0, t.accent),
+                        egui::Stroke::new(1.0_f32, t.accent),
                         egui::StrokeKind::Inside,
                     );
                     p.text(
@@ -1472,7 +1476,7 @@ fn delivery_page(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Com
         ui.add_space(S2);
         egui::Frame::NONE
             .fill(t.panel)
-            .stroke(egui::Stroke::new(1.0, t.line))
+            .stroke(egui::Stroke::new(1.0_f32, t.line))
             .corner_radius(egui::CornerRadius::same(8))
             .inner_margin(egui::Margin::same(S3 as i8))
             .show(ui, |ui| {
@@ -1684,7 +1688,7 @@ fn resources_page(ui: &mut egui::Ui, t: &Theme) {
                     ui.painter().hline(
                         r.x_range(),
                         ui.cursor().top(),
-                        egui::Stroke::new(1.0, t.line),
+                        egui::Stroke::new(1.0_f32, t.line),
                     );
                 }
             }

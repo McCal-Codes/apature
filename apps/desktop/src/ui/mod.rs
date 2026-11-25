@@ -46,7 +46,7 @@ pub fn card<R>(
     ui.add_space(tokens::S1);
     egui::Frame::NONE
         .fill(t.raised)
-        .stroke(egui::Stroke::new(1.0, t.line))
+        .stroke(egui::Stroke::new(1.0_f32, t.line))
         .corner_radius(egui::CornerRadius::same(8))
         .inner_margin(egui::Margin::same(tokens::S3 as i8))
         .show(ui, |ui| {

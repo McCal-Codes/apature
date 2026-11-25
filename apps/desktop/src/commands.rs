@@ -35,6 +35,8 @@ impl Workspace {
     }
 }
 
+// Only the macOS menu bar builds these; other platforms reach them through keys.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     OpenFolder(PathBuf),
@@ -190,6 +192,8 @@ pub enum Command {
     Activate,
 }
 
+// Only the macOS menu bar builds these; other platforms reach them through keys.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 impl Command {
     /// Menu identifiers are strings so the native menu can round-trip them.
     pub fn menu_id(&self) -> String {
@@ -360,10 +364,9 @@ impl Command {
                     )
                 } else if let Some(r) = id.strip_prefix("image.rating.") {
                     Command::SetRating(r.parse().ok()?)
-                } else if let Some(c) = id.strip_prefix("image.class.") {
-                    Command::SetClass(c.parse().ok()?)
                 } else {
-                    return None;
+                    let c = id.strip_prefix("image.class.")?;
+                    Command::SetClass(c.parse().ok()?)
                 }
             }
         })

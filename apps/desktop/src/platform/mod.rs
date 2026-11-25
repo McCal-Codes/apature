@@ -190,7 +190,7 @@ impl Platform {
                     v.push((format!("{}:", letter as char), p));
                 }
             }
-            return v;
+            v
         }
         #[cfg(not(target_os = "windows"))]
         {
@@ -222,6 +222,8 @@ impl Platform {
         {
             let mut comps = path.components();
             if let Some(std::path::Component::Prefix(p)) = comps.next() {
+                // "C:" joined with "\\" is the drive root "C:\\", which is what we want here.
+                #[allow(clippy::join_absolute_paths)]
                 let root = std::path::PathBuf::from(p.as_os_str()).join("\\");
                 let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
                 if p.as_os_str()
@@ -468,7 +470,8 @@ pub enum VolumeKind {
     Camera,
     /// Removable or external disk (USB, Thunderbolt, SD without DCIM).
     External,
-    /// The Mac's own disk.
+    /// The Mac's own disk (only diskutil on macOS reports it).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Internal,
     /// Recovery and other system volumes: never an ingest source.
     System,

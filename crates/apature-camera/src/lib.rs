@@ -417,7 +417,7 @@ impl Session {
             } else {
                 "bin"
             };
-            name = format!("WIFI_{:08X}.{ext}", handle & 0xFFFF_FFFF);
+            name = format!("WIFI_{:08X}.{ext}", handle);
         }
         std::fs::create_dir_all(out).map_err(|e| e.to_string())?;
         let path = out.join(&name);
@@ -684,7 +684,7 @@ fn worker(
                 (Some(sess), camera)
             }
             Err(e) => {
-                note(format!("{e}"));
+                note(e.to_string());
                 set(&st, |s| s.state = State::Error(e));
                 std::thread::sleep(Duration::from_secs(5));
                 continue;
@@ -753,7 +753,7 @@ fn worker(
                     };
                     match serve_camera(&listener, cmd, id, &host_name, &out, &say) {
                         Ok(n) => set(&st, |s| s.frames += n),
-                        Err(e) => note(format!("{e}")),
+                        Err(e) => note(e.to_string()),
                     }
                     listener.set_nonblocking(true).ok();
                 }

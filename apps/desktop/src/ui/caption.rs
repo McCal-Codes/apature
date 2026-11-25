@@ -244,8 +244,7 @@ pub fn show_photo(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
             c,
         );
     }
-    if app.cols > 0 {
-        let row = app.cursor_pos() / app.cols;
+    if let Some(row) = app.cursor_pos().checked_div(app.cols) {
         let rows = app.row_count();
         app.schedule_thumbs(row.saturating_sub(1)..(row + 2).min(rows));
     }
@@ -268,8 +267,11 @@ pub fn show_fields(app: &mut App, ctx: &egui::Context, t: &Theme) {
                 )
                 .show_inside(ui, |ui| {
                     let r = ui.available_rect_before_wrap();
-                    ui.painter()
-                        .hline(r.x_range(), r.top() - S3, egui::Stroke::new(1.0, t.line));
+                    ui.painter().hline(
+                        r.x_range(),
+                        r.top() - S3,
+                        egui::Stroke::new(1.0_f32, t.line),
+                    );
                     let Some(draft) = app.caption_draft.as_ref() else {
                         return;
                     };

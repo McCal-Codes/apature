@@ -54,7 +54,7 @@ fn section<R>(
     header.body(|ui| {
         egui::Frame::NONE
             .fill(t.raised)
-            .stroke(egui::Stroke::new(1.0, t.line))
+            .stroke(egui::Stroke::new(1.0_f32, t.line))
             .corner_radius(CornerRadius::same(8))
             .inner_margin(egui::Margin::same(S3 as i8))
             .show(ui, |ui| {
@@ -426,7 +426,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
     let r = resp.response.rect;
     ctx.layer_painter(egui::LayerId::background()).line_segment(
         [r.left_top(), r.left_bottom()],
-        egui::Stroke::new(1.0, t.line),
+        egui::Stroke::new(1.0_f32, t.line),
     );
     for c in cmds {
         app.dispatch(ctx, c);
