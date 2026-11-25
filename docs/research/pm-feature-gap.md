@@ -208,3 +208,69 @@ the installed Photo Mechanic, and the owner's saved presets
 
 Next three to build: (1) the "(with prior settings)" twins, (2) ingest and
 copy presets with PM import, (3) a Tasks panel.
+
+## 8. Both directions, against Photo Mechanic 2026.6 (2026-11-24)
+
+Source: *documented* = Camera Bits' own pages read on 2026-11-24
+(docs.camerabits.com, home.camerabits.com: supported formats, ingest, Live
+Ingest, GPS, upload, catalogs, pricing, What's New); *ours* = CHANGELOG.md,
+STATUS.md and the code on main at 438383e. Items marked *(title only)* come
+from a help-article title whose body was not read.
+
+Since §6 and §7, these shipped and are no longer gaps: Copy or Move Photos,
+the "with Prior Settings" twins, named ingest presets with PM import, Ingest
+From Selection, Edit Photos, loupe, burst stacks, crop ratios and guides.
+Photo Mechanic Plus (catalogs) stopped being sold on 2026-02-27, so the
+catalog gap matters less than it did.
+
+### What Photo Mechanic has and Apature does not
+
+| # | Photo Mechanic (documented) | Apature | why it matters |
+|---|---|---|---|
+| 1 | Previews for ~20 RAW formats (CR3, ARW, RAF, ORF, RW2, DNG…) plus HEIC, PSD, PNG, TIFF, WebP, AVIF | **done 2026-11-24** for CR3 (#10, checked on an EOS R5) and HEIC (#11, the system decoder; checked on iPhone X files and on macOS in CI); other makers' RAWs are untested (RAF is not TIFF; ORF and RW2 use their own TIFF magic); no PSD, PNG, TIFF, WebP, AVIF | was the gate for Canon bodies and phones |
+| 2 | Select by rating, colour class, tagged, cropped, transferred, date; invert; save/load a selection *(menu, §6)* | Select All and Select None only | "the 34 five-stars" still means a filter and ⌘A |
+| 3 | Transferred state: set on export/upload, select and clear by it *(menu, §6)* | a sent ledger for delivery, nothing on the sheet | which frames went where lives in your head |
+| 4 | Find (regex, whole word) and Find & Replace in metadata | none | name and play corrections after the fact |
+| 5 | Adjust capture date and time (camera offsets, two bodies) | none | sequences from two bodies sort wrong |
+| 6 | GPS from GPX/NMEA tracks with time offset and interpolation, reverse geocode to city/state/country, map, home location | one fixed location at ingest | |
+| 7 | Structured (hierarchical) keyword lists | keyword chips with recent values | |
+| 8 | Uploaders: FTP, SFTP, S3, Box, Dropbox, PhotoShelter, SmugMug, Flickr, Zenfolio and more; email over SMTP | Folder, FTP, FTPS, SFTP; cloud drives via their sync folder | |
+| 9 | Watermark on save and upload | none | |
+| 10 | Video (AVI, MOV, MPEG, MP4) browsed, metadata to sidecars | none | |
+| 11 | Mirror horizontal/vertical | none | low |
+| 12 | Merge several cards into one destination in one ingest | one source per run | |
+| 13 | Tasks panel, settings import/export, tooltip field choice *(§7)* | none | comfort |
+| 14 | Critical-focus check *(title only)* | no AF point (maker note) | |
+
+Not planned, as before: burn to disc, printing, slide shows, web galleries,
+RAW to DNG, catalogs.
+
+### What Apature has and Photo Mechanic does not document
+
+* SHA-256 verification of every copy at every destination, with a per-file
+  report; Camera Bits' ingest article does not mention checksums.
+* Day chips and collision refusal shown before anything is copied.
+* Delivery with a per-photo sent ledger, retries and "resend failed" (a
+  top request on PM's own board, §5).
+* Assignments: New assignment from a pasted editor's sheet, the Upcoming
+  list, and refusal of assignments that still hold template text.
+* Nikon Wi-Fi pairing straight to the camera, with no transmitter or vendor
+  utility.
+* `apature-cli level` (tilt estimate) and `locate` (which frame a crop came
+  from).
+* JPEG XL export (PM reads JPEG XL only).
+* Import of PM snapshots, code replacement files and IPTC templates.
+* Undo for Delete, a Linux build, a CLI for most jobs, cloud-placeholder
+  detection, accessibility settings, free and open source (PM: $149 a year
+  or $299 perpetual).
+
+### Order this suggests
+
+1. ~~CR3 and HEIC previews~~ done 2026-11-24 (#10, #11).
+2. Select by state and the Transferred mark (deadline speed, §6 #2 and #3).
+3. Find & Replace in captions.
+4. Adjust capture time.
+5. GPS tracks and reverse geocoding; structured keywords.
+
+Not checked: stacking, sort options and scripting in PM (titles only), and
+which Apature features work on Windows and Linux as well as the Mac.
