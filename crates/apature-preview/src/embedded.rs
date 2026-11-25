@@ -1,4 +1,4 @@
-//! Locate JPEG previews embedded in TIFF-based RAW files.
+//! Locate JPEG previews embedded in TIFF-based RAW files and Canon CR3.
 
 use apature_core::tiff::{tag, ByteOrder, Ifd, Tiff};
 
@@ -43,6 +43,21 @@ pub fn find_embedded_jpegs(data: &[u8]) -> Vec<EmbeddedJpeg> {
             source: "file".into(),
         });
         return out;
+    }
+
+    // Canon CR3 is ISO-BMFF, not TIFF: THMB, PRVW and the full-size JPEG
+    // track. `finish` checks each range really is a JPEG.
+    if let Some(cr3) = apature_core::bmff::cr3(data) {
+        for (offset, length, source) in cr3.jpegs {
+            out.push(EmbeddedJpeg {
+                offset,
+                length,
+                width: 0,
+                height: 0,
+                source: source.into(),
+            });
+        }
+        return finish(data, out);
     }
 
     let Ok((tiff, first)) = Tiff::parse(data) else {
@@ -303,6 +318,33 @@ mod tests {
         assert_eq!(found[0].long_side(), 6000);
         assert_eq!(found[1].long_side(), 160);
         assert_eq!(found[0].bytes(&data), &big[..]);
+    }
+
+    #[test]
+    fn finds_the_three_cr3_previews_largest_first() {
+        let (thmb, prvw, full) = (
+            fake_jpeg(160, 120),
+            fake_jpeg(1620, 1080),
+            fake_jpeg(6000, 4000),
+        );
+        let data = apature_core::bmff::testutil::cr3(b"", b"", &thmb, &prvw, &full);
+        let found = find_embedded_jpegs(&data);
+        let sides: Vec<(u32, &str)> = found
+            .iter()
+            .map(|c| (c.long_side(), c.source.as_str()))
+            .collect();
+        assert_eq!(
+            sides,
+            [(6000, "CR3:trak"), (1620, "CR3:PRVW"), (160, "CR3:THMB")]
+        );
+        assert_eq!(found[0].bytes(&data), &full[..]);
+    }
+
+    #[test]
+    fn a_cr3_raw_track_is_not_taken_for_a_jpeg() {
+        // The main RAW track holds CRX data, not a JPEG: it must be dropped.
+        let data = apature_core::bmff::testutil::cr3(b"", b"", b"", b"", b"CRX raw bytes");
+        assert!(find_embedded_jpegs(&data).is_empty());
     }
 
     #[test]

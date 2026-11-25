@@ -6,6 +6,7 @@ All notable, user-visible changes. Versions follow semantic versioning;
 ## [0.1.2] — Unreleased
 
 ### Added
+- Canon CR3 files show thumbnails and previews, open 1:1 and export, from the JPEGs the camera embeds (the 160 px thumbnail, the 1620 px preview and the full-size JPEG), with the camera, lens, capture time, exposure and orientation read from the file. Checked against files built to Canon's layout; not yet against a card from a Canon body.
 - A better Rename Photos: `{oldseq}` keeps the number a photo already has (…Highlands0049-103026 → …NC-Highlands0049-103026), the dialog has "Keep each photo's number" and "Count from the start number" buttons, and a checkbox writes the loaded assignment's slug into the headline, title and job ID of the photos renamed, so the name and the metadata agree.
 - `apature-cli locate --crop FILE FRAMES…` finds which frame a sent crop was cut from and where (score and top,left,bottom,right fractions for `crop --rect`), so a set sent to an editor can be matched back to the RAWs and re-cropped non-destructively.
 - Assignment variables: `{team}`, `{teamname}`, `{opponent}` and `{event}` (and the existing `{venue}`, `{city}`, `{slug}`) come from the loaded assignment, so one caption ending or template says the right thing for each job; your own variables win if a name is in both. New assignment fills the team (the home side) and the opponent from a sheet's "FOOTBALL: A at B" line.

@@ -49,6 +49,12 @@ has no usable preview. Revisit when CR3 matters or when a develop-for-export
 feature is scoped (rawler is the obvious candidate then, kept behind a
 feature flag so the default build stays permissive).
 
+2026-11-24: the second locator exists. `apature_core::bmff` walks ISO-BMFF
+boxes (about 200 lines, bounds-checked, no new dependency) and finds a
+CR3's THMB, PRVW and full-size JPEG track plus its CMT1/CMT2 TIFF blocks;
+the preview locator and the EXIF reader use it. Still no copyleft. HEIC
+is not covered: its images are HEVC, which needs a decoder.
+
 ## ADR-003 (2026-10-13, accepted): jpeg-decoder for decoding, with DCT scaling
 
 Alternatives: zune-jpeg via `image` (faster full decodes, no scaled decode),
