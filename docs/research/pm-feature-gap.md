@@ -227,7 +227,7 @@ catalog gap matters less than it did.
 
 | # | Photo Mechanic (documented) | Apature | why it matters |
 |---|---|---|---|
-| 1 | Previews for ~20 RAW formats (CR3, ARW, RAF, ORF, RW2, DNG…) plus HEIC, PSD, PNG, TIFF, WebP, AVIF | **done 2026-11-24** for CR3 (#10, checked on an EOS R5) and HEIC (#11, the system decoder; checked on iPhone X files and on macOS in CI); ARW, RAF, ORF, RW2, DNG go through the TIFF walker but are untested; no PSD, PNG, TIFF, WebP, AVIF | was the gate for Canon bodies and phones |
+| 1 | Previews for ~20 RAW formats (CR3, ARW, RAF, ORF, RW2, DNG…) plus HEIC, PSD, PNG, TIFF, WebP, AVIF | **done 2026-11-24** for CR3 (#10, checked on an EOS R5) and HEIC (#11, the system decoder; checked on iPhone X files and on macOS in CI); other makers' RAWs are untested (RAF is not TIFF; ORF and RW2 use their own TIFF magic); no PSD, PNG, TIFF, WebP, AVIF | was the gate for Canon bodies and phones |
 | 2 | Select by rating, colour class, tagged, cropped, transferred, date; invert; save/load a selection *(menu, §6)* | Select All and Select None only | "the 34 five-stars" still means a filter and ⌘A |
 | 3 | Transferred state: set on export/upload, select and clear by it *(menu, §6)* | a sent ledger for delivery, nothing on the sheet | which frames went where lives in your head |
 | 4 | Find (regex, whole word) and Find & Replace in metadata | none | name and play corrections after the fact |
