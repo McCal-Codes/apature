@@ -333,6 +333,70 @@ mod tests {
         assert_eq!((small.width, small.height), (16, 8));
     }
 
+    /// The whole macOS chain on a sideways photo: a JPEG whose EXIF says
+    /// "turn 90° clockwise" (orientation 6), made into a HEIC by `sips`, then
+    /// decoded by Apature. It must come back upright exactly once: portrait,
+    /// with the stored frame's left half (red) on top.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_decodes_a_sideways_heic_upright() {
+        let dir = tempfile::tempdir().unwrap();
+        let (w, h) = (64u32, 32u32);
+        let img = Rgb {
+            width: w,
+            height: h,
+            data: (0..w * h)
+                .flat_map(|i| {
+                    if i % w < w / 2 {
+                        [220, 20, 20]
+                    } else {
+                        [20, 20, 220]
+                    }
+                })
+                .collect(),
+        };
+        let jpeg = crate::decode::encode_jpeg(&img, 95).unwrap();
+        let src = dir.path().join("sideways.jpg");
+        std::fs::write(&src, crate::jpeg_info::with_exif_orientation(&jpeg, 6)).unwrap();
+        let heic = dir.path().join("sideways.heic");
+        let out = std::process::Command::new("/usr/bin/sips")
+            .args(["-s", "format", "heic"])
+            .arg(&src)
+            .arg("--out")
+            .arg(&heic)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "sips: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            is_heif(&std::fs::read(&heic).unwrap()),
+            "sips did not write a HEIF"
+        );
+
+        let up = decode_with_os(&heic, 0).unwrap();
+        assert_eq!(
+            (up.width, up.height),
+            (h, w),
+            "not portrait: turned 0 or 2 times"
+        );
+        let px = |x: u32, y: u32| {
+            let i = ((y * up.width + x) * 3) as usize;
+            [up.data[i], up.data[i + 1], up.data[i + 2]]
+        };
+        let (top, bottom) = (px(16, 8), px(16, 56));
+        assert!(
+            top[0] > 150 && top[2] < 100,
+            "top {top:?}: turned the wrong way"
+        );
+        assert!(bottom[2] > 150 && bottom[0] < 100, "bottom {bottom:?}");
+
+        let small = decode_with_os(&heic, 16).unwrap();
+        assert_eq!(small.width.max(small.height), 16);
+    }
+
     #[test]
     fn a_missing_file_is_an_error_not_a_panic() {
         assert!(decode_with_os(Path::new("no/such/photo.heic"), 100).is_err());
