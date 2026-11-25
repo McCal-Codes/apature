@@ -227,7 +227,7 @@ catalog gap matters less than it did.
 
 | # | Photo Mechanic (documented) | Apature | why it matters |
 |---|---|---|---|
-| 1 | Previews for ~20 RAW formats (CR3, ARW, RAF, ORF, RW2, DNG…) plus HEIC, PSD, PNG, TIFF, WebP, AVIF | CR3 and HEIC are recognised (`item.rs`) but have no preview path in `apature-preview`; tested on Nikon only | decides who can use it at all: Canon's current bodies and phones show no thumbnails |
+| 1 | Previews for ~20 RAW formats (CR3, ARW, RAF, ORF, RW2, DNG…) plus HEIC, PSD, PNG, TIFF, WebP, AVIF | **done 2026-11-24** for CR3 (#10, checked on an EOS R5) and HEIC (#11, the system decoder; checked on iPhone X files and on macOS in CI); ARW, RAF, ORF, RW2, DNG go through the TIFF walker but are untested; no PSD, PNG, TIFF, WebP, AVIF | was the gate for Canon bodies and phones |
 | 2 | Select by rating, colour class, tagged, cropped, transferred, date; invert; save/load a selection *(menu, §6)* | Select All and Select None only | "the 34 five-stars" still means a filter and ⌘A |
 | 3 | Transferred state: set on export/upload, select and clear by it *(menu, §6)* | a sent ledger for delivery, nothing on the sheet | which frames went where lives in your head |
 | 4 | Find (regex, whole word) and Find & Replace in metadata | none | name and play corrections after the fact |
@@ -266,7 +266,7 @@ RAW to DNG, catalogs.
 
 ### Order this suggests
 
-1. CR3 and HEIC previews (who can use it).
+1. ~~CR3 and HEIC previews~~ done 2026-11-24 (#10, #11).
 2. Select by state and the Transferred mark (deadline speed, §6 #2 and #3).
 3. Find & Replace in captions.
 4. Adjust capture time.
