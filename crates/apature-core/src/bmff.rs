@@ -93,6 +93,123 @@ pub fn is_cr3(data: &[u8]) -> bool {
     data.len() >= 12 && &data[4..8] == b"ftyp" && &data[8..12] == b"crx "
 }
 
+/// True for an ISO-BMFF file whose major or compatible brands are one of
+/// HEIF's image brands (iPhone `heic`, Canon `heix`, generic `mif1`, …).
+pub fn is_heif(data: &[u8]) -> bool {
+    const BRANDS: [&[u8; 4]; 8] = [
+        b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1",
+    ];
+    if data.len() < 12 || &data[4..8] != b"ftyp" {
+        return false;
+    }
+    let size = u32::from_be_bytes(data[0..4].try_into().unwrap()) as usize;
+    let ftyp = &data[8..size.clamp(12, data.len())];
+    // Major brand, then (after the minor version) the compatible brands.
+    std::iter::once(&ftyp[..4])
+        .chain(ftyp.get(8..).unwrap_or(&[]).chunks_exact(4))
+        .any(|b| BRANDS.iter().any(|k| &k[..] == b))
+}
+
+/// The TIFF bytes of a HEIF's `Exif` item (`meta` / `iinf` names it,
+/// `iloc` says where it is), or `None`. The item starts with a 4-byte
+/// offset to the TIFF header, usually skipping `Exif\0\0`.
+pub fn heif_exif(data: &[u8]) -> Option<&[u8]> {
+    if !is_heif(data) {
+        return None;
+    }
+    let meta = children(data, 0).into_iter().find(|b| &b.kind == b"meta")?;
+    // `meta` is a full box: version and flags come before its children.
+    let kids = children(meta.payload.get(4..)?, meta.offset + 4);
+    let iinf = kids.iter().find(|b| &b.kind == b"iinf")?;
+    let iloc = kids.iter().find(|b| &b.kind == b"iloc")?;
+    let id = exif_item_id(iinf.payload)?;
+    let (offset, length) = item_extent(iloc.payload, id)?;
+    let item = data.get(offset..offset.checked_add(length)?)?;
+    let skip = be32(item, 0)? as usize;
+    item.get(4usize.checked_add(skip)?..)
+}
+
+/// `iinf`: the id of the item whose type is `Exif`.
+fn exif_item_id(iinf: &[u8]) -> Option<u32> {
+    let version = *iinf.first()?;
+    let start = if version == 0 { 6 } else { 8 };
+    for infe in children(iinf.get(start..)?, 0) {
+        if &infe.kind != b"infe" {
+            continue;
+        }
+        let p = infe.payload;
+        // Versions 2 and 3 carry the item type; 0 and 1 predate it.
+        let (id, kind_at) = match *p.first()? {
+            2 => (u16::from_be_bytes(p.get(4..6)?.try_into().ok()?) as u32, 8),
+            3 => (be32(p, 4)?, 10),
+            _ => continue,
+        };
+        if p.get(kind_at..kind_at + 4)? == b"Exif" {
+            return Some(id);
+        }
+    }
+    None
+}
+
+/// `iloc`: the file offset and length of item `id`'s first extent. Only
+/// construction method 0 (an offset in the file) is read.
+fn item_extent(iloc: &[u8], id: u32) -> Option<(usize, usize)> {
+    let version = *iloc.first()?;
+    let sizes = *iloc.get(4)?;
+    let more = *iloc.get(5)?;
+    let (offset_size, length_size) = ((sizes >> 4) as usize, (sizes & 0xF) as usize);
+    let base_size = (more >> 4) as usize;
+    let index_size = if version == 1 || version == 2 {
+        (more & 0xF) as usize
+    } else {
+        0
+    };
+    let mut at = 6;
+    let count = if version < 2 {
+        let c = u16::from_be_bytes(iloc.get(at..at + 2)?.try_into().ok()?) as u32;
+        at += 2;
+        c
+    } else {
+        let c = be32(iloc, at)?;
+        at += 4;
+        c
+    };
+    let read = |at: &mut usize, n: usize| -> Option<u64> {
+        let b = iloc.get(*at..*at + n)?;
+        *at += n;
+        Some(b.iter().fold(0u64, |v, &x| (v << 8) | x as u64))
+    };
+    for _ in 0..count.min(4096) {
+        let item = read(&mut at, if version < 2 { 2 } else { 4 })? as u32;
+        let method = if version == 1 || version == 2 {
+            read(&mut at, 2)? & 0xF
+        } else {
+            0
+        };
+        let _data_ref = read(&mut at, 2)?;
+        let base = read(&mut at, base_size)?;
+        let extents = read(&mut at, 2)?;
+        let mut first = None;
+        for _ in 0..extents {
+            let _index = read(&mut at, index_size)?;
+            let off = read(&mut at, offset_size)?;
+            let len = read(&mut at, length_size)?;
+            first.get_or_insert((off, len));
+        }
+        if item == id {
+            let (off, len) = first?;
+            if method != 0 {
+                return None;
+            }
+            return Some((
+                usize::try_from(base.checked_add(off)?).ok()?,
+                usize::try_from(len).ok()?,
+            ));
+        }
+    }
+    None
+}
+
 /// What a CR3 holds that Apature reads: the TIFF metadata blocks and the
 /// byte ranges where JPEG previews may start (each still to be checked).
 #[derive(Debug, Default)]
@@ -217,6 +334,41 @@ pub mod testutil {
         bx(b"uuid", &p)
     }
 
+    /// A HEIF with one `Exif` item holding `tiff` (after the usual
+    /// `Exif\0\0`), laid out the way an iPhone writes it: ftyp, meta (hdlr,
+    /// iinf with infe v2, iloc v0), then mdat.
+    pub fn heif_with_exif(tiff: &[u8]) -> Vec<u8> {
+        let build = |exif_at: u32| {
+            let mut ftyp = b"heic".to_vec();
+            ftyp.extend_from_slice(&[0, 0, 0, 0]);
+            ftyp.extend_from_slice(b"mif1heic");
+            // infe v2: version/flags, item_ID 7, protection 0, type, name.
+            let mut infe = vec![2, 0, 0, 0, 0, 7, 0, 0];
+            infe.extend_from_slice(b"Exif\0");
+            let mut iinf = vec![0, 0, 0, 0, 0, 1];
+            iinf.extend(bx(b"infe", &infe));
+            let mut item = 6u32.to_be_bytes().to_vec();
+            item.extend_from_slice(b"Exif\0\0");
+            item.extend_from_slice(tiff);
+            // iloc v0: offset_size 4, length_size 4, base_offset_size 0;
+            // one item (7), data_ref 0, one extent.
+            let mut iloc = vec![0, 0, 0, 0, 0x44, 0x00, 0, 1, 0, 7, 0, 0, 0, 1];
+            iloc.extend_from_slice(&exif_at.to_be_bytes());
+            iloc.extend_from_slice(&(item.len() as u32).to_be_bytes());
+            let mut meta = vec![0, 0, 0, 0];
+            meta.extend(bx(b"hdlr", &[0; 24]));
+            meta.extend(bx(b"iinf", &iinf));
+            meta.extend(bx(b"iloc", &iloc));
+            let mut v = bx(b"ftyp", &ftyp);
+            v.extend(bx(b"meta", &meta));
+            let at = v.len() as u32 + 8;
+            v.extend(bx(b"mdat", &item));
+            (v, at)
+        };
+        let (_, at) = build(0);
+        build(at).0
+    }
+
     /// A CR3 laid out the way Canon writes one: ftyp, moov (Canon uuid with
     /// CMT1, CMT2 and THMB; one trak pointing into mdat), the PRVW uuid,
     /// then mdat holding `full`.
@@ -294,6 +446,36 @@ mod tests {
             got.contains(&(&b"\xFF\xD8\xFFfull"[..], "CR3:trak")),
             "{got:?}"
         );
+    }
+
+    #[test]
+    fn finds_a_heifs_exif_item() {
+        let data = super::testutil::heif_with_exif(b"MM\0*tiff here");
+        assert!(is_heif(&data));
+        assert!(!is_cr3(&data));
+        assert_eq!(heif_exif(&data), Some(&b"MM\0*tiff here"[..]));
+        for cut in 0..data.len() {
+            let _ = heif_exif(&data[..cut]);
+        }
+    }
+
+    #[test]
+    fn heif_brands() {
+        let with = |major: &[u8; 4], compat: &[u8]| {
+            let mut p = major.to_vec();
+            p.extend_from_slice(&[0, 0, 0, 0]);
+            p.extend_from_slice(compat);
+            bx(b"ftyp", &p)
+        };
+        assert!(is_heif(&with(b"heic", b"mif1heic")));
+        assert!(is_heif(&with(b"mif1", b"heic")));
+        assert!(is_heif(&with(b"heix", b"")));
+        assert!(!is_heif(&with(b"crx ", b"isom")));
+        assert!(!is_heif(&with(b"avif", b"")));
+        assert!(!is_heif(&[0xFF, 0xD8, 0xFF, 0xE0]));
+        let mut lying = with(b"isom", b"");
+        lying[3] = 0xFF;
+        assert!(!is_heif(&lying));
     }
 
     #[test]

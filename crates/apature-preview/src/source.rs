@@ -16,6 +16,8 @@ pub enum SourceError {
     NoPreview(PathBuf),
     #[error("{0}: {1}")]
     Decode(PathBuf, DecodeError),
+    #[error("{0}: {1}")]
+    System(PathBuf, String),
 }
 
 pub struct Source {
@@ -87,7 +89,13 @@ impl Source {
     }
 
     /// Decode the best candidate for `long_side`, downscaled in the DCT domain.
+    /// A HEIC (no JPEG inside) is decoded by the operating system instead,
+    /// and comes back upright.
     pub fn decode_for(&self, long_side: u32) -> Result<Rgb, SourceError> {
+        if self.candidates.is_empty() && crate::system::is_heif(&self.map) {
+            return crate::system::decode_with_os(&self.path, long_side)
+                .map_err(|e| SourceError::System(self.path.clone(), e));
+        }
         let c = self
             .best_for(long_side)
             .ok_or_else(|| SourceError::NoPreview(self.path.clone()))?;

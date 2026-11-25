@@ -86,6 +86,13 @@ pub fn from_bytes(data: &[u8]) -> Option<ExifSummary> {
     if let Some(c) = apature_core::bmff::cr3(data) {
         return from_cr3(&c);
     }
+    if apature_core::bmff::is_heif(data) {
+        // The system decoder hands back a HEIC upright (HEIF's own rotation
+        // box rules), so its EXIF orientation must not be applied again.
+        let mut s = from_tiff(apature_core::bmff::heif_exif(data)?)?;
+        s.orientation = 1;
+        return Some(s);
+    }
     if let Some(tiff_bytes) = exif_segment_in_jpeg(data) {
         return from_tiff(tiff_bytes);
     }
@@ -213,6 +220,34 @@ fn exif_segment_in_jpeg(data: &[u8]) -> Option<&[u8]> {
 mod tests {
     use super::*;
     use apature_core::tiff::testutil::build_le;
+
+    #[test]
+    fn reads_a_heics_exif_item_and_leaves_it_upright() {
+        // IFD0: Model at 64, Orientation 6, ExifIFD at 100; Exif IFD: DateTimeOriginal at 130.
+        let mut tiff = build_le(
+            &[
+                (tag::MODEL, 2, 10, 64u32.to_le_bytes()),
+                (tag::ORIENTATION, 3, 1, [6, 0, 0, 0]),
+                (tag::EXIF_IFD, 4, 1, 100u32.to_le_bytes()),
+            ],
+            b"iPhone 15\0",
+            64,
+        );
+        tiff.resize(100, 0);
+        tiff.extend_from_slice(&1u16.to_le_bytes());
+        tiff.extend_from_slice(&tag::DATE_TIME_ORIGINAL.to_le_bytes());
+        tiff.extend_from_slice(&2u16.to_le_bytes());
+        tiff.extend_from_slice(&20u32.to_le_bytes());
+        tiff.extend_from_slice(&130u32.to_le_bytes());
+        tiff.extend_from_slice(&0u32.to_le_bytes());
+        tiff.resize(130, 0);
+        tiff.extend_from_slice(b"2026:07:04 21:15:02\0");
+        let data = apature_core::bmff::testutil::heif_with_exif(&tiff);
+        let s = from_bytes(&data).expect("summary");
+        assert_eq!(s.model.as_deref(), Some("iPhone 15"));
+        assert_eq!(s.date_time_original.as_deref(), Some("2026:07:04 21:15:02"));
+        assert_eq!(s.orientation, 1, "the decoder already turned it");
+    }
 
     #[test]
     fn reads_a_cr3s_two_tiff_blocks() {

@@ -2,9 +2,10 @@ name: CI
 
 # Linux for the libraries, a type-check of the desktop, and a real desktop
 # build with a headless smoke test under Xvfb (cheapest minutes). Windows
-# builds the desktop and runs every test on pushes to main and pull requests. One macOS job
-# builds and tests the desktop crate on pushes to main, so a commit that does
-# not compile can never sit on main unnoticed. Bundling, signing and the
+# builds the desktop and runs every test on pushes to main and pull requests.
+# One macOS job builds the desktop and runs every test on pushes to main (and
+# on a pull request labeled `macos`), so a commit that does not compile can
+# never sit on main unnoticed. Bundling, signing and the
 # real-card checks stay on the owner's Mac.
 on:
   push:
@@ -108,9 +109,10 @@ jobs:
           retention-days: 7
 
   desktop-macos:
-    # macOS minutes cost ten times Linux ones: pushes to main only, and not
-    # for docs-only changes.
-    if: github.event_name == 'push'
+    # macOS minutes cost ten times Linux ones: pushes to main, and a pull
+    # request only when it carries the `macos` label (for changes with a
+    # macOS-only path, such as the sips HEIC decoder).
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'macos')
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
@@ -118,7 +120,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p apature -p apature-cli
-      - run: cargo test --release -p apature
+      # Every crate: the sips decoder and its test live in apature-preview.
+      - name: Tests
+        run: |
+          export APATURE_CONFIG_DIR="$RUNNER_TEMP/apature-config"
+          cargo test --release --workspace
       - name: Headless smoke test (the sheet renders and a screenshot lands)
         run: |
           mkdir -p /tmp/smoke

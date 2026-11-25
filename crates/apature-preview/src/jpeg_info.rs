@@ -54,9 +54,77 @@ pub fn is_jpeg(bytes: &[u8]) -> bool {
     bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF
 }
 
+/// The EXIF orientation (1..=8) in a JPEG's APP1 segment, 1 when there is
+/// none. Used for JPEGs another program wrote, whose pixels may be stored
+/// sideways.
+pub fn orientation(bytes: &[u8]) -> u32 {
+    use apature_core::tiff::{tag, Tiff};
+    if !is_jpeg(bytes) {
+        return 1;
+    }
+    let mut i = 2;
+    while i + 4 <= bytes.len() && bytes[i] == 0xFF {
+        let marker = bytes[i + 1];
+        if marker == 0xDA || marker == 0xD9 {
+            break;
+        }
+        let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        let Some(seg) = bytes.get(i + 4..i + 2 + len) else {
+            break;
+        };
+        if marker == 0xE1 && seg.starts_with(b"Exif\0\0") {
+            let o = Tiff::parse(&seg[6..])
+                .ok()
+                .and_then(|(t, first)| {
+                    let ifd = t.read_ifd(first).ok()?;
+                    t.uint(ifd.get(tag::ORIENTATION)?, 0)
+                })
+                .unwrap_or(1) as u32;
+            return if (1..=8).contains(&o) { o } else { 1 };
+        }
+        i += 2 + len;
+    }
+    1
+}
+
+/// `jpeg` with an EXIF APP1 holding only `orientation`, right after SOI.
+#[cfg(test)]
+pub(crate) fn with_exif_orientation(jpeg: &[u8], orientation: u16) -> Vec<u8> {
+    use apature_core::tiff::{tag, testutil::build_le};
+    let o = orientation.to_le_bytes();
+    let tiff = build_le(&[(tag::ORIENTATION, 3, 1, [o[0], o[1], 0, 0])], b"", 0);
+    let mut out = jpeg[..2].to_vec();
+    out.extend_from_slice(&[0xFF, 0xE1]);
+    out.extend_from_slice(&((2 + 6 + tiff.len()) as u16).to_be_bytes());
+    out.extend_from_slice(b"Exif\0\0");
+    out.extend_from_slice(&tiff);
+    out.extend_from_slice(&jpeg[2..]);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_exif_orientation() {
+        let img = crate::decode::Rgb {
+            width: 8,
+            height: 4,
+            data: vec![128; 8 * 4 * 3],
+        };
+        let plain = crate::decode::encode_jpeg(&img, 90).unwrap();
+        assert_eq!(orientation(&plain), 1);
+        assert_eq!(orientation(&with_exif_orientation(&plain, 6)), 6);
+        assert_eq!(
+            orientation(&with_exif_orientation(&plain, 9)),
+            1,
+            "out of range"
+        );
+        assert_eq!(orientation(b"II*\0"), 1);
+        // A segment length running past the end does not panic.
+        assert_eq!(orientation(&[0xFF, 0xD8, 0xFF, 0xE1, 0xFF, 0xFF, b'E']), 1);
+    }
 
     #[test]
     fn reads_sof0_dimensions() {
