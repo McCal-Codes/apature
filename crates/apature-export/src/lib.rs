@@ -146,6 +146,8 @@ pub enum PixelSource {
     Jpeg,
     EmbeddedPreview,
     SystemRawDecode,
+    /// A HEIC, decoded by the operating system (its picture is HEVC).
+    SystemHeicDecode,
 }
 
 #[derive(Clone, Debug)]
@@ -166,8 +168,8 @@ pub struct Outcome {
 pub enum ExportError {
     #[error("{0}: no JPEG and no embedded preview to export")]
     NoPixels(PathBuf),
-    #[error("{0}: HEIC export is not supported yet")]
-    Heic(PathBuf),
+    #[error("{0}: {1}")]
+    Heic(PathBuf, String),
     #[error("{0} exists; export does not overwrite")]
     Exists(PathBuf),
     #[error("{0}: {1}")]
@@ -231,7 +233,8 @@ fn pixel_source(item: &PhotoItem) -> Result<(PathBuf, bool), ExportError> {
     }
     match item.primary.kind {
         Kind::Raw => Ok((item.primary.path.clone(), false)),
-        Kind::Heic => Err(ExportError::Heic(item.primary.path.clone())),
+        // Decoded by the operating system in `export_one`.
+        Kind::Heic => Ok((item.primary.path.clone(), false)),
         Kind::Jpeg => Ok((item.primary.path.clone(), true)),
     }
 }
@@ -330,8 +333,11 @@ pub fn export(
     if apature_core::fileops::is_online_only(&src_path) {
         return Err(ExportError::OnlineOnly(src_path));
     }
+    let heic = !is_jpeg && item.primary.kind == Kind::Heic;
     let mut pixels = if is_jpeg {
         PixelSource::Jpeg
+    } else if heic {
+        PixelSource::SystemHeicDecode
     } else {
         PixelSource::EmbeddedPreview
     };
@@ -363,7 +369,7 @@ pub fn export(
             Some(((n as f32) / keep).ceil() as u32)
         }
     };
-    if !is_jpeg && settings.raw == RawPixels::SystemDecode {
+    if !is_jpeg && !heic && settings.raw == RawPixels::SystemDecode {
         match system_decode_raw(&src_path, target.unwrap_or(0)) {
             Ok(rendered) => {
                 data = rendered;
@@ -375,22 +381,29 @@ pub fn export(
             }
         }
     }
-    let jpeg_bytes: &[u8] = if is_jpeg {
-        &data
-    } else {
-        let best = find_embedded_jpegs(&data)
-            .into_iter()
-            .max_by_key(|e| e.long_side())
-            .ok_or_else(|| ExportError::NoPixels(src_path.clone()))?;
-        best.bytes(&data)
-    };
-    let summary = if pixels == PixelSource::SystemRawDecode {
+    let mut summary = if pixels == PixelSource::SystemRawDecode {
         exif::from_bytes(&data).unwrap_or_default()
     } else {
         exif::read(&src_path).unwrap_or_else(|_| exif::from_bytes(&data).unwrap_or_default())
     };
-    let mut img =
-        decode_jpeg(jpeg_bytes, target).map_err(|e| ExportError::Decode(src_path.clone(), e))?;
+    let mut img = if heic {
+        // The system decoder hands back upright pixels, so the file's own
+        // orientation is already applied; crops were drawn on that view.
+        summary.orientation = 1;
+        apature_preview::system::decode_with_os(&src_path, target.unwrap_or(0))
+            .map_err(|e| ExportError::Heic(src_path.clone(), e))?
+    } else {
+        let jpeg_bytes: &[u8] = if is_jpeg {
+            &data
+        } else {
+            let best = find_embedded_jpegs(&data)
+                .into_iter()
+                .max_by_key(|e| e.long_side())
+                .ok_or_else(|| ExportError::NoPixels(src_path.clone()))?;
+            best.bytes(&data)
+        };
+        decode_jpeg(jpeg_bytes, target).map_err(|e| ExportError::Decode(src_path.clone(), e))?
+    };
     // The crop is in the stored frame, so it comes before the rotation. A
     // system RAW render may already be turned (its own tag says how); bring
     // it back to the RAW's stored frame first so crop and turn mean the same
