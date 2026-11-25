@@ -2931,7 +2931,7 @@ impl App {
             self.status = "Ingesting · the sheet fills in as files verify (⌘R refreshes)".into();
             return;
         }
-        if finished || verified.is_multiple_of(25) {
+        if finished || verified % 25 == 0 {
             if self.folder.as_deref() == Some(dest.as_path()) {
                 self.refresh_folder();
             } else if let Some(i) = open {
@@ -3181,7 +3181,7 @@ impl App {
         let key = |k: egui::Key, shift: bool| {
             let mut m = egui::Modifiers::COMMAND | egui::Modifiers::MAC_CMD;
             if shift {
-                m = m | egui::Modifiers::SHIFT;
+                m |= egui::Modifiers::SHIFT;
             }
             egui::Event::Key {
                 key: k,
@@ -4996,7 +4996,7 @@ impl App {
         p.rect_stroke(
             r.shrink(S4),
             egui::CornerRadius::same(10),
-            egui::Stroke::new(2.0, t.accent),
+            egui::Stroke::new(2.0_f32, t.accent),
             egui::StrokeKind::Inside,
         );
         p.text(
@@ -5260,14 +5260,14 @@ impl eframe::App for App {
                 egui::pos2(r.left(), r.top() + ui::tokens::TOOLBAR_H),
                 egui::pos2(r.right(), r.top() + ui::tokens::TOOLBAR_H),
             ],
-            egui::Stroke::new(1.0, t.line),
+            egui::Stroke::new(1.0_f32, t.line),
         );
         ctx.layer_painter(egui::LayerId::background()).line_segment(
             [
                 egui::pos2(r.left(), r.bottom() - ui::tokens::STATUS_H),
                 egui::pos2(r.right(), r.bottom() - ui::tokens::STATUS_H),
             ],
-            egui::Stroke::new(1.0, t.line),
+            egui::Stroke::new(1.0_f32, t.line),
         );
 
         self.draw_drop_overlay(ctx, &t);

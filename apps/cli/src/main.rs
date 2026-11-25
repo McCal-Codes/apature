@@ -852,7 +852,7 @@ fn caption(
 ) -> Result<()> {
     use apature_metadata::codes::{self, Vars};
     let a = match assignment {
-        Some(p) => Some(read_assignment(&p)?),
+        Some(p) => Some(read_assignment(p)?),
         None => None,
     };
     let codes_table = a.as_ref().map(|a| a.codes()).unwrap_or_default();
@@ -1338,9 +1338,12 @@ fn cmd_transfer(
     Ok(())
 }
 
+/// Score, frame name, and the crop as top, left, bottom, right fractions of the frame.
+type LocateRow = (f64, String, (f32, f32, f32, f32));
+
 fn cmd_locate(crop: &Path, frames: &[PathBuf]) -> Result<()> {
     let crop_bytes = std::fs::read(crop)?;
-    let mut rows: Vec<(f64, String, (f32, f32, f32, f32))> = frames
+    let mut rows: Vec<LocateRow> = frames
         .par_iter()
         .filter_map(|f| {
             let bytes = match std::fs::read(f) {

@@ -3,6 +3,10 @@
 use apature_core::fileops::Trashed;
 use apature_core::Marks;
 
+/// What an undo or redo hands back: the label, the (idx, marks) pairs to
+/// apply, and the files to bring back from the Trash.
+pub type Restore = (String, Vec<(usize, Marks)>, Vec<Trashed>);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Change {
     pub idx: usize,
@@ -40,7 +44,7 @@ impl UndoStack {
 
     /// Pops an entry and returns the (idx, marks) pairs to apply and the
     /// files to bring back from the Trash.
-    pub fn undo(&mut self) -> Option<(String, Vec<(usize, Marks)>, Vec<Trashed>)> {
+    pub fn undo(&mut self) -> Option<Restore> {
         let e = self.undo.pop()?;
         let apply = e.changes.iter().map(|c| (c.idx, c.before)).collect();
         let (label, trashed) = (e.label.clone(), e.trashed.clone());
@@ -49,7 +53,7 @@ impl UndoStack {
     }
 
     /// The files to move to the Trash again come back as `trashed`.
-    pub fn redo(&mut self) -> Option<(String, Vec<(usize, Marks)>, Vec<Trashed>)> {
+    pub fn redo(&mut self) -> Option<Restore> {
         let e = self.redo.pop()?;
         let apply = e.changes.iter().map(|c| (c.idx, c.after)).collect();
         let (label, trashed) = (e.label.clone(), e.trashed.clone());

@@ -48,8 +48,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
             app.request_preview(p, fit_px, 2);
         }
     }
-    if app.cols > 0 {
-        let row = app.cursor_pos() / app.cols;
+    if let Some(row) = app.cursor_pos().checked_div(app.cols) {
         let rows = app.row_count();
         app.schedule_thumbs(row.saturating_sub(1)..(row + 2).min(rows));
     }
@@ -265,7 +264,7 @@ fn draw_pane(
                     p.rect_stroke(
                         at,
                         CornerRadius::same(3),
-                        Stroke::new(1.0, t.accent),
+                        Stroke::new(1.0_f32, t.accent),
                         StrokeKind::Outside,
                     );
                     let tag = if is_full {
@@ -433,7 +432,7 @@ fn draw_pane(
         p.rect_stroke(
             rect,
             CornerRadius::ZERO,
-            Stroke::new(2.0, t.accent),
+            Stroke::new(2.0_f32, t.accent),
             StrokeKind::Inside,
         );
     }
@@ -613,10 +612,10 @@ fn crop_tool(
     p.rect_stroke(
         crop_px,
         0.0,
-        Stroke::new(1.0, Color32::WHITE),
+        Stroke::new(1.0_f32, Color32::WHITE),
         StrokeKind::Outside,
     );
-    let guide = Stroke::new(1.0, Color32::WHITE.gamma_multiply(0.45));
+    let guide = Stroke::new(1.0_f32, Color32::WHITE.gamma_multiply(0.45));
     let fracs: &[f32] = match c.overlay {
         CropOverlay::None => &[],
         CropOverlay::Thirds => &[1.0 / 3.0, 2.0 / 3.0],
@@ -643,7 +642,7 @@ fn crop_tool(
         p.rect_stroke(
             Rect::from_center_size(h, Vec2::splat(H)),
             1.0,
-            Stroke::new(1.0, Color32::BLACK.gamma_multiply(0.6)),
+            Stroke::new(1.0_f32, Color32::BLACK.gamma_multiply(0.6)),
             StrokeKind::Outside,
         );
     }

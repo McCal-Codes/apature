@@ -147,7 +147,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                                 p.rect_stroke(
                                                     rect,
                                                     egui::CornerRadius::same(6),
-                                                    egui::Stroke::new(1.0, t.accent),
+                                                    egui::Stroke::new(1.0_f32, t.accent),
                                                     egui::StrokeKind::Inside,
                                                 );
                                             } else if resp.hovered() {
@@ -254,7 +254,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, t: &Theme) {
                                 .color(t.accent.gamma_multiply(a)),
                         )
                         .fill(t.accent_wash.gamma_multiply(a))
-                        .stroke(egui::Stroke::new(1.0, t.accent.gamma_multiply(a))),
+                        .stroke(egui::Stroke::new(1.0_f32, t.accent.gamma_multiply(a))),
                     );
                     if chip.on_hover_text("Remove this filter").clicked() {
                         cmds.push(Command::ClearFilter(Some(clause)));

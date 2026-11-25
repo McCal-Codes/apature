@@ -68,8 +68,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
         )
         .show_inside(ui, |ui| {
             let r = ui.available_rect_before_wrap();
-            ui.painter()
-                .hline(r.x_range(), r.top() - S3, egui::Stroke::new(1.0, t.line));
+            ui.painter().hline(
+                r.x_range(),
+                r.top() - S3,
+                egui::Stroke::new(1.0_f32, t.line),
+            );
             ui.horizontal(|ui| {
                 let label = format!("Export {n} photo{}", if n == 1 { "" } else { "s" });
                 let b = ui
@@ -533,7 +536,7 @@ fn progress(app: &mut App, ui: &mut egui::Ui, t: &Theme, cmds: &mut Vec<Command>
     ui.add_space(S1);
     egui::Frame::NONE
         .fill(t.raised)
-        .stroke(egui::Stroke::new(1.0, border))
+        .stroke(egui::Stroke::new(1.0_f32, border))
         .corner_radius(CornerRadius::same(8))
         .inner_margin(egui::Margin::same(S3 as i8))
         .show(ui, |ui| {

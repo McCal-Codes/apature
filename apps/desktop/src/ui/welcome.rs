@@ -198,7 +198,7 @@ fn page_welcome(app: &mut App, ui: &mut egui::Ui, t: &Theme) {
             let p = ui.painter();
             p.circle_filled(rect.center(), 8.0, swatch.accent);
             if selected {
-                p.circle_stroke(rect.center(), 10.0, egui::Stroke::new(2.0, t.text));
+                p.circle_stroke(rect.center(), 10.0, egui::Stroke::new(2.0_f32, t.text));
             }
             if resp.clicked() {
                 app.prefs.accent = a;
@@ -442,7 +442,7 @@ pub fn tips(app: &mut App, ctx: &egui::Context, t: &Theme) {
         .show(ctx, |ui| {
             egui::Frame::NONE
                 .fill(t.raised)
-                .stroke(egui::Stroke::new(1.0, t.accent))
+                .stroke(egui::Stroke::new(1.0_f32, t.accent))
                 .corner_radius(egui::CornerRadius::same(10))
                 .inner_margin(egui::Margin::same(S3 as i8))
                 .shadow(egui::epaint::Shadow {

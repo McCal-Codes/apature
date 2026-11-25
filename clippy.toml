@@ -1,0 +1,2 @@
+# The workspace supports Rust 1.80 (Cargo.toml), so clippy must not suggest newer APIs.
+msrv = "1.80"
