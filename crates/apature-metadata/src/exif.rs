@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use apature_core::tiff::{tag, Tiff};
+use apature_core::tiff::{tag, Ifd, Tiff};
 
 /// The EXIF fields worth showing on a contact sheet.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -72,7 +72,7 @@ pub enum ExifError {
     NotFound,
 }
 
-/// Read the summary from a file (RAW/TIFF or JPEG).
+/// Read the summary from a file (RAW/TIFF, Canon CR3 or JPEG).
 pub fn read(path: &Path) -> Result<ExifSummary, ExifError> {
     let file = File::open(path)?;
     // SAFETY: read-only mapping, see apature_preview::Source for the rationale.
@@ -83,6 +83,16 @@ pub fn read(path: &Path) -> Result<ExifSummary, ExifError> {
 /// Read the summary from in-memory bytes. Returns `None` if no TIFF header
 /// can be found (neither a TIFF container nor a JPEG with an Exif APP1).
 pub fn from_bytes(data: &[u8]) -> Option<ExifSummary> {
+    if let Some(c) = apature_core::bmff::cr3(data) {
+        return from_cr3(&c);
+    }
+    if apature_core::bmff::is_heif(data) {
+        // The system decoder hands back a HEIC upright (HEIF's own rotation
+        // box rules), so its EXIF orientation must not be applied again.
+        let mut s = from_tiff(apature_core::bmff::heif_exif(data)?)?;
+        s.orientation = 1;
+        return Some(s);
+    }
     if let Some(tiff_bytes) = exif_segment_in_jpeg(data) {
         return from_tiff(tiff_bytes);
     }
@@ -96,6 +106,39 @@ fn from_tiff(data: &[u8]) -> Option<ExifSummary> {
         orientation: 1,
         ..Default::default()
     };
+    ifd0_fields(&t, &ifd0, &mut s);
+    if let Some(exif_off) = ifd0.get(tag::EXIF_IFD).and_then(|e| t.uint(e, 0)) {
+        if let Ok(exif) = t.read_ifd(exif_off as u32) {
+            exif_fields(&t, &exif, &mut s);
+        }
+    }
+    Some(s)
+}
+
+/// Canon CR3 keeps IFD0 (`CMT1`) and the Exif IFD (`CMT2`) as two separate
+/// TIFFs inside its ISO-BMFF boxes.
+fn from_cr3(c: &apature_core::bmff::Cr3) -> Option<ExifSummary> {
+    let mut s = ExifSummary {
+        orientation: 1,
+        ..Default::default()
+    };
+    let mut found = false;
+    if let Some((t, first)) = c.ifd0.and_then(|b| Tiff::parse(b).ok()) {
+        if let Ok(ifd0) = t.read_ifd(first) {
+            ifd0_fields(&t, &ifd0, &mut s);
+            found = true;
+        }
+    }
+    if let Some((t, first)) = c.exif.and_then(|b| Tiff::parse(b).ok()) {
+        if let Ok(exif) = t.read_ifd(first) {
+            exif_fields(&t, &exif, &mut s);
+            found = true;
+        }
+    }
+    found.then_some(s)
+}
+
+fn ifd0_fields(t: &Tiff, ifd0: &Ifd, s: &mut ExifSummary) {
     s.make = ifd0
         .get(tag::MAKE)
         .and_then(|e| t.ascii(e))
@@ -109,34 +152,32 @@ fn from_tiff(data: &[u8]) -> Option<ExifSummary> {
             s.orientation = o as u32;
         }
     }
-    if let Some(exif_off) = ifd0.get(tag::EXIF_IFD).and_then(|e| t.uint(e, 0)) {
-        if let Ok(exif) = t.read_ifd(exif_off as u32) {
-            s.date_time_original = exif
-                .get(tag::DATE_TIME_ORIGINAL)
-                .and_then(|e| t.ascii(e))
-                .filter(|v| !v.is_empty());
-            s.exposure_time = exif.get(tag::EXPOSURE_TIME).and_then(|e| t.rational(e, 0));
-            s.f_number = exif
-                .get(tag::F_NUMBER)
-                .and_then(|e| t.rational(e, 0))
-                .filter(|(_, d)| *d != 0)
-                .map(|(n, d)| n as f64 / d as f64);
-            s.iso = exif
-                .get(tag::ISO)
-                .and_then(|e| t.uint(e, 0))
-                .map(|v| v as u32);
-            s.focal_length_mm = exif
-                .get(tag::FOCAL_LENGTH)
-                .and_then(|e| t.rational(e, 0))
-                .filter(|(_, d)| *d != 0)
-                .map(|(n, d)| n as f64 / d as f64);
-            s.lens = exif
-                .get(tag::LENS_MODEL)
-                .and_then(|e| t.ascii(e))
-                .filter(|v| !v.is_empty());
-        }
-    }
-    Some(s)
+}
+
+fn exif_fields(t: &Tiff, exif: &Ifd, s: &mut ExifSummary) {
+    s.date_time_original = exif
+        .get(tag::DATE_TIME_ORIGINAL)
+        .and_then(|e| t.ascii(e))
+        .filter(|v| !v.is_empty());
+    s.exposure_time = exif.get(tag::EXPOSURE_TIME).and_then(|e| t.rational(e, 0));
+    s.f_number = exif
+        .get(tag::F_NUMBER)
+        .and_then(|e| t.rational(e, 0))
+        .filter(|(_, d)| *d != 0)
+        .map(|(n, d)| n as f64 / d as f64);
+    s.iso = exif
+        .get(tag::ISO)
+        .and_then(|e| t.uint(e, 0))
+        .map(|v| v as u32);
+    s.focal_length_mm = exif
+        .get(tag::FOCAL_LENGTH)
+        .and_then(|e| t.rational(e, 0))
+        .filter(|(_, d)| *d != 0)
+        .map(|(n, d)| n as f64 / d as f64);
+    s.lens = exif
+        .get(tag::LENS_MODEL)
+        .and_then(|e| t.ascii(e))
+        .filter(|v| !v.is_empty());
 }
 
 /// If `data` is a JPEG, return the TIFF bytes inside its Exif APP1 segment.
@@ -179,6 +220,62 @@ fn exif_segment_in_jpeg(data: &[u8]) -> Option<&[u8]> {
 mod tests {
     use super::*;
     use apature_core::tiff::testutil::build_le;
+
+    #[test]
+    fn reads_a_heics_exif_item_and_leaves_it_upright() {
+        // IFD0: Model at 64, Orientation 6, ExifIFD at 100; Exif IFD: DateTimeOriginal at 130.
+        let mut tiff = build_le(
+            &[
+                (tag::MODEL, 2, 10, 64u32.to_le_bytes()),
+                (tag::ORIENTATION, 3, 1, [6, 0, 0, 0]),
+                (tag::EXIF_IFD, 4, 1, 100u32.to_le_bytes()),
+            ],
+            b"iPhone 15\0",
+            64,
+        );
+        tiff.resize(100, 0);
+        tiff.extend_from_slice(&1u16.to_le_bytes());
+        tiff.extend_from_slice(&tag::DATE_TIME_ORIGINAL.to_le_bytes());
+        tiff.extend_from_slice(&2u16.to_le_bytes());
+        tiff.extend_from_slice(&20u32.to_le_bytes());
+        tiff.extend_from_slice(&130u32.to_le_bytes());
+        tiff.extend_from_slice(&0u32.to_le_bytes());
+        tiff.resize(130, 0);
+        tiff.extend_from_slice(b"2026:07:04 21:15:02\0");
+        let data = apature_core::bmff::testutil::heif_with_exif(&tiff);
+        let s = from_bytes(&data).expect("summary");
+        assert_eq!(s.model.as_deref(), Some("iPhone 15"));
+        assert_eq!(s.date_time_original.as_deref(), Some("2026:07:04 21:15:02"));
+        assert_eq!(s.orientation, 1, "the decoder already turned it");
+    }
+
+    #[test]
+    fn reads_a_cr3s_two_tiff_blocks() {
+        // CMT1: IFD0 with Model (ascii at 64) and Orientation 8.
+        let cmt1 = build_le(
+            &[
+                (tag::MODEL, 2, 11, 64u32.to_le_bytes()),
+                (tag::ORIENTATION, 3, 1, [8, 0, 0, 0]),
+            ],
+            b"Canon R5 \0\0",
+            64,
+        );
+        // CMT2: the Exif IFD is its first IFD, with DateTimeOriginal at 64 and ISO 1600.
+        let cmt2 = build_le(
+            &[
+                (tag::DATE_TIME_ORIGINAL, 2, 20, 64u32.to_le_bytes()),
+                (tag::ISO, 3, 1, [0x40, 0x06, 0, 0]),
+            ],
+            b"2026:11:24 19:05:31\0",
+            64,
+        );
+        let data = apature_core::bmff::testutil::cr3(&cmt1, &cmt2, b"", b"", b"");
+        let s = from_bytes(&data).expect("summary");
+        assert_eq!(s.model.as_deref(), Some("Canon R5"));
+        assert_eq!(s.orientation, 8);
+        assert_eq!(s.date_time_original.as_deref(), Some("2026:11:24 19:05:31"));
+        assert_eq!(s.iso, Some(1600));
+    }
 
     #[test]
     fn reads_fields_from_tiff_and_jpeg_wrapper() {
